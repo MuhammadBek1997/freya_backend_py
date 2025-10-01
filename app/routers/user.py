@@ -11,8 +11,10 @@ from datetime import datetime, timedelta
 import httpx
 
 from app.database import get_db
-from app.models.user import User, UserLocation, UserPaymentCard, UserFavouriteSalon
+from app.models.user import User
+from app.models.payment_card import PaymentCard
 from app.models.salon import Salon
+from app.models.user_favourite_salon import UserFavouriteSalon
 from app.schemas.user import (
     UserRegistrationStep1, PhoneVerification, UserRegistrationStep2,
     UserLogin, PasswordResetRequest, PasswordReset, PhoneChangeRequest,
@@ -26,17 +28,6 @@ from app.auth.jwt_utils import JWTUtils
 from app.config import settings
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
-
-
-# Helper functions
-def hash_password(password: str) -> str:
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
-
-
-def verify_password(password: str, hashed_password: str) -> bool:
-    """Verify password against hash"""
-    return hash_password(password) == hashed_password
 
 
 def generate_verification_code() -> str:
@@ -156,12 +147,12 @@ async def register_step1(
     verification_code = generate_verification_code()
     
     # Create temporary user record
-    hashed_password = hash_password(user_data.password)
+    hashed_password = JWTUtils.hash_password(user_data.password)
     temp_user = User(
         phone=user_data.phone,
-        password=hashed_password,
+        password_hash=hashed_password,
         verification_code=verification_code,
-        verification_code_expires=datetime.utcnow() + timedelta(minutes=5),
+        verification_expires_at=datetime.utcnow() + timedelta(minutes=5),
         is_verified=False,
         is_active=False
     )
@@ -196,7 +187,7 @@ async def verify_phone(
     
     # Check verification code
     if (user.verification_code != verification_data.verification_code or
-        user.verification_code_expires < datetime.utcnow()):
+        user.verification_expires_at < datetime.utcnow()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan"
@@ -204,8 +195,9 @@ async def verify_phone(
     
     # Mark phone as verified
     user.is_verified = True
+    user.is_active = True
     user.verification_code = None
-    user.verification_code_expires = None
+    user.verification_expires_at = None
     db.commit()
     
     return {
@@ -265,7 +257,7 @@ async def login_user(
             detail="Telefon raqam yoki parol noto'g'ri"
         )
     
-    if not verify_password(login_data.password, user.password):
+    if not JWTUtils.verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Telefon raqam yoki parol noto'g'ri"
@@ -276,13 +268,13 @@ async def login_user(
     db.commit()
     
     # Create access token
-    access_token = JWTUtils.create_access_token(data={"id": user.id, "role": "user"})
+    access_token = JWTUtils.create_access_token(data={"id": str(user.id), "role": "user"})
     
     return LoginResponse(
         success=True,
         message="Muvaffaqiyatli kirildi",
         token=access_token,
-        user=user
+        user=UserResponse.model_validate(user)
     )
 
 
@@ -304,7 +296,7 @@ async def send_password_reset_code(
     # Generate verification code
     verification_code = generate_verification_code()
     user.verification_code = verification_code
-    user.verification_code_expires = datetime.utcnow() + timedelta(minutes=5)
+    user.verification_expires_at = datetime.utcnow() + timedelta(minutes=5)
     
     db.commit()
     
@@ -335,16 +327,16 @@ async def reset_password(
     
     # Check verification code
     if (user.verification_code != reset_data.verification_code or
-        user.verification_code_expires < datetime.utcnow()):
+        user.verification_expires_at < datetime.utcnow()):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan"
         )
     
     # Update password
-    user.password = hash_password(reset_data.new_password)
+    user.password_hash = JWTUtils.hash_password(reset_data.new_password)
     user.verification_code = None
-    user.verification_code_expires = None
+    user.verification_expires_at = None
     user.updated_at = datetime.utcnow()
     
     db.commit()
@@ -398,10 +390,8 @@ async def delete_user(
     """
     Foydalanuvchi hisobini o'chirish
     """
-    # Delete related records
-    db.query(UserLocation).filter(UserLocation.user_id == current_user.id).delete()
-    db.query(UserPaymentCard).filter(UserPaymentCard.user_id == current_user.id).delete()
-    db.query(UserFavouriteSalon).filter(UserFavouriteSalon.user_id == current_user.id).delete()
+    # Delete related data
+    db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).delete()
     
     # Delete user
     db.delete(current_user)
@@ -468,28 +458,21 @@ async def update_user_location(
     """
     Foydalanuvchi joylashuvini yangilash
     """
-    user_location = db.query(UserLocation).filter(UserLocation.user_id == current_user.id).first()
-    
-    if user_location:
-        user_location.latitude = location_data.latitude
-        user_location.longitude = location_data.longitude
-        user_location.address = location_data.address
-        user_location.updated_at = datetime.utcnow()
-    else:
-        user_location = UserLocation(
-            user_id=current_user.id,
-            latitude=location_data.latitude,
-            longitude=location_data.longitude,
-            address=location_data.address,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
-        )
-        db.add(user_location)
+    # Update user location fields directly
+    current_user.latitude = location_data.latitude
+    current_user.longitude = location_data.longitude
+    current_user.address = location_data.address
+    current_user.location_updated_at = datetime.utcnow()
     
     db.commit()
-    db.refresh(user_location)
+    db.refresh(current_user)
     
-    return user_location
+    return {
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude,
+        "address": current_user.address,
+        "location_updated_at": current_user.location_updated_at
+    }
 
 
 @router.get("/location", response_model=UserLocationResponse)
@@ -500,15 +483,18 @@ async def get_user_location(
     """
     Foydalanuvchi joylashuvini olish
     """
-    user_location = db.query(UserLocation).filter(UserLocation.user_id == current_user.id).first()
-    
-    if not user_location:
+    if not current_user.latitude or not current_user.longitude:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Joylashuv ma'lumoti topilmadi"
+            detail="Foydalanuvchi joylashuvi topilmadi"
         )
     
-    return user_location
+    return {
+        "latitude": current_user.latitude,
+        "longitude": current_user.longitude,
+        "address": current_user.address,
+        "location_updated_at": current_user.location_updated_at
+    }
 
 
 @router.get("/profile", response_model=UserResponse)
@@ -737,9 +723,9 @@ async def add_payment_card(
         )
     
     # Check if card already exists
-    existing_card = db.query(UserPaymentCard).filter(
-        UserPaymentCard.user_id == current_user.id,
-        UserPaymentCard.card_number_hash == hashlib.sha256(card_data.card_number.encode()).hexdigest()
+    existing_card = db.query(PaymentCard).filter(
+        PaymentCard.user_id == current_user.id,
+        PaymentCard.card_number_hash == hashlib.sha256(card_data.card_number.encode()).hexdigest()
     ).first()
     
     if existing_card:
@@ -751,20 +737,20 @@ async def add_payment_card(
     # If this is the first card or set as default, make it default
     if card_data.is_default:
         # Remove default from other cards
-        db.query(UserPaymentCard).filter(
-            UserPaymentCard.user_id == current_user.id
+        db.query(PaymentCard).filter(
+            PaymentCard.user_id == current_user.id
         ).update({"is_default": False})
     
     # Check if user has no cards, make this default
-    user_cards_count = db.query(UserPaymentCard).filter(
-        UserPaymentCard.user_id == current_user.id
+    user_cards_count = db.query(PaymentCard).filter(
+        PaymentCard.user_id == current_user.id
     ).count()
     
     if user_cards_count == 0:
         card_data.is_default = True
     
     # Create payment card
-    payment_card = UserPaymentCard(
+    payment_card = PaymentCard(
         user_id=current_user.id,
         card_number_hash=hashlib.sha256(card_data.card_number.encode()).hexdigest(),
         masked_card_number=mask_card_number(card_data.card_number),
@@ -791,9 +777,9 @@ async def get_user_payment_cards(
     """
     Foydalanuvchi to'lov kartalari ro'yxatini olish
     """
-    cards = db.query(UserPaymentCard).filter(
-        UserPaymentCard.user_id == current_user.id
-    ).order_by(UserPaymentCard.is_default.desc(), UserPaymentCard.created_at.desc()).all()
+    cards = db.query(PaymentCard).filter(
+        PaymentCard.user_id == current_user.id
+    ).order_by(PaymentCard.is_default.desc(), PaymentCard.created_at.desc()).all()
     
     return cards
 
@@ -808,9 +794,9 @@ async def update_payment_card(
     """
     To'lov kartasini yangilash
     """
-    card = db.query(UserPaymentCard).filter(
-        UserPaymentCard.id == card_id,
-        UserPaymentCard.user_id == current_user.id
+    card = db.query(PaymentCard).filter(
+        PaymentCard.id == card_id,
+        PaymentCard.user_id == current_user.id
     ).first()
     
     if not card:
@@ -821,9 +807,9 @@ async def update_payment_card(
     
     # If setting as default, remove default from other cards
     if card_update.is_default:
-        db.query(UserPaymentCard).filter(
-            UserPaymentCard.user_id == current_user.id,
-            UserPaymentCard.id != card_id
+        db.query(PaymentCard).filter(
+            PaymentCard.user_id == current_user.id,
+            PaymentCard.id != card_id
         ).update({"is_default": False})
     
     # Update fields
@@ -846,9 +832,9 @@ async def delete_payment_card(
     """
     To'lov kartasini o'chirish
     """
-    card = db.query(UserPaymentCard).filter(
-        UserPaymentCard.id == card_id,
-        UserPaymentCard.user_id == current_user.id
+    card = db.query(PaymentCard).filter(
+        PaymentCard.id == card_id,
+        PaymentCard.user_id == current_user.id
     ).first()
     
     if not card:
@@ -862,8 +848,8 @@ async def delete_payment_card(
     
     # If deleted card was default, make another card default
     if was_default:
-        remaining_card = db.query(UserPaymentCard).filter(
-            UserPaymentCard.user_id == current_user.id
+        remaining_card = db.query(PaymentCard).filter(
+            PaymentCard.user_id == current_user.id
         ).first()
         if remaining_card:
             remaining_card.is_default = True
@@ -885,9 +871,9 @@ async def set_default_payment_card(
     """
     To'lov kartasini asosiy qilib belgilash
     """
-    card = db.query(UserPaymentCard).filter(
-        UserPaymentCard.id == card_id,
-        UserPaymentCard.user_id == current_user.id
+    card = db.query(PaymentCard).filter(
+        PaymentCard.id == card_id,
+        PaymentCard.user_id == current_user.id
     ).first()
     
     if not card:
@@ -897,8 +883,8 @@ async def set_default_payment_card(
         )
     
     # Remove default from all cards
-    db.query(UserPaymentCard).filter(
-        UserPaymentCard.user_id == current_user.id
+    db.query(PaymentCard).filter(
+        PaymentCard.user_id == current_user.id
     ).update({"is_default": False})
     
     # Set this card as default

@@ -9,7 +9,9 @@ class EmployeeCreate(BaseModel):
     employee_name: str
     employee_phone: str
     employee_email: EmailStr
-    position: str
+    role: str
+    username: str
+    profession: str
     employee_password: str
 
 class EmployeeUpdate(BaseModel):
@@ -17,16 +19,18 @@ class EmployeeUpdate(BaseModel):
     surname: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
+    username: Optional[str] = None
     profession: Optional[str] = None
 
 class EmployeeResponse(BaseModel):
     id: UUID
     salon_id: UUID
-    name: str
+    name: Optional[str] = None
     surname: Optional[str] = None
-    phone: str
-    email: str
-    position: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    role: Optional[str] = None
+    username: Optional[str] = None
     profession: Optional[str] = None
     bio: Optional[str] = None
     specialization: Optional[str] = None

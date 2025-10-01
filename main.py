@@ -2,6 +2,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
@@ -55,7 +57,7 @@ app = FastAPI(
     ### Versiya: 2.0.0
     """,
     version="2.0.0",
-    docs_url="/api/docs",
+    docs_url=None,  # Disable default docs
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
     lifespan=lifespan,
@@ -76,7 +78,10 @@ app = FastAPI(
             "url": "https://freya-salon-backend.herokuapp.com",
             "description": "Production server"
         }
-    ]
+    ],
+    swagger_ui_parameters={
+        "syntaxHighlight.theme": "obsidian"
+    }
 )
 
 # CORS configuration
@@ -121,6 +126,16 @@ app.include_router(translation_router, prefix="/api")
 
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# Custom docs endpoint with unpkg.com CDN
+@app.get("/api/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        swagger_js_url="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js",
+        swagger_css_url="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css",
+    )
 
 @app.get("/")
 async def root():

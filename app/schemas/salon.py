@@ -33,23 +33,21 @@ class WorkingHours(BaseModel):
 class SalonCreate(BaseModel):
     salon_name: str
     salon_phone: Optional[str] = None
-    salon_add_phone: Optional[str] = None
     salon_instagram: Optional[str] = None
-    salon_rating: Optional[Decimal] = Decimal('0')
-    comments: Optional[List[Dict[str, Any]]] = []
-    salon_payment: Optional[Dict[str, Any]] = {}
+    salon_rating: Optional[Decimal] = 0
     salon_description: Optional[str] = None
     salon_types: Optional[List[SalonType]] = None
     private_salon: Optional[bool] = False
-    work_schedule: Optional[List[Dict[str, Any]]] = []
-    salon_title: Optional[str] = None
-    salon_additionals: Optional[List[Dict[str, Any]]] = []
-    sale_percent: Optional[int] = 0
-    sale_limit: Optional[int] = 0
     location: Optional[Location] = None
-    salon_orient: Optional[Location] = None
-    salon_photos: Optional[List[str]] = []
     salon_comfort: Optional[List[SalonComfort]] = None
+    salon_sale: Optional[Dict[str, Any]] = None
+    is_private: Optional[bool] = False
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    address_uz: Optional[str] = None
+    address_ru: Optional[str] = None
+    address_en: Optional[str] = None
     
     # Legacy fields for backward compatibility
     name: Optional[str] = None
@@ -72,51 +70,52 @@ class SalonCreate(BaseModel):
 class SalonUpdate(BaseModel):
     salon_name: Optional[str] = None
     salon_phone: Optional[str] = None
-    salon_add_phone: Optional[str] = None
     salon_instagram: Optional[str] = None
     salon_rating: Optional[Decimal] = None
-    comments: Optional[List[Dict[str, Any]]] = None
-    salon_payment: Optional[Dict[str, Any]] = None
     salon_description: Optional[str] = None
     salon_types: Optional[List[SalonType]] = None
     private_salon: Optional[bool] = None
-    work_schedule: Optional[List[Dict[str, Any]]] = None
-    salon_title: Optional[str] = None
-    salon_additionals: Optional[List[Dict[str, Any]]] = None
-    sale_percent: Optional[int] = None
-    sale_limit: Optional[int] = None
     location: Optional[Location] = None
-    salon_orient: Optional[Location] = None
-    salon_photos: Optional[List[str]] = None
     salon_comfort: Optional[List[SalonComfort]] = None
+    salon_sale: Optional[Dict[str, Any]] = None
     is_active: Optional[bool] = None
+    is_private: Optional[bool] = None
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    address_uz: Optional[str] = None
+    address_ru: Optional[str] = None
+    address_en: Optional[str] = None
 
 # Salon Response Schema
 class SalonResponse(BaseModel):
     id: str
-    salon_logo: Optional[str] = None
     salon_name: str
     salon_phone: Optional[str] = None
-    salon_add_phone: Optional[str] = None
     salon_instagram: Optional[str] = None
     salon_rating: Optional[Decimal] = None
-    comments: Optional[List[Dict[str, Any]]] = None
-    salon_payment: Optional[Dict[str, Any]] = None
     salon_description: Optional[str] = None
     salon_types: Optional[List[Dict[str, Any]]] = None
     private_salon: Optional[bool] = None
-    work_schedule: Optional[List[Dict[str, Any]]] = None
-    salon_title: Optional[str] = None
-    salon_additionals: Optional[List[Dict[str, Any]]] = None
-    sale_percent: Optional[int] = None
-    sale_limit: Optional[int] = None
     location: Optional[Dict[str, Any]] = None
-    salon_orient: Optional[Dict[str, Any]] = None
-    salon_photos: Optional[List[str]] = None
     salon_comfort: Optional[List[Dict[str, Any]]] = None
+    salon_sale: Optional[Dict[str, Any]] = None
     is_active: bool
+    is_private: Optional[bool] = None
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    address_uz: Optional[str] = None
+    address_ru: Optional[str] = None
+    address_en: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+    @validator('id', pre=True)
+    def convert_uuid_to_str(cls, v):
+        if hasattr(v, '__str__'):
+            return str(v)
+        return v
 
     class Config:
         from_attributes = True

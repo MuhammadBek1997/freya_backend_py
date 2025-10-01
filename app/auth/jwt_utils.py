@@ -2,7 +2,7 @@
 JWT utilities for authentication
 """
 import jwt
-import hashlib
+import bcrypt
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -45,14 +45,14 @@ class JWTUtils:
             'sessionId': f"{user_type_prefix}_{timestamp}_{secrets.token_urlsafe(8)}"
         })
         
-        encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
         return encoded_jwt
     
     @staticmethod
     def verify_token(token: str) -> Dict[str, Any]:
         """Verify and decode JWT token"""
         try:
-            payload = jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
             return payload
         except jwt.ExpiredSignatureError:
             raise HTTPException(
@@ -67,10 +67,12 @@ class JWTUtils:
     
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash password using SHA-256"""
-        return hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using bcrypt"""
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+        return hashed.decode('utf-8')
     
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Verify password against hash"""
-        return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+        return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))

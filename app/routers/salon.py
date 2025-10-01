@@ -82,37 +82,33 @@ async def create_salon(
         # Set default values
         salon_types = salon_data.salon_types or DEFAULT_SALON_TYPES
         location = salon_data.location or DEFAULT_LOCATION
-        salon_orient = salon_data.salon_orient or DEFAULT_LOCATION
         salon_comfort = salon_data.salon_comfort or DEFAULT_SALON_COMFORT
         
         # Convert Pydantic models to dict for JSON storage
         salon_types_dict = [st.dict() if hasattr(st, 'dict') else st for st in salon_types]
         location_dict = location.dict() if hasattr(location, 'dict') else location
-        salon_orient_dict = salon_orient.dict() if hasattr(salon_orient, 'dict') else salon_orient
         salon_comfort_dict = [sc.dict() if hasattr(sc, 'dict') else sc for sc in salon_comfort]
         
         # Create new salon
         new_salon = Salon(
             salon_name=salon_name,
             salon_phone=salon_phone,
-            salon_add_phone=salon_data.salon_add_phone,
             salon_instagram=salon_data.salon_instagram,
             salon_rating=salon_data.salon_rating or Decimal('0'),
-            comments=salon_data.comments or [],
-            salon_payment=salon_data.salon_payment or {},
             salon_description=salon_description,
             salon_types=salon_types_dict,
             private_salon=salon_data.private_salon or False,
-            work_schedule=salon_data.work_schedule or [],
-            salon_title=salon_data.salon_title,
-            salon_additionals=salon_data.salon_additionals or [],
-            sale_percent=salon_data.sale_percent or 0,
-            sale_limit=salon_data.sale_limit or 0,
             location=location_dict,
-            salon_orient=salon_orient_dict,
-            salon_photos=salon_data.salon_photos or [],
             salon_comfort=salon_comfort_dict,
-            is_active=True
+            salon_sale=salon_data.salon_sale,
+            is_active=True,
+            is_private=salon_data.is_private or False,
+            description_uz=salon_data.description_uz,
+            description_ru=salon_data.description_ru,
+            description_en=salon_data.description_en,
+            address_uz=salon_data.address_uz,
+            address_ru=salon_data.address_ru,
+            address_en=salon_data.address_en
         )
         
         db.add(new_salon)
@@ -122,7 +118,13 @@ async def create_salon(
         return StandardResponse(
             success=True,
             message="Salon muvaffaqiyatli yaratildi",
-            data=new_salon
+            data={
+                "id": str(new_salon.id),
+                "salon_name": new_salon.salon_name,
+                "salon_phone": new_salon.salon_phone,
+                "is_active": new_salon.is_active,
+                "created_at": new_salon.created_at.isoformat() if new_salon.created_at else None
+            }
         )
         
     except HTTPException:
@@ -170,8 +172,36 @@ async def get_all_salons(
         
         total_pages = math.ceil(total / limit)
         
+        # Convert salons to SalonResponse objects with proper UUID handling
+        salon_responses = []
+        for salon in salons:
+            salon_dict = {
+                "id": str(salon.id),
+                "salon_name": salon.salon_name,
+                "salon_phone": salon.salon_phone,
+                "salon_instagram": salon.salon_instagram,
+                "salon_rating": salon.salon_rating,
+                "salon_description": salon.salon_description,
+                "salon_types": salon.salon_types,
+                "private_salon": salon.private_salon,
+                "location": salon.location,
+                "salon_comfort": salon.salon_comfort,
+                "salon_sale": salon.salon_sale,
+                "is_active": salon.is_active,
+                "is_private": salon.is_private,
+                "description_uz": salon.description_uz,
+                "description_ru": salon.description_ru,
+                "description_en": salon.description_en,
+                "address_uz": salon.address_uz,
+                "address_ru": salon.address_ru,
+                "address_en": salon.address_en,
+                "created_at": salon.created_at,
+                "updated_at": salon.updated_at
+            }
+            salon_responses.append(SalonResponse(**salon_dict))
+        
         return SalonListResponse(
-            salons=salons,
+            salons=salon_responses,
             total=total,
             page=page,
             limit=limit,
@@ -201,7 +231,31 @@ async def get_salon_by_id(
                 detail="Salon topilmadi"
             )
         
-        return salon
+        # Convert salon to SalonResponse with proper UUID handling
+        salon_dict = {
+            "id": str(salon.id),
+            "salon_name": salon.salon_name,
+            "salon_phone": salon.salon_phone,
+            "salon_instagram": salon.salon_instagram,
+            "salon_rating": salon.salon_rating,
+            "salon_description": salon.salon_description,
+            "salon_types": salon.salon_types,
+            "private_salon": salon.private_salon,
+            "location": salon.location,
+            "salon_comfort": salon.salon_comfort,
+            "salon_sale": salon.salon_sale,
+            "is_active": salon.is_active,
+            "is_private": salon.is_private,
+            "description_uz": salon.description_uz,
+            "description_ru": salon.description_ru,
+            "description_en": salon.description_en,
+            "address_uz": salon.address_uz,
+            "address_ru": salon.address_ru,
+            "address_en": salon.address_en,
+            "created_at": salon.created_at,
+            "updated_at": salon.updated_at
+        }
+        return SalonResponse(**salon_dict)
         
     except HTTPException:
         raise
@@ -236,7 +290,7 @@ async def update_salon(
                 # Convert Pydantic models to dict for JSON fields
                 if field in ['salon_types', 'salon_comfort'] and value:
                     value = [item.dict() if hasattr(item, 'dict') else item for item in value]
-                elif field in ['location', 'salon_orient'] and value:
+                elif field == 'location' and value:
                     value = value.dict() if hasattr(value, 'dict') else value
                 
                 setattr(salon, field, value)

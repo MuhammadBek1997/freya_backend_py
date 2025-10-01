@@ -24,19 +24,40 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/superadmin/login", response_model=LoginResponse)
 async def superadmin_login(
     request: LoginRequest,
-    db: Session = Depends(get_db),
-    language: str = Depends(get_language)
+    db: Session = Depends(get_db)
 ):
     """
     Superadmin login endpoint
     """
     try:
-        t = get_translation_function(language)
+        # Set default language for this endpoint
+        language = "en"
         
-        logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Starting superadmin login process")
-        logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Username: {request.username}")
-        logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Password length: {len(request.password) if request.password else 0}")
-
+        # Simple translation function for this endpoint
+        def t(key: str) -> str:
+            translations = {
+                "en": {
+                    "Username va password talab qilinadi": "Username and password are required",
+                    "Noto'g'ri username yoki password": "Invalid username or password",
+                    "Superadmin muvaffaqiyatli login qildi": "Superadmin logged in successfully",
+                    "Server xatosi": "Server error"
+                },
+                "uz": {
+                    "Username va password talab qilinadi": "Username va password talab qilinadi",
+                    "Noto'g'ri username yoki password": "Noto'g'ri username yoki password",
+                    "Superadmin muvaffaqiyatli login qildi": "Superadmin muvaffaqiyatli login qildi",
+                    "Server xatosi": "Server xatosi"
+                },
+                "ru": {
+                    "Username va password talab qilinadi": "Требуется имя пользователя и пароль",
+                    "Noto'g'ri username yoki password": "Неверное имя пользователя или пароль",
+                    "Superadmin muvaffaqiyatli login qildi": "Суперадмин успешно вошел в систему",
+                    "Server xatosi": "Ошибка сервера"
+                }
+            }
+            lang_translations = translations.get(language, translations["en"])
+            return lang_translations.get(key, key)
+        
         if not request.username or not request.password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -44,28 +65,20 @@ async def superadmin_login(
             )
 
         # Superadmin ni database dan topish
-        logger.info("🔍 SUPERADMIN LOGIN DEBUG: Searching for superadmin in database...")
         superadmin = db.query(Admin).filter(
             Admin.username == request.username,
             Admin.role == "superadmin",
             Admin.is_active == True
         ).first()
-        
-        logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Superadmin found: {'Yes' if superadmin else 'No'}")
-        if superadmin:
-            logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Superadmin details: {superadmin.id}, {superadmin.username}, {superadmin.role}")
 
         if not superadmin:
-            logger.info("🔍 SUPERADMIN LOGIN DEBUG: No superadmin found with given criteria")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=t("Noto'g'ri username yoki password")
             )
 
         # Password tekshirish
-        logger.info("🔍 SUPERADMIN LOGIN DEBUG: Checking password...")
         is_valid_password = JWTUtils.verify_password(request.password, superadmin.password_hash)
-        logger.info(f"🔍 SUPERADMIN LOGIN DEBUG: Password valid: {is_valid_password}")
         
         if not is_valid_password:
             raise HTTPException(
@@ -75,7 +88,7 @@ async def superadmin_login(
 
         # Token yaratish
         token = JWTUtils.create_access_token({
-            "id": superadmin.id,
+            "id": str(superadmin.id),  # Convert UUID to string
             "username": superadmin.username,
             "role": "superadmin"
         })
@@ -84,7 +97,7 @@ async def superadmin_login(
             message=t("Superadmin muvaffaqiyatli login qildi"),
             token=token,
             user={
-                "id": superadmin.id,
+                "id": str(superadmin.id),  # Convert UUID to string
                 "username": superadmin.username,
                 "email": superadmin.email,
                 "full_name": superadmin.full_name,
@@ -112,7 +125,30 @@ async def admin_login(
     Admin login endpoint
     """
     try:
-        t = get_translation_function(language)
+        # Simple translation function
+        def t(key: str) -> str:
+            translations = {
+                "en": {
+                    "Username va password talab qilinadi": "Username and password are required",
+                    "Noto'g'ri username yoki password": "Invalid username or password",
+                    "Admin muvaffaqiyatli login qildi": "Admin logged in successfully",
+                    "Server xatosi": "Server error"
+                },
+                "uz": {
+                    "Username va password talab qilinadi": "Username va password talab qilinadi",
+                    "Noto'g'ri username yoki password": "Noto'g'ri username yoki password",
+                    "Admin muvaffaqiyatli login qildi": "Admin muvaffaqiyatli login qildi",
+                    "Server xatosi": "Server xatosi"
+                },
+                "ru": {
+                    "Username va password talab qilinadi": "Требуется имя пользователя и пароль",
+                    "Noto'g'ri username yoki password": "Неверное имя пользователя или пароль",
+                    "Admin muvaffaqiyatli login qildi": "Администратор успешно вошел в систему",
+                    "Server xatosi": "Ошибка сервера"
+                }
+            }
+            lang_translations = translations.get(language, translations["uz"])
+            return lang_translations.get(key, key)
         
         logger.info(f"Admin login attempt: {request.username}")
 
@@ -149,7 +185,7 @@ async def admin_login(
 
         # Token yaratish
         token = JWTUtils.create_access_token({
-            "id": admin.id,
+            "id": str(admin.id),
             "username": admin.username,
             "role": admin.role
         })
@@ -158,12 +194,12 @@ async def admin_login(
             message=t("Admin muvaffaqiyatli login qildi"),
             token=token,
             user={
-                "id": admin.id,
+                "id": str(admin.id),
                 "username": admin.username,
                 "email": admin.email,
                 "full_name": admin.full_name,
                 "role": admin.role,
-                "salon_id": admin.salon_id
+                "salon_id": str(admin.salon_id) if admin.salon_id else None
             }
         )
 
@@ -188,7 +224,30 @@ async def create_admin(
     Create admin endpoint (superadmin only)
     """
     try:
-        t = get_translation_function(language)
+        # Simple translation function
+        def t(key: str) -> str:
+            translations = {
+                "en": {
+                    "Bu username allaqachon mavjud": "This username already exists",
+                    "Bu email allaqachon mavjud": "This email already exists", 
+                    "Admin muvaffaqiyatli yaratildi": "Admin created successfully",
+                    "Server xatosi": "Server error"
+                },
+                "uz": {
+                    "Bu username allaqachon mavjud": "Bu username allaqachon mavjud",
+                    "Bu email allaqachon mavjud": "Bu email allaqachon mavjud",
+                    "Admin muvaffaqiyatli yaratildi": "Admin muvaffaqiyatli yaratildi", 
+                    "Server xatosi": "Server xatosi"
+                },
+                "ru": {
+                    "Bu username allaqachon mavjud": "Это имя пользователя уже существует",
+                    "Bu email allaqachon mavjud": "Этот email уже существует",
+                    "Admin muvaffaqiyatli yaratildi": "Администратор успешно создан",
+                    "Server xatosi": "Ошибка сервера"
+                }
+            }
+            lang_translations = translations.get(language, translations["uz"])
+            return lang_translations.get(key, key)
         
         # Username mavjudligini tekshirish
         existing_admin = db.query(Admin).filter(Admin.username == request.username).first()
@@ -257,7 +316,31 @@ async def employee_login(
     Employee login endpoint
     """
     try:
-        t = get_translation_function(language)
+        # Simple translation function
+        def t(key):
+            translations = {
+                "Username va password talab qilinadi": {
+                    "en": "Username and password are required",
+                    "uz": "Username va password talab qilinadi",
+                    "ru": "Требуются имя пользователя и пароль"
+                },
+                "Noto'g'ri username yoki password": {
+                    "en": "Invalid username or password",
+                    "uz": "Noto'g'ri username yoki password",
+                    "ru": "Неверное имя пользователя или пароль"
+                },
+                "Employee muvaffaqiyatli login qildi": {
+                    "en": "Employee logged in successfully",
+                    "uz": "Employee muvaffaqiyatli login qildi",
+                    "ru": "Сотрудник успешно вошел в систему"
+                },
+                "Server xatosi": {
+                    "en": "Server error",
+                    "uz": "Server xatosi",
+                    "ru": "Ошибка сервера"
+                }
+            }
+            return translations.get(key, {}).get(language, key)
         
         if not request.username or not request.password:
             raise HTTPException(
@@ -278,7 +361,7 @@ async def employee_login(
             )
 
         # Password tekshirish
-        is_valid_password = JWTUtils.verify_password(request.password, employee.password_hash)
+        is_valid_password = JWTUtils.verify_password(request.password, employee.employee_password)
         
         if not is_valid_password:
             raise HTTPException(
@@ -288,7 +371,7 @@ async def employee_login(
 
         # Token yaratish
         token = JWTUtils.create_access_token({
-            "id": employee.id,
+            "id": str(employee.id),
             "username": employee.username,
             "role": "employee"
         })
@@ -297,12 +380,12 @@ async def employee_login(
             message=t("Employee muvaffaqiyatli login qildi"),
             token=token,
             user={
-                "id": employee.id,
+                "id": str(employee.id),
                 "username": employee.username,
                 "email": employee.email,
-                "full_name": employee.full_name,
+                "full_name": f"{employee.name} {employee.surname or ''}".strip(),
                 "role": "employee",
-                "salon_id": employee.salon_id
+                "salon_id": str(employee.salon_id) if employee.salon_id else None
             }
         )
 
@@ -326,12 +409,12 @@ async def get_admin_profile(
     """
     try:
         return AdminProfileResponse(
-            id=current_admin.id,
+            id=str(current_admin.id),
             username=current_admin.username,
             email=current_admin.email,
             full_name=current_admin.full_name,
             role=current_admin.role,
-            salon_id=current_admin.salon_id,
+            salon_id=str(current_admin.salon_id) if current_admin.salon_id else None,
             is_active=current_admin.is_active,
             created_at=current_admin.created_at.isoformat(),
             updated_at=current_admin.updated_at.isoformat()
@@ -339,7 +422,17 @@ async def get_admin_profile(
 
     except Exception as error:
         logger.error(f"Admin profile olish xatosi: {error}")
-        t = get_translation_function(language)
+        # Simple translation function
+        def t(key):
+            translations = {
+                "Server xatosi": {
+                    "en": "Server error",
+                    "uz": "Server xatosi", 
+                    "ru": "Ошибка сервера"
+                }
+            }
+            return translations.get(key, {}).get(language, key)
+        
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=t("Server xatosi")

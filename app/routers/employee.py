@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, desc
 from typing import List, Optional
 from uuid import UUID
-import bcrypt
 
 from app.database import get_db
 from app.models.employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
@@ -16,18 +15,9 @@ from app.schemas.employee import (
     EmployeeListResponse, EmployeeDetailResponseWrapper, EmployeePostListResponse, SuccessResponse
 )
 from app.auth.dependencies import get_current_user, get_current_admin
+from app.auth.jwt_utils import JWTUtils
 
 router = APIRouter(prefix="/employees", tags=["employees"])
-
-# Helper functions
-def hash_password(password: str) -> str:
-    """Hash password using bcrypt"""
-    salt = bcrypt.gensalt()
-    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
-
-def verify_password(password: str, hashed: str) -> bool:
-    """Verify password against hash"""
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
 
 def add_multilingual_fields(employee):
     """Add multilingual fields to employee object"""
@@ -131,9 +121,12 @@ async def get_all_employees(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error in get_all_employees: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail="Xodim ma'lumotlarini olishda xatolik yuz berdi"
+            detail=f"Xodim ma'lumotlarini olishda xatolik yuz berdi: {str(e)}"
         )
 
 @router.get("/salon/{salon_id}", response_model=EmployeeListResponse)
@@ -236,21 +229,13 @@ async def get_employee_by_id(
         
         # Add multilingual fields
         employee = add_multilingual_fields(employee)
-        employee.salon_name = employee.salon.name if employee.salon else None
+        employee.salon_name = employee.salon.salon_name if employee.salon else None
         
-        # Get comments with user info
-        comments = db.query(EmployeeComment).options(
-            joinedload(EmployeeComment.user)
-        ).filter(EmployeeComment.employee_id == employee_id).order_by(
-            desc(EmployeeComment.created_at)
-        ).all()
+        # Get comments with user info (temporarily disabled)
+        comments = []
         
-        # Get posts
-        posts = db.query(EmployeePost).options(
-            joinedload(EmployeePost.media)
-        ).filter(EmployeePost.employee_id == employee_id).order_by(
-            desc(EmployeePost.created_at)
-        ).all()
+        # Get posts (temporarily disabled due to missing post_media table)
+        posts = []
         
         # Format comments
         formatted_comments = []
@@ -288,8 +273,10 @@ async def get_employee_by_id(
             avg_rating = round(total_rating / len(formatted_comments), 1)
         
         # Create response
+        employee_dict = employee.__dict__.copy()
+        employee_dict.pop('rating', None)  # Remove existing rating to avoid conflict
         employee_data = EmployeeDetailResponse(
-            **employee.__dict__,
+            **employee_dict,
             rating=avg_rating,
             comments=formatted_comments,
             posts=formatted_posts
@@ -302,9 +289,12 @@ async def get_employee_by_id(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error in get_employee_by_id: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail="Xodim ma'lumotlarini olishda xatolik yuz berdi"
+            detail=f"Xodim ma'lumotlarini olishda xatolik yuz berdi: {str(e)}"
         )
 
 @router.post("/", response_model=SuccessResponse)
@@ -323,22 +313,23 @@ async def create_employee(
                 detail="Salon topilmadi"
             )
         
-        # Check if phone or email already exists
+        # Check if phone, email or username already exists
         existing_employee = db.query(Employee).filter(
             or_(
                 Employee.phone == employee_data.employee_phone,
-                Employee.email == employee_data.employee_email
+                Employee.email == employee_data.employee_email,
+                Employee.username == employee_data.username
             )
         ).first()
         
         if existing_employee:
             raise HTTPException(
                 status_code=400,
-                detail="Telefon raqam yoki email allaqachon mavjud"
+                detail="Telefon raqam, email yoki username allaqachon mavjud"
             )
         
         # Hash password
-        hashed_password = hash_password(employee_data.employee_password)
+        hashed_password = JWTUtils.hash_password(employee_data.employee_password)
         
         # Create employee
         new_employee = Employee(
@@ -346,7 +337,9 @@ async def create_employee(
             name=employee_data.employee_name,
             phone=employee_data.employee_phone,
             email=employee_data.employee_email,
-            position=employee_data.position,
+            role=employee_data.role,
+            username=employee_data.username,
+            profession=employee_data.profession,
             employee_password=hashed_password,
             is_active=True
         )
@@ -364,7 +357,9 @@ async def create_employee(
                 "name": new_employee.name,
                 "phone": new_employee.phone,
                 "email": new_employee.email,
-                "position": new_employee.position
+                "role": new_employee.role,
+                "username": new_employee.username,
+                "profession": new_employee.profession
             }
         )
     except HTTPException:
@@ -406,6 +401,21 @@ async def update_employee(
                 raise HTTPException(
                     status_code=400,
                     detail="Email allaqachon mavjud"
+                )
+        
+        # Check if username already exists for other employees
+        if employee_data.username:
+            duplicate = db.query(Employee).filter(
+                and_(
+                    Employee.username == employee_data.username,
+                    Employee.id != employee_id
+                )
+            ).first()
+            
+            if duplicate:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Username allaqachon mavjud"
                 )
         
         # Update fields

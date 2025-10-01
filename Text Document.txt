@@ -1,0 +1,7 @@
+employe: username-Nargiz
+parol-12345678
+
+admin: {
+  "username": "umid",
+  "password": "12345678"
+}

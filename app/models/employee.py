@@ -12,7 +12,7 @@ class Employee(BaseModel):
     surname = Column(String(100))
     phone = Column(String(20), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
-    position = Column(String(100))
+    role = Column(String(100))
     profession = Column(String(100))
     username = Column(String(50), unique=True)
     employee_password = Column(String(255), nullable=False)
@@ -29,7 +29,11 @@ class Employee(BaseModel):
     salon = relationship("Salon", back_populates="employees")
     comments = relationship("EmployeeComment", back_populates="employee", cascade="all, delete-orphan")
     posts = relationship("EmployeePost", back_populates="employee", cascade="all, delete-orphan")
+    general_posts = relationship("Post", back_populates="employee", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="employee")
+    appointments = relationship("Appointment", back_populates="employee")
+    user_chats = relationship("UserChat", back_populates="employee")
+    translations = relationship("EmployeeTranslation", back_populates="employee", cascade="all, delete-orphan")
 
 class EmployeeComment(BaseModel):
     __tablename__ = "employee_comments"
