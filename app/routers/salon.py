@@ -69,9 +69,9 @@ async def create_salon(
     """Yangi salon yaratish"""
     try:
         # Use salon_name if provided, otherwise fallback to name
-        salon_name = salon_data.salon_name or salon_data.name
-        salon_phone = salon_data.salon_phone or salon_data.phone
-        salon_description = salon_data.salon_description or salon_data.description
+        salon_name = salon_data.name
+        salon_phone = salon_data.phone
+        salon_description = salon_data.description
         
         if not salon_name or salon_name.strip() == '':
             raise HTTPException(
@@ -97,18 +97,24 @@ async def create_salon(
             salon_rating=salon_data.salon_rating or Decimal('0'),
             salon_description=salon_description,
             salon_types=salon_types_dict,
+            salon_logo=salon_data.logo,
+            salon_photos=salon_data.photos or [],
             private_salon=salon_data.private_salon or False,
             location=location_dict,
             salon_comfort=salon_comfort_dict,
             salon_sale=salon_data.salon_sale,
             is_active=True,
             is_private=salon_data.is_private or False,
+
             description_uz=salon_data.description_uz,
             description_ru=salon_data.description_ru,
             description_en=salon_data.description_en,
             address_uz=salon_data.address_uz,
             address_ru=salon_data.address_ru,
-            address_en=salon_data.address_en
+            address_en=salon_data.address_en,
+            orientation_uz=salon_data.orientation_uz,
+            orientation_ru=salon_data.orientation_ru,
+            orientation_en=salon_data.orientation_en,
         )
         
         db.add(new_salon)
@@ -181,7 +187,6 @@ async def get_all_salons(
                 "salon_phone": salon.salon_phone,
                 "salon_instagram": salon.salon_instagram,
                 "salon_rating": salon.salon_rating,
-                "salon_description": salon.salon_description,
                 "salon_types": salon.salon_types,
                 "private_salon": salon.private_salon,
                 "location": salon.location,

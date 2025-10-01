@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import UUID, Column, Integer, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import BaseModel
@@ -7,10 +7,9 @@ from app.models.base import BaseModel
 class Payment(BaseModel):
     __tablename__ = "payments"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    employee_id = Column(Integer, ForeignKey("employees.id"), nullable=True)
-    salon_id = Column(Integer, ForeignKey("salons.id"), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=True)
+    salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id"), nullable=True)
     amount = Column(Integer, nullable=False)
     payment_type = Column(String(50), nullable=False)  # employee_post, user_premium, salon_top
     transaction_id = Column(String(255), unique=True, nullable=False)

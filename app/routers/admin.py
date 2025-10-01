@@ -143,6 +143,7 @@ async def set_salon_top(
             new_history = SalonTopHistory(
                 salon_id=request.salonId,
                 admin_id=current_admin.id,
+                start_date=datetime.now(),
                 action="top",
                 end_date=end_date,
                 is_active=True
@@ -427,85 +428,85 @@ async def get_my_salon(
         )
 
 
-@router.post("/send-sms", response_model=SMSResponse)
-async def send_sms(
-    request: SendSMSRequest,
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
-):
-    """
-    SMS yuborish (admin uchun)
-    """
-    try:
-        t = get_translation(language)
+# @router.post("/send-sms", response_model=SMSResponse)
+# async def send_sms(
+#     request: SendSMSRequest,
+#     db: Session = Depends(get_db),
+#     current_admin: Admin = Depends(get_current_admin),
+#     language: str = Depends(get_language)
+# ):
+#     """
+#     SMS yuborish (admin uchun)
+#     """
+#     try:
+#         t = get_translation(language)
         
-        # TODO: SMS service integration
-        # sms_service = SMSService()
-        # result = await sms_service.send_sms(request.phone, request.message)
+#         # TODO: SMS service integration
+#         # sms_service = SMSService()
+#         # result = await sms_service.send_sms(request.phone, request.message)
         
-        # Hozircha mock response
-        return SMSResponse(
-            success=True,
-            message=t("SMS muvaffaqiyatli yuborildi"),
-            data={
-                "phone": request.phone,
-                "message": request.message,
-                "sent_at": datetime.now().isoformat()
-            }
-        )
+#         # Hozircha mock response
+#         return SMSResponse(
+#             success=True,
+#             message=t("SMS muvaffaqiyatli yuborildi"),
+#             data={
+#                 "phone": request.phone,
+#                 "message": request.message,
+#                 "sent_at": datetime.now().isoformat()
+#             }
+#         )
 
-    except Exception as error:
-        logger.error(f"SMS yuborish xatosi: {error}")
-        t = get_translation(language)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("SMS yuborishda xatolik yuz berdi")
-        )
+#     except Exception as error:
+#         logger.error(f"SMS yuborish xatosi: {error}")
+#         t = get_translation(language)
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=t("SMS yuborishda xatolik yuz berdi")
+#         )
 
 
-@router.post("/verify-sms", response_model=SMSResponse)
-async def verify_sms(
-    request: VerifySMSRequest,
-    db: Session = Depends(get_db),
-    current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
-):
-    """
-    SMS kodni tasdiqlash (admin uchun)
-    """
-    try:
-        t = get_translation(language)
+# @router.post("/verify-sms", response_model=SMSResponse)
+# async def verify_sms(
+#     request: VerifySMSRequest,
+#     db: Session = Depends(get_db),
+#     current_admin: Admin = Depends(get_current_admin),
+#     language: str = Depends(get_language)
+# ):
+#     """
+#     SMS kodni tasdiqlash (admin uchun)
+#     """
+#     try:
+#         t = get_translation(language)
         
-        # TODO: SMS verification logic
-        # sms_service = SMSService()
-        # is_valid = await sms_service.verify_code(request.phone, request.code)
+#         # TODO: SMS verification logic
+#         # sms_service = SMSService()
+#         # is_valid = await sms_service.verify_code(request.phone, request.code)
         
-        # Hozircha mock verification
-        is_valid = request.code == "123456"  # Mock code
+#         # Hozircha mock verification
+#         is_valid = request.code == "123456"  # Mock code
         
-        if is_valid:
-            return SMSResponse(
-                success=True,
-                message=t("SMS kod muvaffaqiyatli tasdiqlandi"),
-                data={
-                    "phone": request.phone,
-                    "verified": True,
-                    "verified_at": datetime.now().isoformat()
-                }
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Noto'g'ri SMS kod")
-            )
+#         if is_valid:
+#             return SMSResponse(
+#                 success=True,
+#                 message=t("SMS kod muvaffaqiyatli tasdiqlandi"),
+#                 data={
+#                     "phone": request.phone,
+#                     "verified": True,
+#                     "verified_at": datetime.now().isoformat()
+#                 }
+#             )
+#         else:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail=t("Noto'g'ri SMS kod")
+#             )
 
-    except HTTPException:
-        raise
-    except Exception as error:
-        logger.error(f"SMS tasdiqlash xatosi: {error}")
-        t = get_translation(language)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("SMS tasdiqlashda xatolik yuz berdi")
-        )
+#     except HTTPException:
+#         raise
+#     except Exception as error:
+#         logger.error(f"SMS tasdiqlash xatosi: {error}")
+#         t = get_translation(language)
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=t("SMS tasdiqlashda xatolik yuz berdi")
+#         )

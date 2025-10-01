@@ -5,3 +5,6 @@ admin: {
   "username": "umid",
   "password": "12345678"
 }
+
+D:\Freya\freya_backend_py\uploads\avatars\95523011-4993-412f-a946-42c00baada54_3481c582-fbaa-499f-904e-dad559bd7a2f.png
+D:\Freya\freya_backend_py\uploads/avatars\95523011-4993-412f-a946-42c00baada54_3481c582-fbaa-499f-904e-dad559bd7a2f.png

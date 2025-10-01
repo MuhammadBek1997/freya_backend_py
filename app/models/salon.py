@@ -10,7 +10,6 @@ class Salon(BaseModel):
     salon_phone = Column(String(20))
     salon_instagram = Column(String(100))
     salon_rating = Column(DECIMAL(3,2), default=0)
-    salon_description = Column(Text)
     salon_types = Column(JSONB, default=list)
     private_salon = Column(Boolean, default=False)
     location = Column(JSONB)
@@ -25,6 +24,9 @@ class Salon(BaseModel):
     address_uz = Column(Text)
     address_ru = Column(Text)
     address_en = Column(Text)
+    orientation_uz = Column(Text)  # 0: portrait, 1: landscape
+    orientation_ru = Column(Text)  # 0: portrait, 1: landscape
+    orientation_en = Column(Text)  # 0: portrait, 1: landscape
     
     # Relationships
     employees = relationship("Employee", back_populates="salon", cascade="all, delete-orphan")

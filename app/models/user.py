@@ -1,5 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Numeric
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import TIMESTAMP, Column, String, Boolean, DateTime, Integer, Numeric, func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -9,6 +8,7 @@ class User(BaseModel):
     phone = Column(String(20), nullable=False)
     email = Column(String(100), nullable=True)
     password_hash = Column(String(255), nullable=False)
+    avatar_url = Column(String(255), nullable=True)
     full_name = Column(String(100), nullable=True)
     first_name = Column(String(50), nullable=True)
     last_name = Column(String(50), nullable=True)
@@ -25,8 +25,10 @@ class User(BaseModel):
     address = Column(String, nullable=True)
     city = Column(String(100), nullable=True)
     country = Column(String(100), nullable=True)
-    location_updated_at = Column(DateTime, server_default='CURRENT_TIMESTAMP')
-    
+    location_updated_at = Column(
+        TIMESTAMP(timezone=False), server_default=func.now()
+    )
+
     # Relationships
     payment_cards = relationship("PaymentCard", back_populates="user")
     user_chats = relationship("UserChat", back_populates="user")

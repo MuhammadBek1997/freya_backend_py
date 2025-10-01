@@ -32,6 +32,7 @@ class JWTUtils:
         user_type_prefix = {
             'superadmin': 'SA',
             'admin': 'AD',
+            'private_admin': 'PAD',
             'employee': 'EM',
             'user': 'US'
         }.get(data.get('role', ''), 'UN')

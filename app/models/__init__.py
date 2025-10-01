@@ -1,4 +1,4 @@
-from .base import BaseModel
+# from .base import BaseModel
 from .admin import Admin
 from .user import User
 from .salon import Salon
@@ -22,7 +22,7 @@ from .content import Content
 from .user_favorite import UserFavorite
 
 __all__ = [
-    "BaseModel",
+    # "BaseModel",
     "Admin",
     "User", 
     "Salon",

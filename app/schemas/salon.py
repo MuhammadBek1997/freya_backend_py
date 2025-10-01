@@ -10,9 +10,8 @@ class SalonType(BaseModel):
 
 # Location Schema
 class Location(BaseModel):
-    lat: float
-    lng: Optional[float] = None
-    long: Optional[float] = None  # For backward compatibility
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None  # For backward compatibility
 
 # Salon Comfort Schema
 class SalonComfort(BaseModel):
@@ -48,14 +47,19 @@ class SalonCreate(BaseModel):
     address_uz: Optional[str] = None
     address_ru: Optional[str] = None
     address_en: Optional[str] = None
+    orientation_uz: Optional[str] = None
+    orientation_ru: Optional[str] = None
+    orientation_en: Optional[str] = None
     
     # Legacy fields for backward compatibility
+    logo: Optional[str] = None
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
     description: Optional[str] = None
     address: Optional[str] = None
     working_hours: Optional[WorkingHours] = None
+    photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
 
     @validator('salon_name', pre=True)
     def validate_salon_name(cls, v, values):
@@ -86,6 +90,12 @@ class SalonUpdate(BaseModel):
     address_uz: Optional[str] = None
     address_ru: Optional[str] = None
     address_en: Optional[str] = None
+    orientation_uz: Optional[str] = None
+    orientation_ru: Optional[str] = None
+    orientation_en: Optional[str] = None
+    photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
+    logo: Optional[str] = None  # Base64 formatdagi logo rasmi
+
 
 # Salon Response Schema
 class SalonResponse(BaseModel):
@@ -108,6 +118,12 @@ class SalonResponse(BaseModel):
     address_uz: Optional[str] = None
     address_ru: Optional[str] = None
     address_en: Optional[str] = None
+    orientation_uz: Optional[str] = None
+    orientation_ru: Optional[str] = None
+    orientation_en: Optional[str] = None
+
+    photos: Optional[List[str]] = None  # Rasm URL manzillari
+    logo: Optional[str] = None  # Logo URL manzili
     created_at: datetime
     updated_at: datetime
 

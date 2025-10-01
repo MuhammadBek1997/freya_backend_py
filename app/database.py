@@ -8,7 +8,8 @@ engine = create_engine(
     settings.database_url,
     pool_pre_ping=True,
     pool_recycle=300,
-    echo=settings.environment == "development"
+    echo=False
+    # echo=settings.environment == "development"
 )
 
 # Create SessionLocal class
@@ -19,6 +20,7 @@ Base = declarative_base()
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import *
+# Base.metadata.create_all(engine)
 
 # Dependency to get database session
 def get_db():

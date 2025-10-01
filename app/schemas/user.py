@@ -151,7 +151,7 @@ class UserLocationUpdate(BaseModel):
 
 
 class FavouriteSalonRequest(BaseModel):
-    salon_id: int
+    salon_id: str
 
 
 class PaymentCardAdd(BaseModel):
@@ -214,7 +214,8 @@ class UserResponse(BaseModel):
     avatar_url: Optional[str] = None
     birth_date: Optional[datetime] = None
     gender: Optional[str] = None
-    location: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     is_active: bool
     is_verified: bool
     last_login: Optional[datetime] = None
@@ -232,7 +233,7 @@ class UserLocationResponse(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     address: Optional[str]
-    updated_at: Optional[datetime]
+    location_updated_at: Optional[datetime]
 
 
 class PaymentCardResponse(BaseModel):

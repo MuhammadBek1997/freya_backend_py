@@ -14,6 +14,6 @@ class Admin(BaseModel):
     phone = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
     role = Column(String(50), default='admin')
-    
+
     # Relationships
     salon = relationship("Salon", back_populates="admins")

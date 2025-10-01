@@ -1,0 +1,4636 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Freya Salon Backend API",
+    "description": "\n    ## Freya Beauty Salon Management System API\n    \n    Bu API Freya go'zallik saloni boshqaruv tizimi uchun yaratilgan.\n    \n    ### Asosiy funksiyalar:\n    - 🔐 **Autentifikatsiya va avtorizatsiya** (JWT token)\n    - 👥 **Foydalanuvchilar boshqaruvi** (Admin, User, Employee)\n    - 🏢 **Salon boshqaruvi** (Salon ma'lumotlari, xizmatlar)\n    - 📅 **Vaqt jadvali boshqaruvi** (Booking, Schedule)\n    - 💳 **To'lov tizimi** (Click.uz integratsiyasi)\n    - 📱 **SMS xabarnomalar** (Eskiz.uz integratsiyasi)\n    - 🌐 **Tarjima xizmati** (DeepL API)\n    \n    ### Texnologiyalar:\n    - **FastAPI** - Web framework\n    - **SQLAlchemy** - ORM\n    - **PostgreSQL/SQLite** - Database\n    - **JWT** - Authentication\n    - **Pydantic** - Data validation\n    \n    ### Versiya: 2.0.0\n    ",
+    "contact": { "name": "Freya Development Team", "email": "dev@freya.uz" },
+    "license": {
+      "name": "MIT License",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "2.0.0"
+  },
+  "servers": [
+    { "url": "http://localhost:8000", "description": "Development server" },
+    {
+      "url": "https://freya-salon-backend.herokuapp.com",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/api/auth/superadmin/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Superadmin Login",
+        "description": "Superadmin login endpoint",
+        "operationId": "superadmin_login_api_auth_superadmin_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__auth__LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Admin Login",
+        "description": "Admin login endpoint",
+        "operationId": "admin_login_api_auth_admin_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__auth__LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/create": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Create Admin",
+        "description": "Create admin endpoint (superadmin only)",
+        "operationId": "create_admin_api_auth_admin_create_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAdminRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Admin Api Auth Admin Create Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/auth/employee/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Employee Login",
+        "description": "Employee login endpoint",
+        "operationId": "employee_login_api_auth_employee_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__auth__LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/admin/profile": {
+      "get": {
+        "tags": ["Authentication"],
+        "summary": "Get Admin Profile",
+        "description": "Get admin profile endpoint",
+        "operationId": "get_admin_profile_api_auth_admin_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProfileResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+
+    "/api/admin/salon/top": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Set Salon Top",
+        "description": "Salonni top qilish yoki top'dan chiqarish",
+        "operationId": "set_salon_top_api_admin_salon_top_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalonTopRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SalonTopResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/admin/salons/top": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get Top Salons",
+        "description": "Top salonlar ro'yxatini olish",
+        "operationId": "get_top_salons_api_admin_salons_top_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/app__schemas__admin__SalonListResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get Top Salons Api Admin Salons Top Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/admin/salon/{salon_id}/top-history": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get Salon Top History",
+        "description": "Salon top tarixini olish",
+        "operationId": "get_salon_top_history_api_admin_salon__salon_id__top_history_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SalonTopHistoryResponse"
+                  },
+                  "title": "Response Get Salon Top History Api Admin Salon  Salon Id  Top History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/salons": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get All Salons",
+        "description": "Barcha salonlar ro'yxatini olish (pagination bilan)",
+        "operationId": "get_all_salons_api_admin_salons_get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "is_top",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+              "title": "Is Top"
+            }
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+              "title": "Is Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/app__schemas__admin__SalonListResponse"
+                  },
+                  "title": "Response Get All Salons Api Admin Salons Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/my-salon": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Get My Salon",
+        "description": "Admin'ning o'z salonini olish",
+        "operationId": "get_my_salon_api_admin_my_salon_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SalonDetailResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/admin/send-sms": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Send Sms",
+        "description": "SMS yuborish (admin uchun)",
+        "operationId": "send_sms_api_admin_send_sms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendSMSRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SMSResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/admin/verify-sms": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Verify Sms",
+        "description": "SMS kodni tasdiqlash (admin uchun)",
+        "operationId": "verify_sms_api_admin_verify_sms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/VerifySMSRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SMSResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+
+    "/api/users/register/step1": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Register Step1",
+        "description": "Ro'yxatdan o'tish - 1-qadam: Telefon va parol",
+        "operationId": "register_step1_api_users_register_step1_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserRegistrationStep1" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Register Step1 Api Users Register Step1 Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/verify-phone": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Verify Phone",
+        "description": "Telefon raqamni tasdiqlash",
+        "operationId": "verify_phone_api_users_verify_phone_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PhoneVerification" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Verify Phone Api Users Verify Phone Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/register/step2": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Register Step2",
+        "description": "Ro'yxatdan o'tish - 2-qadam: Username va email",
+        "operationId": "register_step2_api_users_register_step2_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserRegistrationStep2" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/login": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Login User",
+        "description": "Foydalanuvchi tizimga kirishi",
+        "operationId": "login_user_api_users_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserLogin" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__user__LoginResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/password-reset/send-code": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Send Password Reset Code",
+        "description": "Parolni tiklash uchun kod yuborish",
+        "operationId": "send_password_reset_code_api_users_password_reset_send_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordResetRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Password Reset Code Api Users Password Reset Send Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/reset-password": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Reset Password",
+        "description": "Parolni tiklash",
+        "operationId": "reset_password_api_users_reset_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordReset" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Reset Password Api Users Reset Password Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/phone-change/send-code": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Send Phone Change Code",
+        "description": "Telefon raqamni o'zgartirish uchun kod yuborish",
+        "operationId": "send_phone_change_code_api_users_phone_change_send_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PhoneChangeRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Phone Change Code Api Users Phone Change Send Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/delete": {
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete User",
+        "description": "Foydalanuvchi hisobini o'chirish",
+        "operationId": "delete_user_api_users_delete_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Delete User Api Users Delete Delete"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/update": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update User",
+        "description": "Foydalanuvchi ma'lumotlarini yangilash",
+        "operationId": "update_user_api_users_update_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserUpdate" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/generate-token": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Generate User Token",
+        "description": "Yangi token yaratish",
+        "operationId": "generate_user_token_api_users_generate_token_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TokenResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/location": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get User Location",
+        "description": "Foydalanuvchi joylashuvini olish",
+        "operationId": "get_user_location_api_users_location_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserLocationResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      },
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update User Location",
+        "description": "Foydalanuvchi joylashuvini yangilash",
+        "operationId": "update_user_location_api_users_location_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserLocationUpdate" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserLocationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/profile": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get User Profile",
+        "description": "Foydalanuvchi profilini olish",
+        "operationId": "get_user_profile_api_users_profile_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResponse" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/profile/image/upload": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Upload Profile Image",
+        "description": "Profil rasmini yuklash",
+        "operationId": "upload_profile_image_api_users_profile_image_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_profile_image_api_users_profile_image_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Upload Profile Image Api Users Profile Image Upload Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/profile/image": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get Profile Image",
+        "description": "Profil rasmini olish",
+        "operationId": "get_profile_image_api_users_profile_image_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete Profile Image",
+        "description": "Profil rasmini o'chirish",
+        "operationId": "delete_profile_image_api_users_profile_image_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Delete Profile Image Api Users Profile Image Delete"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/favourites/add": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Add Favourite Salon",
+        "description": "Sevimli salonga qo'shish",
+        "operationId": "add_favourite_salon_api_users_favourites_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FavouriteSalonRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Add Favourite Salon Api Users Favourites Add Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/favourites/remove": {
+      "post": {
+        "tags": ["Users"],
+        "summary": "Remove Favourite Salon",
+        "description": "Sevimli salondan olib tashlash",
+        "operationId": "remove_favourite_salon_api_users_favourites_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/FavouriteSalonRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Remove Favourite Salon Api Users Favourites Remove Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/favourites": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get Favourite Salons",
+        "description": "Sevimli salonlar ro'yxatini olish",
+        "operationId": "get_favourite_salons_api_users_favourites_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": { "type": "object" },
+                  "type": "array",
+                  "title": "Response Get Favourite Salons Api Users Favourites Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/payment-cards": {
+      "get": {
+        "tags": ["Users"],
+        "summary": "Get User Payment Cards",
+        "description": "Foydalanuvchi to'lov kartalari ro'yxatini olish",
+        "operationId": "get_user_payment_cards_api_users_payment_cards_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PaymentCardResponse"
+                  },
+                  "type": "array",
+                  "title": "Response Get User Payment Cards Api Users Payment Cards Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      },
+      "post": {
+        "tags": ["Users"],
+        "summary": "Add Payment Card",
+        "description": "To'lov kartasini qo'shish",
+        "operationId": "add_payment_card_api_users_payment_cards_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PaymentCardAdd" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentCardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/users/payment-cards/{card_id}": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Update Payment Card",
+        "description": "To'lov kartasini yangilash",
+        "operationId": "update_payment_card_api_users_payment_cards__card_id__put",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Card Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PaymentCardUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentCardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Users"],
+        "summary": "Delete Payment Card",
+        "description": "To'lov kartasini o'chirish",
+        "operationId": "delete_payment_card_api_users_payment_cards__card_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Card Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Delete Payment Card Api Users Payment Cards  Card Id  Delete"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/payment-cards/{card_id}/set-default": {
+      "put": {
+        "tags": ["Users"],
+        "summary": "Set Default Payment Card",
+        "description": "To'lov kartasini asosiy qilib belgilash",
+        "operationId": "set_default_payment_card_api_users_payment_cards__card_id__set_default_put",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "title": "Card Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PaymentCardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "/api/employees/": {
+      "get": {
+        "tags": ["employees"],
+        "summary": "Get All Employees",
+        "description": "Get all employees with pagination and search",
+        "operationId": "get_all_employees_api_employees__get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "salon_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                { "type": "string", "format": "uuid" },
+                { "type": "null" }
+              ],
+              "title": "Salon Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["employees"],
+        "summary": "Create Employee",
+        "description": "Create new employee",
+        "operationId": "create_employee_api_employees__post",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmployeeCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/salon/{salon_id}": {
+      "get": {
+        "tags": ["employees"],
+        "summary": "Get Employees By Salon Id",
+        "description": "Get employees by salon ID",
+        "operationId": "get_employees_by_salon_id_api_employees_salon__salon_id__get",
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Salon Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/{employee_id}": {
+      "get": {
+        "tags": ["employees"],
+        "summary": "Get Employee By Id",
+        "description": "Get employee by ID with comments and posts",
+        "operationId": "get_employee_by_id_api_employees__employee_id__get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeDetailResponseWrapper"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["employees"],
+        "summary": "Update Employee",
+        "description": "Update employee",
+        "operationId": "update_employee_api_employees__employee_id__put",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmployeeUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["employees"],
+        "summary": "Delete Employee",
+        "description": "Delete employee (soft delete)",
+        "operationId": "delete_employee_api_employees__employee_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/{employee_id}/comments": {
+      "post": {
+        "tags": ["employees"],
+        "summary": "Add Employee Comment",
+        "description": "Add comment to employee",
+        "operationId": "add_employee_comment_api_employees__employee_id__comments_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmployeeCommentCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/{employee_id}/posts": {
+      "post": {
+        "tags": ["employees"],
+        "summary": "Add Employee Post",
+        "description": "Add post for employee",
+        "operationId": "add_employee_post_api_employees__employee_id__posts_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/EmployeePostCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["employees"],
+        "summary": "Get Employee Posts",
+        "description": "Get employee posts",
+        "operationId": "get_employee_posts_api_employees__employee_id__posts_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeePostListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/{employee_id}/waiting-status": {
+      "patch": {
+        "tags": ["employees"],
+        "summary": "Update Employee Waiting Status",
+        "description": "Update employee waiting status",
+        "operationId": "update_employee_waiting_status_api_employees__employee_id__waiting_status_patch",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Employee Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeWaitingStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/employees/bulk/waiting-status": {
+      "patch": {
+        "tags": ["employees"],
+        "summary": "Bulk Update Employee Waiting Status",
+        "description": "Bulk update employees waiting status",
+        "operationId": "bulk_update_employee_waiting_status_api_employees_bulk_waiting_status_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkEmployeeWaitingStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+
+    "/api/salons/": {
+      "post": {
+        "tags": ["Salons"],
+        "summary": "Create Salon",
+        "description": "Yangi salon yaratish",
+        "operationId": "create_salon_api_salons__post",
+        "security": [{ "HTTPBearer": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalonCreate" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": ["Salons"],
+        "summary": "Get All Salons",
+        "description": "Barcha salonlarni olish",
+        "operationId": "get_all_salons_api_salons__get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "title": "Search"
+            }
+          },
+          {
+            "name": "is_private",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "default": "",
+              "title": "Is Private"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__salon__SalonListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salons/{salon_id}": {
+      "get": {
+        "tags": ["Salons"],
+        "summary": "Get Salon By Id",
+        "description": "ID bo'yicha salonni olish",
+        "operationId": "get_salon_by_id_api_salons__salon_id__get",
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SalonResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["Salons"],
+        "summary": "Update Salon",
+        "description": "Salonni yangilash",
+        "operationId": "update_salon_api_salons__salon_id__put",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalonUpdate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Salons"],
+        "summary": "Delete Salon",
+        "description": "Salonni o'chirish (soft delete)",
+        "operationId": "delete_salon_api_salons__salon_id__delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salons/{salon_id}/comments": {
+      "post": {
+        "tags": ["Salons"],
+        "summary": "Add Salon Comment",
+        "description": "Salon uchun izoh qo'shish",
+        "operationId": "add_salon_comment_api_salons__salon_id__comments_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalonCommentCreate" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salons/nearby": {
+      "get": {
+        "tags": ["Salons"],
+        "summary": "Get Nearby Salons",
+        "description": "Yaqin atrofdagi salonlarni olish",
+        "operationId": "get_nearby_salons_api_salons_nearby_get",
+        "parameters": [
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "title": "Latitude" }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "number", "title": "Longitude" }
+          },
+          {
+            "name": "radius",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 100.0,
+              "minimum": 0.1,
+              "default": 10.0,
+              "title": "Radius"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "is_private",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "default": "",
+              "title": "Is Private"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__salon__SalonListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salons/filter/types": {
+      "get": {
+        "tags": ["Salons"],
+        "summary": "Get Salons By Types",
+        "description": "Salon turlari bo'yicha filtrlash",
+        "operationId": "get_salons_by_types_api_salons_filter_types_get",
+        "parameters": [
+          {
+            "name": "salon_types",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Types" }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [{ "type": "string" }, { "type": "null" }],
+              "default": "",
+              "title": "Search"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__salon__SalonListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/salons/{salon_id}/photos": {
+      "post": {
+        "tags": ["Salons"],
+        "summary": "Upload Salon Photos",
+        "description": "Salon rasmlari yuklash",
+        "operationId": "upload_salon_photos_api_salons__salon_id__photos_post",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PhotoUploadRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Salons"],
+        "summary": "Delete Salon Photo",
+        "description": "Salon rasmini o'chirish",
+        "operationId": "delete_salon_photo_api_salons__salon_id__photos_delete",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "salon_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Salon Id" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PhotoDeleteRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StandardResponse" }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment/employee-post": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Employee post uchun to'lov yaratish",
+        "description": "Employee post uchun to'lov yaratish\n\n- **employee_id**: Employee ID\n- **post_count**: Post soni (default: 4)",
+        "operationId": "create_employee_post_payment_api_payment_employee_post_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeePostPaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Employee Post Payment Api Payment Employee Post Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/payment/user-premium": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "User premium uchun to'lov yaratish",
+        "description": "User premium uchun to'lov yaratish\n\n- **user_id**: User ID\n- **duration**: Davomiyligi (30 yoki 90 kun)",
+        "operationId": "create_user_premium_payment_api_payment_user_premium_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPremiumPaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create User Premium Payment Api Payment User Premium Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/payment/salon-top": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Salon top uchun to'lov yaratish",
+        "description": "Salon top uchun to'lov yaratish\n\n- **salon_id**: Salon ID\n- **duration**: Davomiyligi (7 yoki 30 kun)",
+        "operationId": "create_salon_top_payment_api_payment_salon_top_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalonTopPaymentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Create Salon Top Payment Api Payment Salon Top Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/payment/status/{transaction_id}": {
+      "get": {
+        "tags": ["Payment"],
+        "summary": "To'lov holatini tekshirish",
+        "description": "To'lov holatini tekshirish\n\n- **transaction_id**: Transaction ID",
+        "operationId": "check_payment_status_api_payment_status__transaction_id__get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "transaction_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Transaction Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Check Payment Status Api Payment Status  Transaction Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment/callback": {
+      "post": {
+        "tags": ["Payment"],
+        "summary": "Click.uz callback",
+        "description": "Click.uz dan kelgan callback\n\n- **transaction_id**: Transaction ID\n- **click_trans_id**: Click transaction ID\n- **status**: To'lov holati",
+        "operationId": "payment_callback_api_payment_callback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PaymentCallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Payment Callback Api Payment Callback Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/payment/history": {
+      "get": {
+        "tags": ["Payment"],
+        "summary": "To'lov tarixi",
+        "description": "Foydalanuvchining to'lov tarixi",
+        "operationId": "get_payment_history_api_payment_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Payment History Api Payment History Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/sms/send-verification-code": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "Tasdiqlash kodini yuborish",
+        "description": "Telefon raqamini tasdiqlash uchun kod yuborish\n\n- **phone**: Telefon raqami (+998901234567 formatida)",
+        "operationId": "send_verification_code_api_sms_send_verification_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendVerificationCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Verification Code Api Sms Send Verification Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/sms/send-reset-password-code": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "Parolni tiklash kodini yuborish",
+        "description": "Parolni tiklash uchun kod yuborish\n\n- **phone**: Telefon raqami (+998901234567 formatida)",
+        "operationId": "send_reset_password_code_api_sms_send_reset_password_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendResetPasswordCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Reset Password Code Api Sms Send Reset Password Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sms/send-change-phone-code": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "Telefon raqamini o'zgartirish kodini yuborish",
+        "description": "Telefon raqamini o'zgartirish uchun kod yuborish\n\n- **old_phone**: Eski telefon raqami\n- **new_phone**: Yangi telefon raqami",
+        "operationId": "send_change_phone_code_api_sms_send_change_phone_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendChangePhoneCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Change Phone Code Api Sms Send Change Phone Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/sms/send-registration-code": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "Ro'yxatdan o'tish kodini yuborish",
+        "description": "Ro'yxatdan o'tish uchun kod yuborish\n\n- **phone**: Telefon raqami (+998901234567 formatida)",
+        "operationId": "send_registration_code_api_sms_send_registration_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendRegistrationCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Registration Code Api Sms Send Registration Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sms/send-payment-card-code": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "To'lov kartasi tasdiqlash kodini yuborish",
+        "description": "To'lov kartasini tasdiqlash uchun kod yuborish\n\n- **phone**: Telefon raqami\n- **card_number**: Karta raqami",
+        "operationId": "send_payment_card_code_api_sms_send_payment_card_code_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendPaymentCardCodeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Send Payment Card Code Api Sms Send Payment Card Code Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/sms/balance": {
+      "get": {
+        "tags": ["SMS"],
+        "summary": "SMS balansini tekshirish",
+        "description": "Eskiz.uz hisobidagi SMS balansini tekshirish",
+        "operationId": "check_sms_balance_api_sms_balance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Check Sms Balance Api Sms Balance Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/sms/status/{message_id}": {
+      "get": {
+        "tags": ["SMS"],
+        "summary": "SMS holatini tekshirish",
+        "description": "Yuborilgan SMS holatini tekshirish\n\n- **message_id**: SMS ID",
+        "operationId": "check_sms_status_api_sms_status__message_id__get",
+        "security": [{ "HTTPBearer": [] }],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "title": "Message Id" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Check Sms Status Api Sms Status  Message Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sms/refresh-token": {
+      "post": {
+        "tags": ["SMS"],
+        "summary": "Eskiz.uz tokenini yangilash",
+        "description": "Eskiz.uz access tokenini yangilash",
+        "operationId": "refresh_eskiz_token_api_sms_refresh_token_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Refresh Eskiz Token Api Sms Refresh Token Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/translation/translate": {
+      "post": {
+        "tags": ["Translation"],
+        "summary": "Matnni tarjima qilish",
+        "description": "Matnni berilgan tilga tarjima qilish\n\n- **text**: Tarjima qilinadigan matn\n- **target_language**: Maqsadli til kodi (uz, ru, en)\n- **source_language**: Manba til kodi (ixtiyoriy)",
+        "operationId": "translate_text_api_translation_translate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TranslateTextRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Translate Text Api Translation Translate Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/translation/translate-all": {
+      "post": {
+        "tags": ["Translation"],
+        "summary": "Matnni barcha tillarga tarjima qilish",
+        "description": "Matnni barcha qo'llab-quvvatlanadigan tillarga tarjima qilish\n\n- **text**: Tarjima qilinadigan matn\n- **source_language**: Manba til kodi (ixtiyoriy)",
+        "operationId": "translate_to_all_languages_api_translation_translate_all_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TranslateToAllLanguagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Translate To All Languages Api Translation Translate All Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/translation/detect-language": {
+      "post": {
+        "tags": ["Translation"],
+        "summary": "Matn tilini aniqlash",
+        "description": "Matn tilini aniqlash\n\n- **text**: Tahlil qilinadigan matn",
+        "operationId": "detect_language_api_translation_detect_language_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DetectLanguageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Detect Language Api Translation Detect Language Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HTTPValidationError" }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/api/translation/supported-languages": {
+      "get": {
+        "tags": ["Translation"],
+        "summary": "Qo'llab-quvvatlanadigan tillar",
+        "description": "Qo'llab-quvvatlanadigan tillar ro'yxatini olish",
+        "operationId": "get_supported_languages_api_translation_supported_languages_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Supported Languages Api Translation Supported Languages Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/translation/usage": {
+      "get": {
+        "tags": ["Translation"],
+        "summary": "DeepL API ishlatish ma'lumotlari",
+        "description": "DeepL API ishlatish ma'lumotlarini olish",
+        "operationId": "get_usage_info_api_translation_usage_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "title": "Response Get Usage Info Api Translation Usage Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [{ "HTTPBearer": [] }]
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Root",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": { "application/json": { "schema": {} } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AdminProfileResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "username": { "type": "string", "title": "Username" },
+          "email": { "type": "string", "title": "Email" },
+          "full_name": { "type": "string", "title": "Full Name" },
+          "role": { "type": "string", "title": "Role" },
+          "salon_id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Id"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "created_at": { "type": "string", "title": "Created At" },
+          "updated_at": { "type": "string", "title": "Updated At" }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "email",
+          "full_name",
+          "role",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdminProfileResponse",
+        "description": "Admin profile response schema"
+      },
+      "Body_upload_profile_image_api_users_profile_image_upload_post": {
+        "properties": {
+          "file": { "type": "string", "format": "binary", "title": "File" }
+        },
+        "type": "object",
+        "required": ["file"],
+        "title": "Body_upload_profile_image_api_users_profile_image_upload_post"
+      },
+      "BulkEmployeeWaitingStatusUpdate": {
+        "properties": {
+          "employee_ids": {
+            "items": { "type": "string", "format": "uuid" },
+            "type": "array",
+            "title": "Employee Ids"
+          },
+          "is_waiting": { "type": "boolean", "title": "Is Waiting" }
+        },
+        "type": "object",
+        "required": ["employee_ids", "is_waiting"],
+        "title": "BulkEmployeeWaitingStatusUpdate"
+      },
+      "CreateAdminRequest": {
+        "properties": {
+          "username": { "type": "string", "title": "Username" },
+          "email": { "type": "string", "format": "email", "title": "Email" },
+          "password": { "type": "string", "title": "Password" },
+          "full_name": { "type": "string", "title": "Full Name" },
+          "salon_id": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Id"
+          },
+          "role": { "type": "string", "title": "Role", "default": "admin" }
+        },
+        "type": "object",
+        "required": ["username", "email", "password", "full_name"],
+        "title": "CreateAdminRequest",
+        "description": "Create admin request schema"
+      },
+      "DetectLanguageRequest": {
+        "properties": { "text": { "type": "string", "title": "Text" } },
+        "type": "object",
+        "required": ["text"],
+        "title": "DetectLanguageRequest"
+      },
+      "EmployeeCommentCreate": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "rating": { "type": "integer", "title": "Rating" }
+        },
+        "type": "object",
+        "required": ["text", "rating"],
+        "title": "EmployeeCommentCreate"
+      },
+      "EmployeeCreate": {
+        "properties": {
+          "salon_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Salon Id"
+          },
+          "employee_name": { "type": "string", "title": "Employee Name" },
+          "employee_phone": { "type": "string", "title": "Employee Phone" },
+          "employee_email": {
+            "type": "string",
+            "format": "email",
+            "title": "Employee Email"
+          },
+          "role": { "type": "string", "title": "Role" },
+          "username": { "type": "string", "title": "Username" },
+          "profession": { "type": "string", "title": "Profession" },
+          "employee_password": {
+            "type": "string",
+            "title": "Employee Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "salon_id",
+          "employee_name",
+          "employee_phone",
+          "employee_email",
+          "role",
+          "username",
+          "profession",
+          "employee_password"
+        ],
+        "title": "EmployeeCreate"
+      },
+      "EmployeeDetailResponse": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "salon_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Salon Id"
+          },
+          "name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name"
+          },
+          "surname": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname"
+          },
+          "phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "role": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Role"
+          },
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "profession": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession"
+          },
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          },
+          "specialization": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization"
+          },
+          "avatar_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Avatar Url"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_waiting": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Waiting"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Deleted At"
+          },
+          "name_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name Uz"
+          },
+          "name_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name En"
+          },
+          "name_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name Ru"
+          },
+          "surname_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname Uz"
+          },
+          "surname_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname En"
+          },
+          "surname_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname Ru"
+          },
+          "profession_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession Uz"
+          },
+          "profession_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession En"
+          },
+          "profession_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession Ru"
+          },
+          "bio_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio Uz"
+          },
+          "bio_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio En"
+          },
+          "bio_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio Ru"
+          },
+          "specialization_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization Uz"
+          },
+          "specialization_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization En"
+          },
+          "specialization_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization Ru"
+          },
+          "comment_count": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Comment Count",
+            "default": 0
+          },
+          "avg_rating": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Avg Rating",
+            "default": 0.0
+          },
+          "salon_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Name"
+          },
+          "rating": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Rating",
+            "default": 0.0
+          },
+          "comments": {
+            "items": { "type": "object" },
+            "type": "array",
+            "title": "Comments",
+            "default": []
+          },
+          "posts": {
+            "items": { "type": "object" },
+            "type": "array",
+            "title": "Posts",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["id", "salon_id", "is_active", "created_at"],
+        "title": "EmployeeDetailResponse"
+      },
+      "EmployeeDetailResponseWrapper": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "data": { "$ref": "#/components/schemas/EmployeeDetailResponse" }
+        },
+        "type": "object",
+        "required": ["success", "data"],
+        "title": "EmployeeDetailResponseWrapper"
+      },
+      "EmployeeListResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "data": {
+            "items": { "$ref": "#/components/schemas/EmployeeResponse" },
+            "type": "array",
+            "title": "Data"
+          },
+          "pagination": { "type": "object", "title": "Pagination" }
+        },
+        "type": "object",
+        "required": ["success", "data", "pagination"],
+        "title": "EmployeeListResponse"
+      },
+      "EmployeePostCreate": {
+        "properties": {
+          "title": { "type": "string", "title": "Title" },
+          "description": { "type": "string", "title": "Description" },
+          "media": {
+            "anyOf": [
+              { "items": { "type": "string" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Media",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": ["title", "description"],
+        "title": "EmployeePostCreate"
+      },
+      "EmployeePostListResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "data": {
+            "items": { "$ref": "#/components/schemas/EmployeePostResponse" },
+            "type": "array",
+            "title": "Data"
+          },
+          "pagination": { "type": "object", "title": "Pagination" }
+        },
+        "type": "object",
+        "required": ["success", "data", "pagination"],
+        "title": "EmployeePostListResponse"
+      },
+      "EmployeePostPaymentRequest": {
+        "properties": {
+          "employee_id": { "type": "integer", "title": "Employee Id" },
+          "post_count": {
+            "type": "integer",
+            "title": "Post Count",
+            "default": 4
+          }
+        },
+        "type": "object",
+        "required": ["employee_id"],
+        "title": "EmployeePostPaymentRequest"
+      },
+      "EmployeePostResponse": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "employee_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Employee Id"
+          },
+          "title": { "type": "string", "title": "Title" },
+          "description": { "type": "string", "title": "Description" },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Updated At"
+          },
+          "employee_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Employee Name"
+          },
+          "employee_surname": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Employee Surname"
+          },
+          "employee_profession": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Employee Profession"
+          },
+          "salon_id": {
+            "anyOf": [
+              { "type": "string", "format": "uuid" },
+              { "type": "null" }
+            ],
+            "title": "Salon Id"
+          },
+          "salon_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Name"
+          },
+          "media_files": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Media Files",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "title",
+          "description",
+          "is_active",
+          "created_at"
+        ],
+        "title": "EmployeePostResponse"
+      },
+      "EmployeeResponse": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "salon_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Salon Id"
+          },
+          "name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name"
+          },
+          "surname": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname"
+          },
+          "phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "role": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Role"
+          },
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "profession": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession"
+          },
+          "bio": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio"
+          },
+          "specialization": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization"
+          },
+          "avatar_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Avatar Url"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_waiting": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Waiting"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Deleted At"
+          },
+          "name_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name Uz"
+          },
+          "name_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name En"
+          },
+          "name_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name Ru"
+          },
+          "surname_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname Uz"
+          },
+          "surname_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname En"
+          },
+          "surname_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname Ru"
+          },
+          "profession_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession Uz"
+          },
+          "profession_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession En"
+          },
+          "profession_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession Ru"
+          },
+          "bio_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio Uz"
+          },
+          "bio_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio En"
+          },
+          "bio_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Bio Ru"
+          },
+          "specialization_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization Uz"
+          },
+          "specialization_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization En"
+          },
+          "specialization_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Specialization Ru"
+          },
+          "comment_count": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Comment Count",
+            "default": 0
+          },
+          "avg_rating": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Avg Rating",
+            "default": 0.0
+          },
+          "salon_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Name"
+          }
+        },
+        "type": "object",
+        "required": ["id", "salon_id", "is_active", "created_at"],
+        "title": "EmployeeResponse"
+      },
+      "EmployeeUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name"
+          },
+          "surname": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Surname"
+          },
+          "phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [
+              { "type": "string", "format": "email" },
+              { "type": "null" }
+            ],
+            "title": "Email"
+          },
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "profession": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Profession"
+          }
+        },
+        "type": "object",
+        "title": "EmployeeUpdate"
+      },
+      "EmployeeWaitingStatusUpdate": {
+        "properties": {
+          "is_waiting": { "type": "boolean", "title": "Is Waiting" }
+        },
+        "type": "object",
+        "required": ["is_waiting"],
+        "title": "EmployeeWaitingStatusUpdate"
+      },
+      "FavouriteSalonRequest": {
+        "properties": {
+          "salon_id": { "type": "integer", "title": "Salon Id" }
+        },
+        "type": "object",
+        "required": ["salon_id"],
+        "title": "FavouriteSalonRequest"
+      },
+      "GenderEnum": {
+        "type": "string",
+        "enum": ["male", "female", "other"],
+        "title": "GenderEnum"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": { "$ref": "#/components/schemas/ValidationError" },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Location": {
+        "properties": {
+          "lat": { "type": "number", "title": "Lat" },
+          "lng": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Lng"
+          },
+          "long": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Long"
+          }
+        },
+        "type": "object",
+        "required": ["lat"],
+        "title": "Location"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": { "type": "string", "title": "Username" },
+          "password": { "type": "string", "title": "Password" }
+        },
+        "type": "object",
+        "required": ["username", "password"],
+        "title": "LoginRequest",
+        "description": "Login request schema"
+      },
+      "PasswordReset": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "verification_code": {
+            "type": "string",
+            "title": "Verification Code"
+          },
+          "new_password": { "type": "string", "title": "New Password" }
+        },
+        "type": "object",
+        "required": ["phone", "verification_code", "new_password"],
+        "title": "PasswordReset"
+      },
+      "PasswordResetRequest": {
+        "properties": { "phone": { "type": "string", "title": "Phone" } },
+        "type": "object",
+        "required": ["phone"],
+        "title": "PasswordResetRequest"
+      },
+      "PaymentCallbackRequest": {
+        "properties": {
+          "transaction_id": { "type": "string", "title": "Transaction Id" },
+          "click_trans_id": { "type": "string", "title": "Click Trans Id" },
+          "status": { "type": "string", "title": "Status" }
+        },
+        "type": "object",
+        "required": ["transaction_id", "click_trans_id", "status"],
+        "title": "PaymentCallbackRequest"
+      },
+      "PaymentCardAdd": {
+        "properties": {
+          "card_number": { "type": "string", "title": "Card Number" },
+          "card_holder_name": { "type": "string", "title": "Card Holder Name" },
+          "expiry_month": { "type": "integer", "title": "Expiry Month" },
+          "expiry_year": { "type": "integer", "title": "Expiry Year" },
+          "is_default": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Default",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_number",
+          "card_holder_name",
+          "expiry_month",
+          "expiry_year"
+        ],
+        "title": "PaymentCardAdd"
+      },
+      "PaymentCardResponse": {
+        "properties": {
+          "id": { "type": "integer", "title": "Id" },
+          "masked_card_number": {
+            "type": "string",
+            "title": "Masked Card Number"
+          },
+          "card_type": { "type": "string", "title": "Card Type" },
+          "card_holder_name": { "type": "string", "title": "Card Holder Name" },
+          "expiry_month": { "type": "integer", "title": "Expiry Month" },
+          "expiry_year": { "type": "integer", "title": "Expiry Year" },
+          "is_default": { "type": "boolean", "title": "Is Default" },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "masked_card_number",
+          "card_type",
+          "card_holder_name",
+          "expiry_month",
+          "expiry_year",
+          "is_default",
+          "created_at"
+        ],
+        "title": "PaymentCardResponse"
+      },
+      "PaymentCardUpdate": {
+        "properties": {
+          "card_holder_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Card Holder Name"
+          },
+          "expiry_month": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Expiry Month"
+          },
+          "expiry_year": {
+            "anyOf": [{ "type": "integer" }, { "type": "null" }],
+            "title": "Expiry Year"
+          },
+          "is_default": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Default"
+          }
+        },
+        "type": "object",
+        "title": "PaymentCardUpdate"
+      },
+      "PhoneChangeRequest": {
+        "properties": { "phone": { "type": "string", "title": "Phone" } },
+        "type": "object",
+        "required": ["phone"],
+        "title": "PhoneChangeRequest"
+      },
+      "PhoneVerification": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "verification_code": {
+            "type": "string",
+            "title": "Verification Code"
+          }
+        },
+        "type": "object",
+        "required": ["phone", "verification_code"],
+        "title": "PhoneVerification"
+      },
+      "PhotoDeleteRequest": {
+        "properties": {
+          "photo_index": { "type": "integer", "title": "Photo Index" }
+        },
+        "type": "object",
+        "required": ["photo_index"],
+        "title": "PhotoDeleteRequest"
+      },
+      "PhotoUploadRequest": {
+        "properties": {
+          "photos": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Photos"
+          }
+        },
+        "type": "object",
+        "required": ["photos"],
+        "title": "PhotoUploadRequest"
+      },
+      "SMSResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "data": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": ["success", "message"],
+        "title": "SMSResponse",
+        "description": "SMS response schema"
+      },
+      "SalonComfort": {
+        "properties": {
+          "name": { "type": "string", "title": "Name" },
+          "isActive": {
+            "type": "boolean",
+            "title": "Isactive",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["name"],
+        "title": "SalonComfort"
+      },
+      "SalonCommentCreate": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "rating": { "type": "integer", "title": "Rating" }
+        },
+        "type": "object",
+        "required": ["text", "rating"],
+        "title": "SalonCommentCreate"
+      },
+      "SalonCreate": {
+        "properties": {
+          "salon_name": { "type": "string", "title": "Salon Name" },
+          "salon_phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Phone"
+          },
+          "salon_instagram": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Instagram"
+          },
+          "salon_rating": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "null" }
+            ],
+            "title": "Salon Rating",
+            "default": 0
+          },
+          "salon_description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Description"
+          },
+          "salon_types": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SalonType" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Salon Types"
+          },
+          "private_salon": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Private Salon",
+            "default": false
+          },
+          "location": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/Location" },
+              { "type": "null" }
+            ]
+          },
+          "salon_comfort": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SalonComfort" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Salon Comfort"
+          },
+          "salon_sale": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Salon Sale"
+          },
+          "is_private": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Private",
+            "default": false
+          },
+          "description_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Uz"
+          },
+          "description_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Ru"
+          },
+          "description_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description En"
+          },
+          "address_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Uz"
+          },
+          "address_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Ru"
+          },
+          "address_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address En"
+          },
+          "name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Name"
+          },
+          "phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description"
+          },
+          "address": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address"
+          },
+          "working_hours": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/WorkingHours" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "required": ["salon_name"],
+        "title": "SalonCreate"
+      },
+      "SalonDetailResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "address": { "type": "string", "title": "Address" },
+          "phone": { "type": "string", "title": "Phone" },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_top": { "type": "boolean", "title": "Is Top" },
+          "rating": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Rating"
+          },
+          "photos": {
+            "items": { "type": "string" },
+            "type": "array",
+            "title": "Photos",
+            "default": []
+          },
+          "services": {
+            "items": { "type": "object" },
+            "type": "array",
+            "title": "Services",
+            "default": []
+          },
+          "employees": {
+            "items": { "type": "object" },
+            "type": "array",
+            "title": "Employees",
+            "default": []
+          },
+          "created_at": { "type": "string", "title": "Created At" },
+          "updated_at": { "type": "string", "title": "Updated At" }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "phone",
+          "is_active",
+          "is_top",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalonDetailResponse",
+        "description": "Salon detail response schema"
+      },
+      "SalonResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "salon_name": { "type": "string", "title": "Salon Name" },
+          "salon_phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Phone"
+          },
+          "salon_instagram": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Instagram"
+          },
+          "salon_rating": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Rating"
+          },
+          "salon_description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Description"
+          },
+          "salon_types": {
+            "anyOf": [
+              { "items": { "type": "object" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Salon Types"
+          },
+          "private_salon": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Private Salon"
+          },
+          "location": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Location"
+          },
+          "salon_comfort": {
+            "anyOf": [
+              { "items": { "type": "object" }, "type": "array" },
+              { "type": "null" }
+            ],
+            "title": "Salon Comfort"
+          },
+          "salon_sale": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Salon Sale"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_private": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Private"
+          },
+          "description_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Uz"
+          },
+          "description_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Ru"
+          },
+          "description_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description En"
+          },
+          "address_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Uz"
+          },
+          "address_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Ru"
+          },
+          "address_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address En"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "salon_name",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalonResponse"
+      },
+      "SalonTopHistoryResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "salon_id": { "type": "string", "title": "Salon Id" },
+          "admin_id": { "type": "string", "title": "Admin Id" },
+          "action": { "type": "string", "title": "Action" },
+          "start_date": { "type": "string", "title": "Start Date" },
+          "end_date": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "End Date"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "created_at": { "type": "string", "title": "Created At" }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "salon_id",
+          "admin_id",
+          "action",
+          "start_date",
+          "is_active",
+          "created_at"
+        ],
+        "title": "SalonTopHistoryResponse",
+        "description": "Salon top history response schema"
+      },
+      "SalonTopPaymentRequest": {
+        "properties": {
+          "salon_id": { "type": "integer", "title": "Salon Id" },
+          "duration": { "type": "integer", "title": "Duration", "default": 7 }
+        },
+        "type": "object",
+        "required": ["salon_id"],
+        "title": "SalonTopPaymentRequest"
+      },
+      "SalonTopRequest": {
+        "properties": {
+          "salonId": { "type": "string", "title": "Salonid" },
+          "isTop": { "type": "boolean", "title": "Istop" },
+          "duration": { "type": "integer", "title": "Duration", "default": 7 }
+        },
+        "type": "object",
+        "required": ["salonId", "isTop"],
+        "title": "SalonTopRequest",
+        "description": "Salon top qilish request schema"
+      },
+      "SalonTopResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "data": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": ["success", "message"],
+        "title": "SalonTopResponse",
+        "description": "Salon top qilish response schema"
+      },
+      "SalonType": {
+        "properties": {
+          "type": { "type": "string", "title": "Type" },
+          "selected": {
+            "type": "boolean",
+            "title": "Selected",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": ["type"],
+        "title": "SalonType"
+      },
+      "SalonUpdate": {
+        "properties": {
+          "salon_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Name"
+          },
+          "salon_phone": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Phone"
+          },
+          "salon_instagram": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Instagram"
+          },
+          "salon_rating": {
+            "anyOf": [
+              { "type": "number" },
+              { "type": "string" },
+              { "type": "null" }
+            ],
+            "title": "Salon Rating"
+          },
+          "salon_description": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Salon Description"
+          },
+          "salon_types": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SalonType" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Salon Types"
+          },
+          "private_salon": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Private Salon"
+          },
+          "location": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/Location" },
+              { "type": "null" }
+            ]
+          },
+          "salon_comfort": {
+            "anyOf": [
+              {
+                "items": { "$ref": "#/components/schemas/SalonComfort" },
+                "type": "array"
+              },
+              { "type": "null" }
+            ],
+            "title": "Salon Comfort"
+          },
+          "salon_sale": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Salon Sale"
+          },
+          "is_active": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Active"
+          },
+          "is_private": {
+            "anyOf": [{ "type": "boolean" }, { "type": "null" }],
+            "title": "Is Private"
+          },
+          "description_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Uz"
+          },
+          "description_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description Ru"
+          },
+          "description_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Description En"
+          },
+          "address_uz": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Uz"
+          },
+          "address_ru": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address Ru"
+          },
+          "address_en": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address En"
+          }
+        },
+        "type": "object",
+        "title": "SalonUpdate"
+      },
+      "SendChangePhoneCodeRequest": {
+        "properties": {
+          "old_phone": { "type": "string", "title": "Old Phone" },
+          "new_phone": { "type": "string", "title": "New Phone" }
+        },
+        "type": "object",
+        "required": ["old_phone", "new_phone"],
+        "title": "SendChangePhoneCodeRequest"
+      },
+      "SendPaymentCardCodeRequest": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "card_number": { "type": "string", "title": "Card Number" }
+        },
+        "type": "object",
+        "required": ["phone", "card_number"],
+        "title": "SendPaymentCardCodeRequest"
+      },
+      "SendRegistrationCodeRequest": {
+        "properties": { "phone": { "type": "string", "title": "Phone" } },
+        "type": "object",
+        "required": ["phone"],
+        "title": "SendRegistrationCodeRequest"
+      },
+      "SendResetPasswordCodeRequest": {
+        "properties": { "phone": { "type": "string", "title": "Phone" } },
+        "type": "object",
+        "required": ["phone"],
+        "title": "SendResetPasswordCodeRequest"
+      },
+      "SendSMSRequest": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "message": { "type": "string", "title": "Message" }
+        },
+        "type": "object",
+        "required": ["phone", "message"],
+        "title": "SendSMSRequest",
+        "description": "SMS yuborish request schema"
+      },
+      "SendVerificationCodeRequest": {
+        "properties": { "phone": { "type": "string", "title": "Phone" } },
+        "type": "object",
+        "required": ["phone"],
+        "title": "SendVerificationCodeRequest"
+      },
+      "StandardResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "data": { "anyOf": [{}, { "type": "null" }], "title": "Data" }
+        },
+        "type": "object",
+        "required": ["success", "message"],
+        "title": "StandardResponse"
+      },
+      "SuccessResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "data": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": ["success", "message"],
+        "title": "SuccessResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "token": { "type": "string", "title": "Token" }
+        },
+        "type": "object",
+        "required": ["success", "message", "token"],
+        "title": "TokenResponse"
+      },
+      "TranslateTextRequest": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "target_language": { "type": "string", "title": "Target Language" },
+          "source_language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Source Language"
+          }
+        },
+        "type": "object",
+        "required": ["text", "target_language"],
+        "title": "TranslateTextRequest"
+      },
+      "TranslateToAllLanguagesRequest": {
+        "properties": {
+          "text": { "type": "string", "title": "Text" },
+          "source_language": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Source Language"
+          }
+        },
+        "type": "object",
+        "required": ["text"],
+        "title": "TranslateToAllLanguagesRequest"
+      },
+      "UserLocationResponse": {
+        "properties": {
+          "latitude": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Longitude"
+          },
+          "address": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address"
+          },
+          "updated_at": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": ["latitude", "longitude", "address", "updated_at"],
+        "title": "UserLocationResponse"
+      },
+      "UserLocationUpdate": {
+        "properties": {
+          "latitude": { "type": "number", "title": "Latitude" },
+          "longitude": { "type": "number", "title": "Longitude" },
+          "address": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Address"
+          }
+        },
+        "type": "object",
+        "required": ["latitude", "longitude"],
+        "title": "UserLocationUpdate"
+      },
+      "UserLogin": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "password": { "type": "string", "title": "Password" }
+        },
+        "type": "object",
+        "required": ["phone", "password"],
+        "title": "UserLogin"
+      },
+      "UserPremiumPaymentRequest": {
+        "properties": {
+          "user_id": { "type": "integer", "title": "User Id" },
+          "duration": { "type": "integer", "title": "Duration", "default": 30 }
+        },
+        "type": "object",
+        "required": ["user_id"],
+        "title": "UserPremiumPaymentRequest"
+      },
+      "UserRegistrationStep1": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "password": { "type": "string", "title": "Password" }
+        },
+        "type": "object",
+        "required": ["phone", "password"],
+        "title": "UserRegistrationStep1"
+      },
+      "UserRegistrationStep2": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "username": { "type": "string", "title": "Username" },
+          "email": {
+            "anyOf": [
+              { "type": "string", "format": "email" },
+              { "type": "null" }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": ["phone", "username"],
+        "title": "UserRegistrationStep2"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": { "type": "string", "format": "uuid", "title": "Id" },
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "phone": { "type": "string", "title": "Phone" },
+          "full_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Full Name"
+          },
+          "avatar_url": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Avatar Url"
+          },
+          "birth_date": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Birth Date"
+          },
+          "gender": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Gender"
+          },
+          "location": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Location"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_verified": { "type": "boolean", "title": "Is Verified" },
+          "last_login": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Last Login"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "phone",
+          "is_active",
+          "is_verified",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserResponse"
+      },
+      "UserUpdate": {
+        "properties": {
+          "username": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Username"
+          },
+          "email": {
+            "anyOf": [
+              { "type": "string", "format": "email" },
+              { "type": "null" }
+            ],
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Full Name"
+          },
+          "birth_date": {
+            "anyOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ],
+            "title": "Birth Date"
+          },
+          "gender": {
+            "anyOf": [
+              { "$ref": "#/components/schemas/GenderEnum" },
+              { "type": "null" }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": { "anyOf": [{ "type": "string" }, { "type": "integer" }] },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": { "type": "string", "title": "Message" },
+          "type": { "type": "string", "title": "Error Type" }
+        },
+        "type": "object",
+        "required": ["loc", "msg", "type"],
+        "title": "ValidationError"
+      },
+      "VerifySMSRequest": {
+        "properties": {
+          "phone": { "type": "string", "title": "Phone" },
+          "code": { "type": "string", "title": "Code" }
+        },
+        "type": "object",
+        "required": ["phone", "code"],
+        "title": "VerifySMSRequest",
+        "description": "SMS tasdiqlash request schema"
+      },
+      "WorkingHours": {
+        "properties": {
+          "monday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Monday"
+          },
+          "tuesday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Tuesday"
+          },
+          "wednesday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Wednesday"
+          },
+          "thursday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Thursday"
+          },
+          "friday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Friday"
+          },
+          "saturday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Saturday"
+          },
+          "sunday": {
+            "anyOf": [{ "type": "object" }, { "type": "null" }],
+            "title": "Sunday"
+          }
+        },
+        "type": "object",
+        "title": "WorkingHours"
+      },
+      "app__schemas__admin__SalonListResponse": {
+        "properties": {
+          "id": { "type": "string", "title": "Id" },
+          "name": { "type": "string", "title": "Name" },
+          "address": { "type": "string", "title": "Address" },
+          "phone": { "type": "string", "title": "Phone" },
+          "email": {
+            "anyOf": [{ "type": "string" }, { "type": "null" }],
+            "title": "Email"
+          },
+          "is_active": { "type": "boolean", "title": "Is Active" },
+          "is_top": { "type": "boolean", "title": "Is Top" },
+          "rating": {
+            "anyOf": [{ "type": "number" }, { "type": "null" }],
+            "title": "Rating"
+          },
+          "created_at": { "type": "string", "title": "Created At" },
+          "updated_at": { "type": "string", "title": "Updated At" }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "phone",
+          "is_active",
+          "is_top",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SalonListResponse",
+        "description": "Salon list response schema"
+      },
+      "app__schemas__auth__LoginResponse": {
+        "properties": {
+          "message": { "type": "string", "title": "Message" },
+          "token": { "type": "string", "title": "Token" },
+          "user": { "type": "object", "title": "User" }
+        },
+        "type": "object",
+        "required": ["message", "token", "user"],
+        "title": "LoginResponse",
+        "description": "Login response schema"
+      },
+      "app__schemas__salon__SalonListResponse": {
+        "properties": {
+          "salons": {
+            "items": { "$ref": "#/components/schemas/SalonResponse" },
+            "type": "array",
+            "title": "Salons"
+          },
+          "total": { "type": "integer", "title": "Total" },
+          "page": { "type": "integer", "title": "Page" },
+          "limit": { "type": "integer", "title": "Limit" },
+          "total_pages": { "type": "integer", "title": "Total Pages" }
+        },
+        "type": "object",
+        "required": ["salons", "total", "page", "limit", "total_pages"],
+        "title": "SalonListResponse"
+      },
+      "app__schemas__user__LoginResponse": {
+        "properties": {
+          "success": { "type": "boolean", "title": "Success" },
+          "message": { "type": "string", "title": "Message" },
+          "token": { "type": "string", "title": "Token" },
+          "user": { "$ref": "#/components/schemas/UserResponse" }
+        },
+        "type": "object",
+        "required": ["success", "message", "token", "user"],
+        "title": "LoginResponse"
+      }
+    },
+    "securitySchemes": { "HTTPBearer": { "type": "http", "scheme": "bearer" } }
+  }
+}
