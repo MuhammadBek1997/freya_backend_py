@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     click_merchant_id: Optional[str] = os.getenv("CLICK_MERCHANT_ID")
     click_secret_key: Optional[str] = os.getenv("CLICK_SECRET_KEY")
     click_merchant_user_id: Optional[str] = os.getenv("CLICK_MERCHANT_USER_ID")
+    click_api_url: Optional[str] = os.getenv("CLICK_API_URL", "https://api.click.uz/v2")
+    
+    # Frontend URL
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    
+    # Eskiz SMS
+    eskiz_base_url: str = os.getenv("ESKIZ_BASE_URL", "https://notify.eskiz.uz/api")
     
     # File upload
     upload_dir: str = "uploads"

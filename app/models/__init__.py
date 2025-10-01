@@ -2,9 +2,7 @@ from .base import BaseModel
 from .admin import Admin
 from .user import User
 from .salon import Salon
-from .employee import Employee
-from .employee_comment import EmployeeComment
-from .employee_post import EmployeePost
+from .employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
 from .schedule import Schedule
 from .message import Message
 from .chat_room import ChatRoom
@@ -17,6 +15,7 @@ from .user_session import UserSession
 from .analytics import Analytics
 from .salon_top_history import SalonTopHistory
 from .service import Service
+from .payment import Payment
 
 __all__ = [
     "BaseModel",
@@ -26,6 +25,8 @@ __all__ = [
     "Employee",
     "EmployeeComment",
     "EmployeePost",
+    "PostMedia",
+    "EmployeePostLimit",
     "Schedule",
     "Message",
     "ChatRoom",
@@ -37,5 +38,6 @@ __all__ = [
     "UserSession",
     "Analytics",
     "SalonTopHistory",
-    "Service"
+    "Service",
+    "Payment"
 ]

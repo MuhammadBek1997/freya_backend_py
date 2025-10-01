@@ -8,6 +8,12 @@ from dotenv import load_dotenv
 
 from app.database import engine, Base
 from app.routers import auth_router, admin_router
+from app.routers.payment import router as payment_router
+from app.routers.sms import router as sms_router
+from app.routers.translation import router as translation_router
+from app.routers.user import router as user_router
+from app.routers.employee import router as employee_router
+from app.routers.salon import router as salon_router
 from app.middleware.cors_proxy import CorsProxyMiddleware
 from app.middleware.language import LanguageMiddleware
 
@@ -25,12 +31,52 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Freya Salon Backend API",
-    description="Backend API for Freya Beauty Salon management system",
+    description="""
+    ## Freya Beauty Salon Management System API
+    
+    Bu API Freya go'zallik saloni boshqaruv tizimi uchun yaratilgan.
+    
+    ### Asosiy funksiyalar:
+    - 🔐 **Autentifikatsiya va avtorizatsiya** (JWT token)
+    - 👥 **Foydalanuvchilar boshqaruvi** (Admin, User, Employee)
+    - 🏢 **Salon boshqaruvi** (Salon ma'lumotlari, xizmatlar)
+    - 📅 **Vaqt jadvali boshqaruvi** (Booking, Schedule)
+    - 💳 **To'lov tizimi** (Click.uz integratsiyasi)
+    - 📱 **SMS xabarnomalar** (Eskiz.uz integratsiyasi)
+    - 🌐 **Tarjima xizmati** (DeepL API)
+    
+    ### Texnologiyalar:
+    - **FastAPI** - Web framework
+    - **SQLAlchemy** - ORM
+    - **PostgreSQL/SQLite** - Database
+    - **JWT** - Authentication
+    - **Pydantic** - Data validation
+    
+    ### Versiya: 2.0.0
+    """,
     version="2.0.0",
     docs_url="/api/docs",
     redoc_url="/api/redoc",
     openapi_url="/api/openapi.json",
-    lifespan=lifespan
+    lifespan=lifespan,
+    contact={
+        "name": "Freya Development Team",
+        "email": "dev@freya.uz",
+    },
+    license_info={
+        "name": "MIT License",
+        "url": "https://opensource.org/licenses/MIT",
+    },
+    servers=[
+        {
+            "url": "http://localhost:8000",
+            "description": "Development server"
+        },
+        {
+            "url": "https://freya-salon-backend.herokuapp.com",
+            "description": "Production server"
+        }
+    ]
 )
 
 # CORS configuration
@@ -66,6 +112,12 @@ if os.getenv("NODE_ENV") == "production":
 # Include routers
 app.include_router(auth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(user_router)
+app.include_router(employee_router, prefix="/api")
+app.include_router(salon_router, prefix="/api")
+app.include_router(payment_router, prefix="/api")
+app.include_router(sms_router, prefix="/api")
+app.include_router(translation_router, prefix="/api")
 
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")

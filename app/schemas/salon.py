@@ -1,0 +1,212 @@
+from pydantic import BaseModel, validator
+from typing import Optional, List, Dict, Any
+from datetime import datetime
+from decimal import Decimal
+
+# Salon Types Schema
+class SalonType(BaseModel):
+    type: str
+    selected: bool = False
+
+# Location Schema
+class Location(BaseModel):
+    lat: float
+    lng: Optional[float] = None
+    long: Optional[float] = None  # For backward compatibility
+
+# Salon Comfort Schema
+class SalonComfort(BaseModel):
+    name: str
+    isActive: bool = False
+
+# Working Hours Schema
+class WorkingHours(BaseModel):
+    monday: Optional[Dict[str, Any]] = None
+    tuesday: Optional[Dict[str, Any]] = None
+    wednesday: Optional[Dict[str, Any]] = None
+    thursday: Optional[Dict[str, Any]] = None
+    friday: Optional[Dict[str, Any]] = None
+    saturday: Optional[Dict[str, Any]] = None
+    sunday: Optional[Dict[str, Any]] = None
+
+# Salon Create Schema
+class SalonCreate(BaseModel):
+    salon_name: str
+    salon_phone: Optional[str] = None
+    salon_add_phone: Optional[str] = None
+    salon_instagram: Optional[str] = None
+    salon_rating: Optional[Decimal] = Decimal('0')
+    comments: Optional[List[Dict[str, Any]]] = []
+    salon_payment: Optional[Dict[str, Any]] = {}
+    salon_description: Optional[str] = None
+    salon_types: Optional[List[SalonType]] = None
+    private_salon: Optional[bool] = False
+    work_schedule: Optional[List[Dict[str, Any]]] = []
+    salon_title: Optional[str] = None
+    salon_additionals: Optional[List[Dict[str, Any]]] = []
+    sale_percent: Optional[int] = 0
+    sale_limit: Optional[int] = 0
+    location: Optional[Location] = None
+    salon_orient: Optional[Location] = None
+    salon_photos: Optional[List[str]] = []
+    salon_comfort: Optional[List[SalonComfort]] = None
+    
+    # Legacy fields for backward compatibility
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    description: Optional[str] = None
+    address: Optional[str] = None
+    working_hours: Optional[WorkingHours] = None
+
+    @validator('salon_name', pre=True)
+    def validate_salon_name(cls, v, values):
+        # Use salon_name if provided, otherwise fallback to name
+        if not v and 'name' in values:
+            return values['name']
+        if not v or (isinstance(v, str) and v.strip() == ''):
+            raise ValueError('Salon nomi (salon_name) majburiy')
+        return v
+
+# Salon Update Schema
+class SalonUpdate(BaseModel):
+    salon_name: Optional[str] = None
+    salon_phone: Optional[str] = None
+    salon_add_phone: Optional[str] = None
+    salon_instagram: Optional[str] = None
+    salon_rating: Optional[Decimal] = None
+    comments: Optional[List[Dict[str, Any]]] = None
+    salon_payment: Optional[Dict[str, Any]] = None
+    salon_description: Optional[str] = None
+    salon_types: Optional[List[SalonType]] = None
+    private_salon: Optional[bool] = None
+    work_schedule: Optional[List[Dict[str, Any]]] = None
+    salon_title: Optional[str] = None
+    salon_additionals: Optional[List[Dict[str, Any]]] = None
+    sale_percent: Optional[int] = None
+    sale_limit: Optional[int] = None
+    location: Optional[Location] = None
+    salon_orient: Optional[Location] = None
+    salon_photos: Optional[List[str]] = None
+    salon_comfort: Optional[List[SalonComfort]] = None
+    is_active: Optional[bool] = None
+
+# Salon Response Schema
+class SalonResponse(BaseModel):
+    id: str
+    salon_logo: Optional[str] = None
+    salon_name: str
+    salon_phone: Optional[str] = None
+    salon_add_phone: Optional[str] = None
+    salon_instagram: Optional[str] = None
+    salon_rating: Optional[Decimal] = None
+    comments: Optional[List[Dict[str, Any]]] = None
+    salon_payment: Optional[Dict[str, Any]] = None
+    salon_description: Optional[str] = None
+    salon_types: Optional[List[Dict[str, Any]]] = None
+    private_salon: Optional[bool] = None
+    work_schedule: Optional[List[Dict[str, Any]]] = None
+    salon_title: Optional[str] = None
+    salon_additionals: Optional[List[Dict[str, Any]]] = None
+    sale_percent: Optional[int] = None
+    sale_limit: Optional[int] = None
+    location: Optional[Dict[str, Any]] = None
+    salon_orient: Optional[Dict[str, Any]] = None
+    salon_photos: Optional[List[str]] = None
+    salon_comfort: Optional[List[Dict[str, Any]]] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Salon List Response Schema
+class SalonListResponse(BaseModel):
+    salons: List[SalonResponse]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+
+# Salon Comment Create Schema
+class SalonCommentCreate(BaseModel):
+    text: str
+    rating: int
+
+    @validator('rating')
+    def validate_rating(cls, v):
+        if not 1 <= v <= 5:
+            raise ValueError('Rating 1 dan 5 gacha bo\'lishi kerak')
+        return v
+
+# Salon Comment Response Schema
+class SalonCommentResponse(BaseModel):
+    id: str
+    salon_id: str
+    user_id: str
+    text: str
+    rating: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Nearby Salons Request Schema
+class NearbySalonsRequest(BaseModel):
+    latitude: float
+    longitude: float
+    radius: Optional[float] = 10.0
+    page: Optional[int] = 1
+    limit: Optional[int] = 10
+    is_private: Optional[str] = ''
+
+    @validator('latitude')
+    def validate_latitude(cls, v):
+        if not -90 <= v <= 90:
+            raise ValueError('Latitude -90 dan 90 gacha bo\'lishi kerak')
+        return v
+
+    @validator('longitude')
+    def validate_longitude(cls, v):
+        if not -180 <= v <= 180:
+            raise ValueError('Longitude -180 dan 180 gacha bo\'lishi kerak')
+        return v
+
+# Salon Types Filter Request Schema
+class SalonTypesFilterRequest(BaseModel):
+    salon_types: List[str]
+    page: Optional[int] = 1
+    limit: Optional[int] = 10
+    search: Optional[str] = ''
+
+# Photo Upload Schema
+class PhotoUploadRequest(BaseModel):
+    photos: List[str]  # Base64 formatdagi rasmlar massivi
+
+    @validator('photos')
+    def validate_photos(cls, v):
+        if not v or len(v) == 0:
+            raise ValueError('Rasmlar majburiy va massiv formatida bo\'lishi kerak')
+        return v
+
+# Photo Delete Schema
+class PhotoDeleteRequest(BaseModel):
+    photo_index: int
+
+    @validator('photo_index')
+    def validate_photo_index(cls, v):
+        if v < 0:
+            raise ValueError('Rasm indeksi 0 dan katta bo\'lishi kerak')
+        return v
+
+# Standard Response Schemas
+class StandardResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Any] = None
+
+class ErrorResponse(BaseModel):
+    success: bool = False
+    message: str
+    error: Optional[str] = None

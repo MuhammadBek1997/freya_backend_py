@@ -32,4 +32,5 @@ class Salon(BaseModel):
     employees = relationship("Employee", back_populates="salon", cascade="all, delete-orphan")
     schedules = relationship("Schedule", back_populates="salon", cascade="all, delete-orphan")
     services = relationship("Service", back_populates="salon", cascade="all, delete-orphan")
-    top_history = relationship("SalonTopHistory", back_populates="salon", cascade="all, delete-orphan")
+    salon_top_histories = relationship("SalonTopHistory", back_populates="salon", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="salon")
