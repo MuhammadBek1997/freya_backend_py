@@ -314,14 +314,15 @@ async def create_employee(
                 detail="Salon topilmadi"
             )
         
-        # Check if phone, email or username already exists
-        existing_employee = db.query(Employee).filter(
-            or_(
-                Employee.phone == employee_data.employee_phone,
-                Employee.email == employee_data.employee_email,
-                Employee.username == employee_data.username
-            )
-        ).first()
+        filters = []
+        if employee_data.employee_phone:
+            filters.append(Employee.phone == employee_data.employee_phone)
+        if employee_data.employee_email:
+            filters.append(Employee.email == employee_data.employee_email)
+        if employee_data.username:
+            filters.append(Employee.username == employee_data.username)
+
+        existing_employee = db.query(Employee).filter(or_(*filters)).first()
         
         if existing_employee:
             raise HTTPException(
