@@ -137,7 +137,7 @@ async def send_sms_verification(
                 headers=headers,
                 data={"mobile_phone": phone, "message": message, "from": "4546"},
             )
-            # print(f"SMS response: {sms_response.status_code}, {sms_response.text}")
+            print(f"SMS response: {sms_response.status_code}, {sms_response.text}")
             # print(f"SMS yuborildi: {sms_response.status_code}")
             return sms_response.status_code == 200
     except Exception as e:
