@@ -6,7 +6,7 @@ from app.config import settings
 
 # Create database engine
 engine = create_engine(
-    settings.database_url,
+    "postgresql://u82hhsnrq03vdb:p894645a6da7b84f388ce131c8306b8bf2c5c3a5c7b32d2e5cd60987b1c644d1f@c3mvmsjsgbq96j.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d7cho3buhj3j6g",
     pool_pre_ping=True,
     pool_recycle=300,
     echo=False,
