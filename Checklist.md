@@ -43,15 +43,15 @@
 - [ ] `PUT /api/users/payment-cards/{card_id}/set-default` - Set default payment card 🔒
 
 ## Employees
-- [ ] `GET /api/employees/` - Get all employees (pagination)
-- [ ] `POST /api/employees/` - Create employee 🔒
-- [ ] `GET /api/employees/salon/{salon_id}` - Get employees by salon ID
-- [ ] `GET /api/employees/{employee_id}` - Get employee by ID (with comments & posts)
-- [ ] `PUT /api/employees/{employee_id}` - Update employee 🔒
-- [ ] `DELETE /api/employees/{employee_id}` - Delete employee (soft delete) 🔒
+- [x] `GET /api/employees/` - Get all employees (pagination)
+- [x] `POST /api/employees/` - Create employee 🔒
+- [x] `GET /api/employees/salon/{salon_id}` - Get employees by salon ID
+- [x] `GET /api/employees/{employee_id}` - Get employee by ID (with comments & posts)
+- [x] `PUT /api/employees/{employee_id}` - Update employee 🔒
+- [x] `DELETE /api/employees/{employee_id}` - Delete employee (soft delete) 🔒
 - [ ] `POST /api/employees/{employee_id}/comments` - Add employee comment 🔒
-- [ ] `POST /api/employees/{employee_id}/posts` - Add employee post 🔒
-- [ ] `GET /api/employees/{employee_id}/posts` - Get employee posts
+- [x] `POST /api/employees/{employee_id}/posts` - Add employee post 🔒
+- [x] `GET /api/employees/{employee_id}/posts` - Get employee posts
 - [ ] `PATCH /api/employees/{employee_id}/waiting-status` - Update employee waiting status 🔒
 - [ ] `PATCH /api/employees/bulk/waiting-status` - Bulk update waiting status 🔒
 

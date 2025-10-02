@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
 from app.models.user import User
 from app.models.salon import Salon
+from app.models.admin import Admin
 from app.schemas.employee import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeDetailResponse,
     EmployeeCommentCreate, EmployeeCommentResponse, EmployeePostCreate, EmployeePostResponse,
@@ -525,7 +526,7 @@ async def add_employee_post(
     employee_id: UUID,
     post_data: EmployeePostCreate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_user = Depends(get_current_user)
 ):
     """Add post for employee"""
     try:
@@ -535,6 +536,39 @@ async def add_employee_post(
             raise HTTPException(
                 status_code=404,
                 detail="Xodim topilmadi"
+            )
+        
+        # Auto-create admin record if it doesn't exist for this employee
+        admin_record = db.query(Admin).filter(Admin.id == employee_id).first()
+        if not admin_record:
+            # Create admin record for employee
+            from app.auth.jwt_utils import JWTUtils
+            
+            # Use employee's existing password or create a default one
+            default_password = "12345678"  # Default password for auto-created admin records
+            hashed_password = JWTUtils.hash_password(default_password)
+            
+            admin_record = Admin(
+                id=employee_id,  # Use employee ID as admin ID
+                username=employee.name.lower().replace(" ", "_"),  # Create username from name
+                email=f"{employee.name.lower().replace(' ', '_')}@example.com",  # Default email
+                password_hash=hashed_password,
+                full_name=employee.name,
+                phone=employee.phone,
+                is_active=True,
+                role="admin",  # Set role as admin for proper access
+                salon_id=employee.salon_id
+            )
+            
+            db.add(admin_record)
+            db.commit()
+            db.refresh(admin_record)
+        
+        # Check if current user is the employee or admin/superadmin
+        if str(employee.id) != str(current_user.id) and current_user.role not in ["admin", "superadmin"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Siz faqat o'zingizning postlaringizni qo'sha olasiz"
             )
         
         # Get or create post limits
@@ -685,39 +719,6 @@ async def get_employee_posts(
             detail="Server xatosi yuz berdi"
         )
 
-@router.patch("/{employee_id}/waiting-status", response_model=SuccessResponse)
-async def update_employee_waiting_status(
-    employee_id: UUID,
-    status_data: EmployeeWaitingStatusUpdate,
-    db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
-):
-    """Update employee waiting status"""
-    try:
-        employee = db.query(Employee).filter(Employee.id == employee_id).first()
-        if not employee:
-            raise HTTPException(
-                status_code=404,
-                detail="Xodim topilmadi"
-            )
-        
-        employee.is_waiting = status_data.is_waiting
-        db.commit()
-        
-        return SuccessResponse(
-            success=True,
-            message="Xodim holati muvaffaqiyatli yangilandi",
-            data={"id": str(employee_id), "is_waiting": status_data.is_waiting}
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail="Server xatosi"
-        )
-
 @router.patch("/bulk/waiting-status", response_model=SuccessResponse)
 async def bulk_update_employee_waiting_status(
     status_data: BulkEmployeeWaitingStatusUpdate,
@@ -750,6 +751,39 @@ async def bulk_update_employee_waiting_status(
                 "employee_ids": [str(id) for id in status_data.employee_ids],
                 "is_waiting": status_data.is_waiting
             }
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Server xatosi"
+        )
+
+@router.patch("/{employee_id}/waiting-status", response_model=SuccessResponse)
+async def update_employee_waiting_status(
+    employee_id: UUID,
+    status_data: EmployeeWaitingStatusUpdate,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin)
+):
+    """Update employee waiting status"""
+    try:
+        employee = db.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail="Xodim topilmadi"
+            )
+        
+        employee.is_waiting = status_data.is_waiting
+        db.commit()
+        
+        return SuccessResponse(
+            success=True,
+            message="Xodim holati muvaffaqiyatli yangilandi",
+            data={"id": str(employee_id), "is_waiting": status_data.is_waiting}
         )
     except HTTPException:
         raise

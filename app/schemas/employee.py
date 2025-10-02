@@ -24,7 +24,7 @@ class EmployeeUpdate(BaseModel):
 
 class EmployeeResponse(BaseModel):
     id: UUID
-    salon_id: UUID
+    salon_id: Optional[UUID] = None
     name: Optional[str] = None
     surname: Optional[str] = None
     phone: Optional[str] = None

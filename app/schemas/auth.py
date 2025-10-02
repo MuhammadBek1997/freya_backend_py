@@ -33,7 +33,7 @@ class AdminProfileResponse(BaseModel):
     id: str
     username: str
     email: str
-    full_name: str
+    full_name: Optional[str] = None
     role: str
     salon_id: Optional[str] = None
     is_active: bool

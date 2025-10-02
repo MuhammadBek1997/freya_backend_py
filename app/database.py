@@ -20,7 +20,7 @@ Base = declarative_base()
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import *
-# Base.metadata.create_all(engine)
+Base.metadata.create_all(engine)
 
 # Dependency to get database session
 def get_db():

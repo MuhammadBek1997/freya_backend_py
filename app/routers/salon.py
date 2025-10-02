@@ -6,6 +6,7 @@ import math
 import json
 from decimal import Decimal
 from datetime import datetime
+import uuid
 
 from app.database import get_db
 from app.models.salon import Salon
@@ -68,10 +69,9 @@ async def create_salon(
 ):
     """Yangi salon yaratish"""
     try:
-        # Use salon_name if provided, otherwise fallback to name
-        salon_name = salon_data.name
-        salon_phone = salon_data.phone
-        salon_description = salon_data.description
+        # Get salon data
+        salon_name = salon_data.salon_name
+        salon_phone = salon_data.salon_phone
         
         if not salon_name or salon_name.strip() == '':
             raise HTTPException(
@@ -95,10 +95,7 @@ async def create_salon(
             salon_phone=salon_phone,
             salon_instagram=salon_data.salon_instagram,
             salon_rating=salon_data.salon_rating or Decimal('0'),
-            salon_description=salon_description,
             salon_types=salon_types_dict,
-            salon_logo=salon_data.logo,
-            salon_photos=salon_data.photos or [],
             private_salon=salon_data.private_salon or False,
             location=location_dict,
             salon_comfort=salon_comfort_dict,
@@ -226,6 +223,15 @@ async def get_salon_by_id(
 ):
     """ID bo'yicha salonni olish"""
     try:
+        # UUID format validation
+        try:
+            uuid.UUID(salon_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Noto'g'ri salon ID formati"
+            )
+        
         salon = db.query(Salon).filter(
             and_(Salon.id == salon_id, Salon.is_active == True)
         ).first()
@@ -243,7 +249,7 @@ async def get_salon_by_id(
             "salon_phone": salon.salon_phone,
             "salon_instagram": salon.salon_instagram,
             "salon_rating": salon.salon_rating,
-            "salon_description": salon.salon_description,
+            "salon_description": salon.description_uz,  # Use description_uz as default
             "salon_types": salon.salon_types,
             "private_salon": salon.private_salon,
             "location": salon.location,
