@@ -27,6 +27,13 @@ async def lifespan(app: FastAPI):
     # Startup
     # Create database tables
     Base.metadata.create_all(bind=engine)
+    # Ensure default superadmin exists after tables are created
+    try:
+        from app import check_and_create_admin
+        check_and_create_admin()
+    except Exception:
+        # Avoid breaking startup if admin creation fails
+        pass
     yield
     # Shutdown
     pass
