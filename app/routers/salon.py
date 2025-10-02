@@ -298,7 +298,7 @@ async def update_salon(
 ):
     """Salonni yangilash"""
     try:
-        salon = db.query(Salon).filter(Salon.id == salon_id).first()
+        salon = db.query(Salon).where(Salon.id == salon_id).first()
         
         if not salon:
             raise HTTPException(
@@ -325,7 +325,6 @@ async def update_salon(
         return StandardResponse(
             success=True,
             message="Salon muvaffaqiyatli yangilandi",
-            data=salon
         )
         
     except HTTPException:
