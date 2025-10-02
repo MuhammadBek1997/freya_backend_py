@@ -112,6 +112,7 @@ async def send_sms_verification(
                         "password": settings.eskiz_password,
                     },
                 )
+                print(f"Auth response: {auth_response.status_code}, {auth_response.text}")
                 if auth_response.status_code == 200:
                     token_data = auth_response.json()
                     settings.eskiz_token = token_data.get("data", {}).get("token")
