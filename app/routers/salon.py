@@ -143,6 +143,8 @@ async def create_salon(
 async def get_all_salons(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    isTop: bool = None,
+    isDiscount: bool = None,
     search: Optional[str] = Query(None),
     is_private: Optional[str] = Query(''),
     db: Session = Depends(get_db)
@@ -161,7 +163,18 @@ async def get_all_salons(
                 Salon.salon_description.ilike(f"%{search}%")
             )
             query = query.filter(search_filter)
+        # Top salon filter
+        # If isTop is true, filter salons that have is_top set to true
+        # If isTop is false, filter salons that have is_top set to false
+        if isTop is not None:
+            query = query.filter(Salon.is_top == isTop)
         
+        # Discount salon filter
+        # If isDiscount is true, filter salons that have a discount
+        # If isDiscount is false, filter salons that do not have a discount
+        if isDiscount is not None:
+            if isDiscount:
+                query = query.where(Salon.salon_sale.has_key('discount'))
         # Private salon filter
         if is_private != '':
             is_private_value = is_private.lower() == 'true'

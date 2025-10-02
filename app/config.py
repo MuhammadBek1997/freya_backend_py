@@ -9,9 +9,7 @@ class Settings(BaseSettings):
         "postgresql://u82hhsnrq03vdb:p894645a6da7b84f388ce131c8306b8bf2c5c3a5c7b32d2e5cd60987b1c644d1f@c3mvmsjsgbq96j.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d7cho3buhj3j6g"
     )
     # Fix for Heroku
-    print(database_url)
     if database_url.startswith("postgres://"):
-        print("Replacing postgres:// with postgresql:// in DATABASE")
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     # JWT
