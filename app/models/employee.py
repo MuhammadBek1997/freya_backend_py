@@ -6,7 +6,7 @@ from .salon import Salon
 
 class Employee(BaseModel):
     __tablename__ = "employees"
-    
+
     salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id", ondelete="CASCADE"))
     name = Column(String(100), nullable=False)
     surname = Column(String(100))
