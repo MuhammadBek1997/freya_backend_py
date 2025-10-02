@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from app.database import engine, Base
 from app.routers import auth_router, admin_router
 from app.routers.payment import router as payment_router
+
 # from app.routers.sms import router as sms_router
 from app.routers.translation import router as translation_router
 from app.routers.user import router as user_router
@@ -24,6 +25,7 @@ from app.middleware.language import LanguageMiddleware
 # Load environment variables
 load_dotenv()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -32,6 +34,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     pass
+
 
 app = FastAPI(
     title="Freya Salon Backend API",
@@ -72,18 +75,13 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT",
     },
     servers=[
+        {"url": "http://localhost:8000", "description": "Development server"},
         {
-            "url": "http://localhost:8000",
-            "description": "Development server"
+            "url": "https://freya-salon-backend-cc373ce6622a.herokuapp.com",
+            "description": "Production server",
         },
-        {
-            "url": "https://freya-salon-backend.herokuapp.com",
-            "description": "Production server"
-        }
     ],
-    swagger_ui_parameters={
-        "syntaxHighlight.theme": "obsidian"
-    }
+    swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
 )
 
 # CORS configuration
@@ -94,7 +92,7 @@ origins = [
     "https://freya-admin-frontend-git-main-muhammadbekdev.vercel.app",
     "https://freya-admin-frontend-muhammadbekdev.vercel.app",
     "https://freya-salon-backend-cc373ce6622a.herokuapp.com",
-    "https://freya-salon-backend.herokuapp.com"
+    "https://freya-salon-backend.herokuapp.com",
 ]
 
 app.add_middleware(
@@ -113,7 +111,10 @@ app.add_middleware(LanguageMiddleware)
 if os.getenv("NODE_ENV") == "production":
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["freya-salon-backend-cc373ce6622a.herokuapp.com", "*.herokuapp.com"]
+        allowed_hosts=[
+            "freya-salon-backend-cc373ce6622a.herokuapp.com",
+            "*.herokuapp.com",
+        ],
     )
 
 # Include routers
@@ -131,6 +132,7 @@ app.include_router(translation_router, prefix="/api")
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+
 # Custom docs endpoint with unpkg.com CDN
 @app.get("/api/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
@@ -141,20 +143,24 @@ async def custom_swagger_ui_html():
         swagger_css_url="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css",
     )
 
+
 @app.get("/")
 async def root():
     return {
         "message": "Freya Backend API is running",
         "environment": os.getenv("NODE_ENV", "development"),
         "port": os.getenv("PORT", "8000"),
-        "database": "configured"
+        "database": "configured",
     }
+
 
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "freya-backend"}
 
+
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
