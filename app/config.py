@@ -9,7 +9,9 @@ class Settings(BaseSettings):
         "DATABASE_URL", "postgresql://user:password@localhost/freya_db"
     )
     # Fix for Heroku
+    print(database_url)
     if database_url.startswith("postgres://"):
+        print("Replacing postgres:// with postgresql:// in DATABASE_URL")
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     # JWT
