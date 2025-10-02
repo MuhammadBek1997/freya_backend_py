@@ -313,7 +313,7 @@ async def create_employee(
                 status_code=404,
                 detail="Salon topilmadi"
             )
-        
+
         filters = []
         if employee_data.employee_phone:
             filters.append(Employee.phone == employee_data.employee_phone)
@@ -322,7 +322,7 @@ async def create_employee(
         if employee_data.username:
             filters.append(Employee.username == employee_data.username)
 
-        existing_employee = db.query(Employee).filter(or_(*filters)).first()
+        existing_employee = db.query(Employee).filter(or_(*filters)).count()
         
         if existing_employee:
             raise HTTPException(
