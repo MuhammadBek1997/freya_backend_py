@@ -367,6 +367,7 @@ async def create_employee(
         raise
     except Exception as e:
         db.rollback()
+        print(f"Error in create_employee: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail="Xodim yaratishda xatolik yuz berdi"
