@@ -316,10 +316,13 @@ async def create_employee(
 
         filters = []
         if employee_data.employee_phone:
+            print(type(employee_data.employee_phone))
             filters.append(Employee.phone == employee_data.employee_phone)
         if employee_data.employee_email:
+            print(type(employee_data.employee_email))
             filters.append(Employee.email == employee_data.employee_email)
         if employee_data.username:
+            print(type(employee_data.username))
             filters.append(Employee.username == employee_data.username)
 
         existing_employee = db.query(Employee).filter(or_(*filters)).count()
