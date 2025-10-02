@@ -35,7 +35,7 @@ class Salon(BaseModel):
     salon_top_histories = relationship("SalonTopHistory", back_populates="salon", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="salon")
     admins = relationship("Admin", back_populates="salon")
-    appointments = relationship("Appointment", back_populates="salon")
+    # appointments = relationship("Appointment", back_populates="salon")
     user_chats = relationship("UserChat", back_populates="salon")
     translations = relationship("SalonTranslation", back_populates="salon", cascade="all, delete-orphan")
     favourited_by_users = relationship("UserFavouriteSalon", back_populates="salon")

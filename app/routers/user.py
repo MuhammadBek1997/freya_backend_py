@@ -155,7 +155,7 @@ async def register_step1(
     # Check if phone already exists
     existing_user = db.query(User).filter(User.phone == user_data.phone).first()
 
-    if existing_user.is_verified and existing_user.is_active:
+    if existing_user and existing_user.is_verified and existing_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan",

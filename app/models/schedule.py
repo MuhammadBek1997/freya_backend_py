@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Date, Integer, DECIMAL, ForeignKey
+from sqlalchemy import Column, String, Boolean, Date, Integer, DECIMAL, ForeignKey, Text, Time
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 from .base import BaseModel
@@ -11,7 +11,7 @@ class Schedule(BaseModel):
     title = Column(String(300))
     date = Column(Date, nullable=False)
     repeat = Column(Boolean, default=False)
-    repeat_value = Column(Integer)
+    repeat_value = Column(Text)
     employee_list = Column(ARRAY(UUID), default=list)
     price = Column(DECIMAL(10,2), nullable=False)
     full_pay = Column(DECIMAL(10,2))
@@ -20,3 +20,4 @@ class Schedule(BaseModel):
     
     # Relationships
     salon = relationship("Salon", back_populates="schedules")
+    appointments = relationship("Appointment", back_populates="schedule") 

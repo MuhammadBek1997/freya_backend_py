@@ -16,6 +16,8 @@ from app.routers.translation import router as translation_router
 from app.routers.user import router as user_router
 from app.routers.employee import router as employee_router
 from app.routers.salon import router as salon_router
+from app.routers.appointments_router import router as appointment_router
+from app.routers.schedules_router import router as schedule_router
 from app.middleware.cors_proxy import CorsProxyMiddleware
 from app.middleware.language import LanguageMiddleware
 
@@ -121,6 +123,8 @@ app.include_router(user_router)
 app.include_router(employee_router, prefix="/api")
 app.include_router(salon_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
+app.include_router(appointment_router, prefix="/api")
+app.include_router(schedule_router, prefix="/api")
 # app.include_router(sms_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
 

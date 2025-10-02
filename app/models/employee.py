@@ -10,6 +10,7 @@ class Employee(BaseModel):
     salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id", ondelete="CASCADE"))
     name = Column(String(100), nullable=False)
     surname = Column(String(100))
+    position = Column(String(100))
     phone = Column(String(20), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     role = Column(String(100))
