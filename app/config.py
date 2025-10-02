@@ -5,7 +5,9 @@ from typing import Optional, Union
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = "postgresql://u82hhsnrq03vdb:p894645a6da7b84f388ce131c8306b8bf2c5c3a5c7b32d2e5cd60987b1c644d1f@c3mvmsjsgbq96j.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d7cho3buhj3j6g"
+    database_url: str = (
+        "postgresql://u82hhsnrq03vdb:p894645a6da7b84f388ce131c8306b8bf2c5c3a5c7b32d2e5cd60987b1c644d1f@c3mvmsjsgbq96j.cluster-czz5s0kz4scl.eu-west-1.rds.amazonaws.com:5432/d7cho3buhj3j6g"
+    )
     # Fix for Heroku
     print(database_url)
     if database_url.startswith("postgres://"):
@@ -13,18 +15,18 @@ class Settings(BaseSettings):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     # JWT
-    secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here")
+    secret_key: str = "gj589tujfj39if094fkvmi3jtju359im3u8hf1qsiodacr89rf3rijwcm3uwi"
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    access_token_expire_minutes: int = 60
 
-    # Environment
+    # EnvironmentJWT_EXPIRES_IN
     environment: str = os.getenv("NODE_ENV", "development")
     port: int = int(os.getenv("PORT", 8000))
 
     # External Services
-    eskiz_email: Optional[str] = os.getenv("ESKIZ_EMAIL")
-    eskiz_password: Optional[str] = os.getenv("ESKIZ_PASSWORD")
-    eskiz_token: Optional[str] = os.getenv("ESKIZ_TOKEN")
+    eskiz_email: Optional[str] = "fayzullindmr@gmail.com"
+    eskiz_password: Optional[str] = "rlPJjmkaqRvZshRoNpcIiCFtC5GiNzI7k7YNe8fs"
+    eskiz_token: Optional[str] = ""
 
     deepl_api_key: Optional[str] = os.getenv("DEEPL_API_KEY")
 
@@ -35,42 +37,24 @@ class Settings(BaseSettings):
     click_api_url: Optional[str] = os.getenv("CLICK_API_URL", "https://api.click.uz/v2")
 
     # Frontend URL
-    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url: str = "https://freya-admin.vercel.app"
 
     # Eskiz SMS
-    eskiz_base_url: str = os.getenv("ESKIZ_BASE_URL", "https://notify.eskiz.uz/api")
+    eskiz_base_url: str = "https://notify.eskiz.uz/api"
 
     # File upload
-    upload_path: str = os.getenv("UPLOAD_PATH", "uploads/")
-    max_file_size: int = 10 * 1024 * 1024  # 10MB
+    upload_path: str = "uploads/"
+    max_file_size: int = 5242880  # 5 MB
 
-    SUPERADMIN_EMAIL: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_EMAIL", "") or None
-    )
-    SUPERADMIN_PASSWORD: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_PASSWORD", "") or None
-    )
-    SUPERADMIN_USERNAME: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_USERNAME", "") or None
-    )
-    SUPERADMIN_FIRST_NAME: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_FIRST_NAME", "") or None
-    )
-    SUPERADMIN_LAST_NAME: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_LAST_NAME", "") or None
-    )
-    SUPERADMIN_PHONE: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_PHONE", "") or None
-    )
-    SUPERADMIN_IS_ACTIVE: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_IS_ACTIVE", "") or None
-    )
-    SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_IS_SUPERUSER", "") or None
-    )
-    SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = (
-        os.getenv("SUPERADMIN_IS_VERIFIED", "") or None
-    )
+    SUPERADMIN_EMAIL: Optional[Union[str, int, bool, None]] = "superadmin@localhost"
+    SUPERADMIN_PASSWORD: Optional[Union[str, int, bool, None]] = "superadminpassword"
+    SUPERADMIN_USERNAME: Optional[Union[str, int, bool, None]] = "superadmin"
+    SUPERADMIN_FIRST_NAME: Optional[Union[str, int, bool, None]] = "Super"
+    SUPERADMIN_LAST_NAME: Optional[Union[str, int, bool, None]] = "Admin"
+    SUPERADMIN_PHONE: Optional[Union[str, int, bool, None]] = "+1234567890"
+    SUPERADMIN_IS_ACTIVE: Optional[Union[str, int, bool, None]] = "true"
+    SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
+    SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
 
     class Config:
         env_file = ".env"
