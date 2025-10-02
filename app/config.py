@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     database_url: str = os.getenv(
         "DATABASE_URL", "postgresql://user:password@localhost/freya_db"
     )
+    # Fix for Heroku
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     # JWT
     secret_key: str = os.getenv("SECRET_KEY", "your-secret-key-here")
