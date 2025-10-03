@@ -1,9 +1,11 @@
 """
 Authentication routes
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Union
+from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models import Admin, Employee
 from app.schemas.auth import (
     LoginRequest, 
@@ -24,44 +26,20 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 @router.post("/superadmin/login", response_model=LoginResponse)
 async def superadmin_login(
     request: LoginRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+
 ):
     """
     Superadmin login endpoint
     """
     try:
         # Set default language for this endpoint
-        language = "en"
-        
-        # Simple translation function for this endpoint
-        def t(key: str) -> str:
-            translations = {
-                "en": {
-                    "Username va password talab qilinadi": "Username and password are required",
-                    "Noto'g'ri username yoki password": "Invalid username or password",
-                    "Superadmin muvaffaqiyatli login qildi": "Superadmin logged in successfully",
-                    "Server xatosi": "Server error"
-                },
-                "uz": {
-                    "Username va password talab qilinadi": "Username va password talab qilinadi",
-                    "Noto'g'ri username yoki password": "Noto'g'ri username yoki password",
-                    "Superadmin muvaffaqiyatli login qildi": "Superadmin muvaffaqiyatli login qildi",
-                    "Server xatosi": "Server xatosi"
-                },
-                "ru": {
-                    "Username va password talab qilinadi": "Требуется имя пользователя и пароль",
-                    "Noto'g'ri username yoki password": "Неверное имя пользователя или пароль",
-                    "Superadmin muvaffaqiyatli login qildi": "Суперадмин успешно вошел в систему",
-                    "Server xatosi": "Ошибка сервера"
-                }
-            }
-            lang_translations = translations.get(language, translations["en"])
-            return lang_translations.get(key, key)
-        
+
         if not request.username or not request.password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Username va password talab qilinadi")
+                detail=get_translation(language, "errors.400") 
             )
 
         # Superadmin ni database dan topish
@@ -74,7 +52,7 @@ async def superadmin_login(
         if not superadmin:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Password tekshirish
@@ -83,7 +61,7 @@ async def superadmin_login(
         if not is_valid_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Token yaratish
@@ -94,7 +72,7 @@ async def superadmin_login(
         })
 
         return LoginResponse(
-            message=t("Superadmin muvaffaqiyatli login qildi"),
+            message=get_translation(language, "success"),
             token=token,
             user={
                 "id": str(superadmin.id),  # Convert UUID to string
@@ -111,7 +89,7 @@ async def superadmin_login(
         logger.error(f"Superadmin login xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -119,43 +97,19 @@ async def superadmin_login(
 async def admin_login(
     request: LoginRequest,
     db: Session = Depends(get_db),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Admin login endpoint
     """
     try:
         # Simple translation function
-        def t(key: str) -> str:
-            translations = {
-                "en": {
-                    "Username va password talab qilinadi": "Username and password are required",
-                    "Noto'g'ri username yoki password": "Invalid username or password",
-                    "Admin muvaffaqiyatli login qildi": "Admin logged in successfully",
-                    "Server xatosi": "Server error"
-                },
-                "uz": {
-                    "Username va password talab qilinadi": "Username va password talab qilinadi",
-                    "Noto'g'ri username yoki password": "Noto'g'ri username yoki password",
-                    "Admin muvaffaqiyatli login qildi": "Admin muvaffaqiyatli login qildi",
-                    "Server xatosi": "Server xatosi"
-                },
-                "ru": {
-                    "Username va password talab qilinadi": "Требуется имя пользователя и пароль",
-                    "Noto'g'ri username yoki password": "Неверное имя пользователя или пароль",
-                    "Admin muvaffaqiyatli login qildi": "Администратор успешно вошел в систему",
-                    "Server xatosi": "Ошибка сервера"
-                }
-            }
-            lang_translations = translations.get(language, translations["uz"])
-            return lang_translations.get(key, key)
-        
         logger.info(f"Admin login attempt: {request.username}")
 
         if not request.username or not request.password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Username va password talab qilinadi")
+                detail=get_translation(language, "errors.400")
             )
 
         # Admin ni database dan topish
@@ -170,7 +124,7 @@ async def admin_login(
             logger.info("Admin not found or inactive")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Password tekshirish
@@ -180,7 +134,7 @@ async def admin_login(
         if not is_valid_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Token yaratish
@@ -191,7 +145,7 @@ async def admin_login(
         })
 
         return LoginResponse(
-            message=t("Admin muvaffaqiyatli login qildi"),
+            message=get_translation(language, "success"),
             token=token,
             user={
                 "id": str(admin.id),
@@ -209,7 +163,7 @@ async def admin_login(
         logger.error(f"Admin login xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -218,43 +172,19 @@ async def create_admin(
     request: CreateAdminRequest,
     db: Session = Depends(get_db),
     current_superadmin: Admin = Depends(get_current_superadmin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Create admin endpoint (superadmin only)
     """
     try:
         # Simple translation function
-        def t(key: str) -> str:
-            translations = {
-                "en": {
-                    "Bu username allaqachon mavjud": "This username already exists",
-                    "Bu email allaqachon mavjud": "This email already exists", 
-                    "Admin muvaffaqiyatli yaratildi": "Admin created successfully",
-                    "Server xatosi": "Server error"
-                },
-                "uz": {
-                    "Bu username allaqachon mavjud": "Bu username allaqachon mavjud",
-                    "Bu email allaqachon mavjud": "Bu email allaqachon mavjud",
-                    "Admin muvaffaqiyatli yaratildi": "Admin muvaffaqiyatli yaratildi", 
-                    "Server xatosi": "Server xatosi"
-                },
-                "ru": {
-                    "Bu username allaqachon mavjud": "Это имя пользователя уже существует",
-                    "Bu email allaqachon mavjud": "Этот email уже существует",
-                    "Admin muvaffaqiyatli yaratildi": "Администратор успешно создан",
-                    "Server xatosi": "Ошибка сервера"
-                }
-            }
-            lang_translations = translations.get(language, translations["uz"])
-            return lang_translations.get(key, key)
-        
         # Username mavjudligini tekshirish
         existing_admin = db.query(Admin).filter(Admin.username == request.username).first()
         if existing_admin:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Bu username allaqachon mavjud")
+                detail=get_translation(language, "auth.userExists")
             )
 
         # Email mavjudligini tekshirish
@@ -262,7 +192,7 @@ async def create_admin(
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Bu email allaqachon mavjud")
+                detail=get_translation(language, "auth.emailExists")
             )
 
         # Password hash qilish
@@ -284,7 +214,7 @@ async def create_admin(
         db.refresh(new_admin)
 
         return {
-            "message": t("Admin muvaffaqiyatli yaratildi"),
+            "message": get_translation(language, "auth.userCreated"),
             "admin": {
                 "id": new_admin.id,
                 "username": new_admin.username,
@@ -302,7 +232,7 @@ async def create_admin(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -310,42 +240,18 @@ async def create_admin(
 async def employee_login(
     request: LoginRequest,
     db: Session = Depends(get_db),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Employee login endpoint
     """
     try:
         # Simple translation function
-        def t(key):
-            translations = {
-                "Username va password talab qilinadi": {
-                    "en": "Username and password are required",
-                    "uz": "Username va password talab qilinadi",
-                    "ru": "Требуются имя пользователя и пароль"
-                },
-                "Noto'g'ri username yoki password": {
-                    "en": "Invalid username or password",
-                    "uz": "Noto'g'ri username yoki password",
-                    "ru": "Неверное имя пользователя или пароль"
-                },
-                "Employee muvaffaqiyatli login qildi": {
-                    "en": "Employee logged in successfully",
-                    "uz": "Employee muvaffaqiyatli login qildi",
-                    "ru": "Сотрудник успешно вошел в систему"
-                },
-                "Server xatosi": {
-                    "en": "Server error",
-                    "uz": "Server xatosi",
-                    "ru": "Ошибка сервера"
-                }
-            }
-            return translations.get(key, {}).get(language, key)
-        
+
         if not request.username or not request.password:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=t("Username va password talab qilinadi")
+                detail=get_translation(language, "errors.400")
             )
 
         # Employee ni database dan topish
@@ -357,7 +263,7 @@ async def employee_login(
         if not employee:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Password tekshirish
@@ -366,7 +272,7 @@ async def employee_login(
         if not is_valid_password:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=t("Noto'g'ri username yoki password")
+                detail=get_translation(language, "auth.invalidCredentials")
             )
 
         # Token yaratish
@@ -377,7 +283,7 @@ async def employee_login(
         })
 
         return LoginResponse(
-            message=t("Employee muvaffaqiyatli login qildi"),
+            message=get_translation(language, "success"),
             token=token,
             user={
                 "id": str(employee.id),
@@ -395,14 +301,14 @@ async def employee_login(
         logger.error(f"Employee login xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
 @router.get("/admin/profile", response_model=AdminProfileResponse)
 async def get_admin_profile(
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Get admin profile endpoint
@@ -423,17 +329,8 @@ async def get_admin_profile(
     except Exception as error:
         logger.error(f"Admin profile olish xatosi: {error}")
         # Simple translation function
-        def t(key):
-            translations = {
-                "Server xatosi": {
-                    "en": "Server error",
-                    "uz": "Server xatosi", 
-                    "ru": "Ошибка сервера"
-                }
-            }
-            return translations.get(key, {}).get(language, key)
-        
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )

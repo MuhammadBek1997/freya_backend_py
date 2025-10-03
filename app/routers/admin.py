@@ -1,12 +1,13 @@
 """
 Admin routes
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import datetime, timedelta
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models import Salon, Admin, SalonTopHistory, Employee, Service
 from app.schemas.admin import (
     SalonTopRequest,
@@ -28,90 +29,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-def get_translation(language: str):
-    """Translation function for admin endpoints"""
-    translations = {
-        "en": {
-            "Faqat adminlar salon top qilishi mumkin": "Only admins can feature salons",
-            "Salon topilmadi": "Salon not found",
-            "Salon muvaffaqiyatli top qilindi": "Salon successfully featured",
-            "Salon top'dan muvaffaqiyatli chiqarildi": "Salon successfully unfeatured",
-            "Server xatosi": "Server error",
-            "Salon ro'yxati muvaffaqiyatli olindi": "Salon list retrieved successfully",
-            "Salon ma'lumotlari muvaffaqiyatli olindi": "Salon details retrieved successfully",
-            "Salon top tarixi muvaffaqiyatli olindi": "Salon feature history retrieved successfully",
-            "Telefon raqam talab qilinadi": "Phone number is required",
-            "SMS muvaffaqiyatli yuborildi": "SMS sent successfully",
-            "SMS yuborishda xatolik": "Error sending SMS",
-            "Tasdiqlash kodi talab qilinadi": "Verification code is required",
-            "Noto'g'ri tasdiqlash kodi": "Invalid verification code",
-            "SMS muvaffaqiyatli tasdiqlandi": "SMS verified successfully",
-            "Salon ma'lumotlari muvaffaqiyatli yangilandi": "Salon information updated successfully",
-            "Rasm muvaffaqiyatli yuklandi": "Image uploaded successfully"
-        },
-        "uz": {
-            "Faqat adminlar salon top qilishi mumkin": "Faqat adminlar salon top qilishi mumkin",
-            "Salon topilmadi": "Salon topilmadi",
-            "Salon muvaffaqiyatli top qilindi": "Salon muvaffaqiyatli top qilindi",
-            "Salon top'dan muvaffaqiyatli chiqarildi": "Salon top'dan muvaffaqiyatli chiqarildi",
-            "Server xatosi": "Server xatosi",
-            "Salon ro'yxati muvaffaqiyatli olindi": "Salon ro'yxati muvaffaqiyatli olindi",
-            "Salon ma'lumotlari muvaffaqiyatli olindi": "Salon ma'lumotlari muvaffaqiyatli olindi",
-            "Salon top tarixi muvaffaqiyatli olindi": "Salon top tarixi muvaffaqiyatli olindi",
-            "Telefon raqam talab qilinadi": "Telefon raqam talab qilinadi",
-            "SMS muvaffaqiyatli yuborildi": "SMS muvaffaqiyatli yuborildi",
-            "SMS yuborishda xatolik": "SMS yuborishda xatolik",
-            "Tasdiqlash kodi talab qilinadi": "Tasdiqlash kodi talab qilinadi",
-            "Noto'g'ri tasdiqlash kodi": "Noto'g'ri tasdiqlash kodi",
-            "SMS muvaffaqiyatli tasdiqlandi": "SMS muvaffaqiyatli tasdiqlandi",
-            "Salon ma'lumotlari muvaffaqiyatli yangilandi": "Salon ma'lumotlari muvaffaqiyatli yangilandi",
-            "Rasm muvaffaqiyatli yuklandi": "Rasm muvaffaqiyatli yuklandi"
-        },
-        "ru": {
-            "Faqat adminlar salon top qilishi mumkin": "Только администраторы могут рекомендовать салоны",
-            "Salon topilmadi": "Салон не найден",
-            "Salon muvaffaqiyatli top qilindi": "Салон успешно рекомендован",
-            "Salon top'dan muvaffaqiyatli chiqarildi": "Салон успешно удален из рекомендаций",
-            "Server xatosi": "Ошибка сервера",
-            "Salon ro'yxati muvaffaqiyatli olindi": "Список салонов успешно получен",
-            "Salon ma'lumotlari muvaffaqiyatli olindi": "Информация о салоне успешно получена",
-            "Salon top tarixi muvaffaqiyatli olindi": "История рекомендаций салона успешно получена",
-            "Telefon raqam talab qilinadi": "Требуется номер телефона",
-            "SMS muvaffaqiyatli yuborildi": "SMS успешно отправлено",
-            "SMS yuborishda xatolik": "Ошибка при отправке SMS",
-            "Tasdiqlash kodi talab qilinadi": "Требуется код подтверждения",
-            "Noto'g'ri tasdiqlash kodi": "Неверный код подтверждения",
-            "SMS muvaffaqiyatli tasdiqlandi": "SMS успешно подтверждено",
-            "Salon ma'lumotlari muvaffaqiyatli yangilandi": "Информация о салоне успешно обновлена",
-            "Rasm muvaffaqiyatli yuklandi": "Изображение успешно загружено"
-        }
-    }
-    
-    lang_code = language.lower()[:2] if language else "uz"
-    if lang_code not in translations:
-        lang_code = "uz"
-    
-    return lambda key: translations[lang_code].get(key, key)
-
-
 @router.post("/salon/top", response_model=SalonTopResponse)
 async def set_salon_top(
     request: SalonTopRequest,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Salonni top qilish yoki top'dan chiqarish
     """
     try:
-        t = get_translation(language)
         
         # Admin ekanligini tekshirish
         if current_admin.role not in ['admin', 'superadmin']:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=t("Faqat adminlar salon top qilishi mumkin")
+                detail=get_translation(language, "errors.403")
             )
 
         # Salon mavjudligini tekshirish
@@ -119,7 +53,7 @@ async def set_salon_top(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=t("Salon topilmadi")
+                detail=get_translation(language, "errors.404")
             )
 
         if request.isTop:
@@ -154,7 +88,7 @@ async def set_salon_top(
 
             return SalonTopResponse(
                 success=True,
-                message=t(f"{salon.salon_name} saloni {request.duration} kunga top qilindi"),
+                message=get_translation(language, "admin.makeTop").format(name=salon.salon_name, duration=request.duration),
                 data={
                     "salon_id": request.salonId,
                     "salon_name": salon.salon_name,
@@ -190,7 +124,7 @@ async def set_salon_top(
 
             return SalonTopResponse(
                 success=True,
-                message=t(f"{salon.salon_name} saloni top'dan chiqarildi"),
+                message=get_translation(language, "admin.removeTop").format(name=salon.salon_name),
                 data={
                     "salon_id": request.salonId,
                     "salon_name": salon.salon_name,
@@ -203,10 +137,9 @@ async def set_salon_top(
     except Exception as error:
         logger.error(f"Salon top qilish xatosi: {error}")
         db.rollback()
-        t = get_translation(language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -214,7 +147,7 @@ async def set_salon_top(
 async def get_top_salons(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Top salonlar ro'yxatini olish
@@ -243,10 +176,9 @@ async def get_top_salons(
 
     except Exception as error:
         logger.error(f"Top salonlar olish xatosi: {error}")
-        t = get_translation(language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -255,7 +187,7 @@ async def get_salon_top_history(
     salon_id: str,
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Salon top tarixini olish
@@ -281,10 +213,9 @@ async def get_salon_top_history(
 
     except Exception as error:
         logger.error(f"Salon top tarixi olish xatosi: {error}")
-        t = get_translation(language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -297,7 +228,7 @@ async def get_all_salons(
     is_active: Optional[bool] = Query(None),
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Barcha salonlar ro'yxatini olish (pagination bilan)
@@ -340,10 +271,9 @@ async def get_all_salons(
 
     except Exception as error:
         logger.error(f"Salonlar ro'yxati olish xatosi: {error}")
-        t = get_translation(language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -351,25 +281,24 @@ async def get_all_salons(
 async def get_my_salon(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
-    language: str = Depends(get_language)
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Admin'ning o'z salonini olish
     """
     try:
-        t = get_translation(language)
         
         if not current_admin.salon_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=t("Sizga biriktirilgan salon topilmadi")
+                detail=get_translation(language, "errors.404")
             )
 
         salon = db.query(Salon).filter(Salon.id == current_admin.salon_id).first()
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=t("Salon topilmadi")
+                detail=get_translation(language, "errors.404")
             )
 
         # Salon xodimlarini olish
@@ -421,10 +350,9 @@ async def get_my_salon(
         raise
     except Exception as error:
         logger.error(f"Salon ma'lumotlari olish xatosi: {error}")
-        t = get_translation(language)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=t("Server xatosi")
+            detail=get_translation(language, "errors.500")
         )
 
 
@@ -433,13 +361,13 @@ async def get_my_salon(
 #     request: SendSMSRequest,
 #     db: Session = Depends(get_db),
 #     current_admin: Admin = Depends(get_current_admin),
-#     language: str = Depends(get_language)
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
 # ):
 #     """
 #     SMS yuborish (admin uchun)
 #     """
 #     try:
-#         t = get_translation(language)
+#      
         
 #         # TODO: SMS service integration
 #         # sms_service = SMSService()
@@ -458,7 +386,7 @@ async def get_my_salon(
 
 #     except Exception as error:
 #         logger.error(f"SMS yuborish xatosi: {error}")
-#         t = get_translation(language)
+#      
 #         raise HTTPException(
 #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             detail=t("SMS yuborishda xatolik yuz berdi")
@@ -470,13 +398,13 @@ async def get_my_salon(
 #     request: VerifySMSRequest,
 #     db: Session = Depends(get_db),
 #     current_admin: Admin = Depends(get_current_admin),
-#     language: str = Depends(get_language)
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
 # ):
 #     """
 #     SMS kodni tasdiqlash (admin uchun)
 #     """
 #     try:
-#         t = get_translation(language)
+#      
         
 #         # TODO: SMS verification logic
 #         # sms_service = SMSService()
@@ -505,7 +433,7 @@ async def get_my_salon(
 #         raise
 #     except Exception as error:
 #         logger.error(f"SMS tasdiqlash xatosi: {error}")
-#         t = get_translation(language)
+#      
 #         raise HTTPException(
 #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             detail=t("SMS tasdiqlashda xatolik yuz berdi")

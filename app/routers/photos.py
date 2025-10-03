@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
+from typing import Union
+from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, status, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 import os
 import uuid
 
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.middleware.auth import get_current_user
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUploadResponse
@@ -19,6 +21,7 @@ async def upload_photo(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Rasm yuklash endpointi. Superadmin ruxsat etilmaydi."""
     try:
@@ -26,14 +29,14 @@ async def upload_photo(
         if role == "superadmin":
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Superadmin rasm yuklay olmaydi"
+                detail=get_translation(language, "errors.403")
             )
 
         # Faoliyat ko'rish: faqat tasvir fayllariga ruxsat
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Faqat rasm fayllarini yuboring"
+                detail=get_translation(language, "errors.400")
             )
 
         photos_dir = os.path.join(os.getcwd(), "photos")
@@ -74,15 +77,15 @@ async def upload_photo(
         # Odatdagi xatolar
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 
 @router.get("/")
-async def get_photo(havola: str):
+async def get_photo(havola: str, language: Union[str, None] = Header(None, alias="X-User-language")):
     """Havola orqali rasmni ochish."""
     photos_dir = os.path.join(os.getcwd(), "photos")
     file_path = os.path.join(photos_dir, havola)
     if not os.path.isfile(file_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rasm topilmadi")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
     return FileResponse(file_path)

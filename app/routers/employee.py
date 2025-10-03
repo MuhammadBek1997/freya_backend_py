@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, desc
-from typing import List, Optional
+from typing import List, Optional, Union
 from uuid import UUID
 
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models.employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
 from app.models.user import User
 from app.models.salon import Salon
@@ -52,7 +53,8 @@ async def get_all_employees(
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
     salon_id: Optional[UUID] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Get all employees with pagination and search"""
     try:
@@ -62,7 +64,7 @@ async def get_all_employees(
             if not salon:
                 raise HTTPException(
                     status_code=404,
-                    detail="Salon topilmadi"
+                    detail=get_translation(language, "errors.404")
                 )
         
         offset = (page - 1) * limit
@@ -127,7 +129,7 @@ async def get_all_employees(
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail=f"Xodim ma'lumotlarini olishda xatolik yuz berdi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/salon/{salon_id}", response_model=EmployeeListResponse)
@@ -136,7 +138,8 @@ async def get_employees_by_salon_id(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Get employees by salon ID"""
     try:
@@ -145,7 +148,7 @@ async def get_employees_by_salon_id(
         if not salon:
             raise HTTPException(
                 status_code=404,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         offset = (page - 1) * limit
@@ -205,13 +208,14 @@ async def get_employees_by_salon_id(
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail="Xodimlarni olishda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/{employee_id}", response_model=EmployeeDetailResponseWrapper)
 async def get_employee_by_id(
     employee_id: UUID,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Get employee by ID with comments and posts"""
     try:
@@ -225,7 +229,7 @@ async def get_employee_by_id(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Add multilingual fields
@@ -295,14 +299,15 @@ async def get_employee_by_id(
         traceback.print_exc()
         raise HTTPException(
             status_code=500,
-            detail=f"Xodim ma'lumotlarini olishda xatolik yuz berdi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/", response_model=SuccessResponse)
 async def create_employee(
     employee_data: EmployeeCreate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Create new employee"""
     try:
@@ -311,7 +316,7 @@ async def create_employee(
         if not salon:
             raise HTTPException(
                 status_code=404,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
 
         filters = []
@@ -330,7 +335,7 @@ async def create_employee(
         if existing_employee:
             raise HTTPException(
                 status_code=400,
-                detail="Telefon raqam, email yoki username allaqachon mavjud"
+                detail=get_translation(language, "auth.userExists") 
             )
         
         # Hash password
@@ -355,7 +360,7 @@ async def create_employee(
         
         return SuccessResponse(
             success=True,
-            message="Xodim muvaffaqiyatli yaratildi",
+            message=get_translation(language, "auth.userCreated"),
             data={
                 "id": str(new_employee.id),
                 "salon_id": str(new_employee.salon_id),
@@ -374,7 +379,7 @@ async def create_employee(
         print(f"Error in create_employee: {str(e)}, {e.__traceback__.tb_lineno}")
         raise HTTPException(
             status_code=500,
-            detail="Xodim yaratishda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.put("/{employee_id}", response_model=SuccessResponse)
@@ -382,7 +387,8 @@ async def update_employee(
     employee_id: UUID,
     employee_data: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Update employee"""
     try:
@@ -391,7 +397,7 @@ async def update_employee(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Check if email already exists for other employees
@@ -406,7 +412,7 @@ async def update_employee(
             if duplicate:
                 raise HTTPException(
                     status_code=400,
-                    detail="Email allaqachon mavjud"
+                    detail=get_translation(language, "auth.emailExists")
                 )
         
         # Check if username already exists for other employees
@@ -421,7 +427,7 @@ async def update_employee(
             if duplicate:
                 raise HTTPException(
                     status_code=400,
-                    detail="Username allaqachon mavjud"
+                    detail=get_translation(language, "auth.userExists")
                 )
         
         # Update fields
@@ -433,7 +439,7 @@ async def update_employee(
         
         return SuccessResponse(
             success=True,
-            message="Xodim ma'lumotlari muvaffaqiyatli yangilandi"
+            message=get_translation(language, "auth.userUpdated"),
         )
     except HTTPException:
         raise
@@ -441,14 +447,15 @@ async def update_employee(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Xodim ma'lumotlarini yangilashda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.delete("/{employee_id}", response_model=SuccessResponse)
 async def delete_employee(
     employee_id: UUID,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Delete employee (soft delete)"""
     try:
@@ -457,7 +464,7 @@ async def delete_employee(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Soft delete
@@ -466,7 +473,7 @@ async def delete_employee(
         
         return SuccessResponse(
             success=True,
-            message="Xodim muvaffaqiyatli o'chirildi"
+            message=get_translation(language, "auth.userDeleted"),
         )
     except HTTPException:
         raise
@@ -474,7 +481,7 @@ async def delete_employee(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Xodimni o'chirishda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/{employee_id}/comments", response_model=SuccessResponse)
@@ -482,7 +489,8 @@ async def add_employee_comment(
     employee_id: UUID,
     comment_data: EmployeeCommentCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Add comment to employee"""
     try:
@@ -491,7 +499,7 @@ async def add_employee_comment(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Create comment
@@ -508,7 +516,7 @@ async def add_employee_comment(
         
         return SuccessResponse(
             success=True,
-            message="Izoh muvaffaqiyatli qo'shildi",
+            message=get_translation(language, "success"),
             data={
                 "id": str(new_comment.id),
                 "employee_id": str(employee_id),
@@ -523,7 +531,7 @@ async def add_employee_comment(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Izoh qo'shishda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/{employee_id}/posts", response_model=SuccessResponse)
@@ -531,7 +539,8 @@ async def add_employee_post(
     employee_id: UUID,
     post_data: EmployeePostCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Add post for employee"""
     try:
@@ -540,7 +549,7 @@ async def add_employee_post(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Auto-create admin record if it doesn't exist for this employee
@@ -573,7 +582,7 @@ async def add_employee_post(
         if str(employee.id) != str(current_user.id) and current_user.role not in ["admin", "superadmin"]:
             raise HTTPException(
                 status_code=403,
-                detail="Siz faqat o'zingizning postlaringizni qo'sha olasiz"
+                detail=get_translation(language, "errors.403")
             )
         
         # Get or create post limits
@@ -595,7 +604,7 @@ async def add_employee_post(
         if remaining_free_posts == 0 and remaining_paid_posts == 0:
             raise HTTPException(
                 status_code=403,
-                detail="Post limiti tugagan. Yangi postlar uchun to'lov qiling."
+                detail=get_translation(language, "errors.403")
             )
         
         # Create post
@@ -629,7 +638,7 @@ async def add_employee_post(
         
         return SuccessResponse(
             success=True,
-            message="Post muvaffaqiyatli qo'shildi",
+            message=get_translation(language, "success"),
             data={
                 "id": str(new_post.id),
                 "employee_id": str(employee_id),
@@ -650,7 +659,7 @@ async def add_employee_post(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Post qo'shishda xatolik yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/{employee_id}/posts", response_model=EmployeePostListResponse)
@@ -658,7 +667,8 @@ async def get_employee_posts(
     employee_id: UUID,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Get employee posts"""
     try:
@@ -667,7 +677,7 @@ async def get_employee_posts(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Employee topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         offset = (page - 1) * limit
@@ -735,21 +745,22 @@ async def get_employee_posts(
             pass
         raise HTTPException(
             status_code=500,
-            detail="Server xatosi yuz berdi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.patch("/bulk/waiting-status", response_model=SuccessResponse)
 async def bulk_update_employee_waiting_status(
     status_data: BulkEmployeeWaitingStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Bulk update employees waiting status"""
     try:
         if not status_data.employee_ids:
             raise HTTPException(
                 status_code=400,
-                detail="employee_ids array bo'lishi va bo'sh bo'lmasligi kerak"
+                detail=get_translation(language, "errors.400")
             )
         
         # Update employees
@@ -764,7 +775,7 @@ async def bulk_update_employee_waiting_status(
         
         return SuccessResponse(
             success=True,
-            message=f"{updated_count} ta xodim holati muvaffaqiyatli yangilandi",
+            message=get_translation(language, "success"),
             data={
                 "updated_count": updated_count,
                 "employee_ids": [str(id) for id in status_data.employee_ids],
@@ -777,7 +788,7 @@ async def bulk_update_employee_waiting_status(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Server xatosi"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.patch("/{employee_id}/waiting-status", response_model=SuccessResponse)
@@ -785,7 +796,8 @@ async def update_employee_waiting_status(
     employee_id: UUID,
     status_data: EmployeeWaitingStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin)
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Update employee waiting status"""
     try:
@@ -793,7 +805,7 @@ async def update_employee_waiting_status(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail="Xodim topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         employee.is_waiting = status_data.is_waiting
@@ -801,7 +813,7 @@ async def update_employee_waiting_status(
         
         return SuccessResponse(
             success=True,
-            message="Xodim holati muvaffaqiyatli yangilandi",
+            message=get_translation(language, "success"),
             data={"id": str(employee_id), "is_waiting": status_data.is_waiting}
         )
     except HTTPException:
@@ -810,5 +822,5 @@ async def update_employee_waiting_status(
         db.rollback()
         raise HTTPException(
             status_code=500,
-            detail="Server xatosi"
+            detail=get_translation(language, "errors.500")
         )

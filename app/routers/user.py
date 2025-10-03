@@ -1,7 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Header,
+    status,
+    UploadFile,
+    File,
+    Form,
+)
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Union
 import os
 import uuid
 import hashlib
@@ -11,6 +20,7 @@ from datetime import datetime, timedelta
 import httpx
 
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models.user import User
 from app.models.payment_card import PaymentCard
 from app.models.salon import Salon
@@ -112,7 +122,9 @@ async def send_sms_verification(
                         "password": settings.eskiz_password,
                     },
                 )
-                print(f"Auth response: {auth_response.status_code}, {auth_response.text}")
+                print(
+                    f"Auth response: {auth_response.status_code}, {auth_response.text}"
+                )
                 if auth_response.status_code == 200:
                     token_data = auth_response.json()
                     settings.eskiz_token = token_data.get("data", {}).get("token")
@@ -148,7 +160,9 @@ async def send_sms_verification(
 
 @router.post("/register/step1", response_model=dict)
 async def register_step1(
-    user_data: UserRegistrationStep1, db: Session = Depends(get_db)
+    user_data: UserRegistrationStep1,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Ro'yxatdan o'tish - 1-qadam: Telefon va parol
@@ -159,7 +173,7 @@ async def register_step1(
     if existing_user and existing_user.is_verified and existing_user.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu telefon raqam allaqachon ro'yxatdan o'tgan",
+            detail=get_translation(language, "auth.phoneExists"),
         )
 
     # Generate verification code
@@ -170,7 +184,7 @@ async def register_step1(
     if not sms_sent:
         return {
             "success": False,
-            "message": "Tasdiqlash kodi yuborilmadi",
+            "message": get_translation(language, "auth.codeNotsent"),
             "sms_sent": sms_sent,
         }
     # Create temporary user record
@@ -188,14 +202,16 @@ async def register_step1(
 
     return {
         "success": True,
-        "message": "Tasdiqlash kodi yuborildi",
+        "message": get_translation(language, "auth.verificationCodeSent"),
         "sms_sent": sms_sent,
     }
 
 
 @router.post("/verify-phone", response_model=dict)
 async def verify_phone(
-    verification_data: PhoneVerification, db: Session = Depends(get_db)
+    verification_data: PhoneVerification,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Telefon raqamni tasdiqlash
@@ -203,7 +219,8 @@ async def verify_phone(
     user = db.query(User).filter(User.phone == verification_data.phone).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Foydalanuvchi topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "auth.userNotFound"),
         )
 
     # Check verification code
@@ -213,7 +230,7 @@ async def verify_phone(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan",
+            detail=get_translation(language, "auth.invalidVerificationCode"),
         )
 
     # Mark phone as verified
@@ -223,12 +240,14 @@ async def verify_phone(
     user.verification_expires_at = None
     db.commit()
 
-    return {"success": True, "message": "Telefon raqam tasdiqlandi"}
+    return {"success": True, "message": get_translation(language, "auth.userVerified")}
 
 
 @router.post("/register/step2", response_model=UserResponse)
 async def register_step2(
-    user_data: UserRegistrationStep2, db: Session = Depends(get_db)
+    user_data: UserRegistrationStep2,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Ro'yxatdan o'tish - 2-qadam: Username va email
@@ -237,7 +256,7 @@ async def register_step2(
     if not user or not user.is_verified:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Telefon raqam tasdiqlanmagan",
+            detail=get_translation(language, "auth.inactiveUser"),
         )
 
     # Check if username already exists
@@ -247,7 +266,7 @@ async def register_step2(
     if existing_username:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu username allaqachon band",
+            detail=get_translation(language, "auth.userExists"),
         )
 
     # Update user with additional info
@@ -264,7 +283,11 @@ async def register_step2(
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
+async def login_user(
+    login_data: UserLogin,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
     """
     Foydalanuvchi tizimga kirishi
     """
@@ -272,13 +295,13 @@ async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Telefon raqam yoki parol noto'g'ri",
+            detail=get_translation(language, "auth.invalidCredentials"),
         )
 
     if not JWTUtils.verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Telefon raqam yoki parol noto'g'ri",
+            detail=get_translation(language, "auth.invalidCredentials"),
         )
 
     # Update last login
@@ -292,7 +315,7 @@ async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
 
     return LoginResponse(
         success=True,
-        message="Muvaffaqiyatli kirildi",
+        message=get_translation(language, "auth.success"),
         token=access_token,
         user=UserResponse.model_validate(user),
     )
@@ -300,7 +323,9 @@ async def login_user(login_data: UserLogin, db: Session = Depends(get_db)):
 
 @router.post("/password-reset/send-code", response_model=dict)
 async def send_password_reset_code(
-    reset_request: PasswordResetRequest, db: Session = Depends(get_db)
+    reset_request: PasswordResetRequest,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Parolni tiklash uchun kod yuborish
@@ -309,7 +334,7 @@ async def send_password_reset_code(
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Bu telefon raqam bilan foydalanuvchi topilmadi",
+            detail=get_translation(language, "auth.userNotFound"),
         )
 
     # Generate verification code
@@ -326,20 +351,25 @@ async def send_password_reset_code(
 
     return {
         "success": True,
-        "message": "Parolni tiklash kodi yuborildi",
+        "message": get_translation(language, "auth.verificationCodeSent"),
         "sms_sent": sms_sent,
     }
 
 
 @router.post("/reset-password", response_model=dict)
-async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db)):
+async def reset_password(
+    reset_data: PasswordReset,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
     """
     Parolni tiklash
     """
     user = db.query(User).filter(User.phone == reset_data.phone).first()
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Foydalanuvchi topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "auth.userNotFound"),
         )
 
     # Check verification code
@@ -349,7 +379,7 @@ async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan",
+            detail=get_translation(language, "auth.invalidVerificationCode"),
         )
 
     # Update password
@@ -360,7 +390,7 @@ async def reset_password(reset_data: PasswordReset, db: Session = Depends(get_db
 
     db.commit()
 
-    return {"success": True, "message": "Parol muvaffaqiyatli o'zgartirildi"}
+    return {"success": True, "message": get_translation(language, "auth.passwordReset")}
 
 
 @router.post("/phone-change/send-code", response_model=dict)
@@ -368,6 +398,7 @@ async def send_phone_change_code(
     phone_request: PhoneChangeRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Telefon raqamni o'zgartirish uchun kod yuborish
@@ -377,7 +408,7 @@ async def send_phone_change_code(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu telefon raqam allaqachon ishlatilmoqda",
+            detail=get_translation(language, "auth.phoneExists"),
         )
 
     # Generate verification code
@@ -394,7 +425,7 @@ async def send_phone_change_code(
 
     return {
         "success": True,
-        "message": "Yangi telefon raqamga tasdiqlash kodi yuborildi",
+        "message": get_translation(language, "auth.verificationCodeSent"),
         "sms_sent": sms_sent,
     }
 
@@ -404,6 +435,7 @@ async def verify_phone_change(
     verification_data: PhoneVerification,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Telefon raqamni o'zgartirishni tasdiqlash
@@ -414,7 +446,7 @@ async def verify_phone_change(
     ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tasdiqlash kodi noto'g'ri yoki muddati tugagan",
+            detail=get_translation(language, "auth.codeExpired"),
         )
 
     # Check if new phone already exists
@@ -422,7 +454,7 @@ async def verify_phone_change(
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu telefon raqam allaqachon ishlatilmoqda",
+            detail=get_translation(language, "auth.phoneExists"),
         )
 
     # Update phone number
@@ -432,12 +464,14 @@ async def verify_phone_change(
 
     db.commit()
 
-    return {"success": True, "message": "Telefon raqam muvaffaqiyatli o'zgartirildi"}
+    return {"success": True, "message": get_translation(language, "auth.userUpdated")}
 
 
 @router.delete("/delete", response_model=dict)
 async def delete_user(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Foydalanuvchi hisobini o'chirish
@@ -449,7 +483,7 @@ async def delete_user(
     db.delete(current_user)
     db.commit()
 
-    return {"success": True, "message": "Hisob muvaffaqiyatli o'chirildi"}
+    return {"success": True, "message": get_translation(language, "auth.userDeleted")}
 
 
 @router.put("/update", response_model=UserResponse)
@@ -457,6 +491,7 @@ async def update_user(
     user_update: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Foydalanuvchi ma'lumotlarini yangilash
@@ -469,7 +504,7 @@ async def update_user(
         if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Bu username allaqachon band",
+                detail=get_translation(language, "auth.userExists"),
             )
 
     # Update fields
@@ -485,7 +520,10 @@ async def update_user(
 
 
 @router.post("/generate-token", response_model=TokenResponse)
-async def generate_user_token(current_user: User = Depends(get_current_user)):
+async def generate_user_token(
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
     """
     Yangi token yaratish
     """
@@ -494,7 +532,7 @@ async def generate_user_token(current_user: User = Depends(get_current_user)):
     )
 
     return TokenResponse(
-        success=True, message="Yangi token yaratildi", token=access_token
+        success=True, message=get_translation(language, "success"), token=access_token
     )
 
 
@@ -503,6 +541,7 @@ async def update_user_location(
     location_data: UserLocationUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Foydalanuvchi joylashuvini yangilash
@@ -526,7 +565,9 @@ async def update_user_location(
 
 @router.get("/location", response_model=UserLocationResponse)
 async def get_user_location(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Foydalanuvchi joylashuvini olish
@@ -534,7 +575,7 @@ async def get_user_location(
     if not current_user.latitude or not current_user.longitude:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Foydalanuvchi joylashuvi topilmadi",
+            detail=get_translation(language, "errors.404"),
         )
 
     return {
@@ -546,7 +587,10 @@ async def get_user_location(
 
 
 @router.get("/profile", response_model=UserResponse)
-async def get_user_profile(current_user: User = Depends(get_current_user)):
+async def get_user_profile(
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
     """
     Foydalanuvchi profilini olish
     """
@@ -558,6 +602,7 @@ async def upload_profile_image(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Profil rasmini yuklash
@@ -566,7 +611,7 @@ async def upload_profile_image(
     if not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Faqat rasm fayllari qabul qilinadi",
+            detail=get_translation(language, "errors.400"),
         )
 
     # Create uploads directory if not exists
@@ -590,7 +635,7 @@ async def upload_profile_image(
 
     return {
         "success": True,
-        "message": "Profil rasmi yuklandi",
+        "message": get_translation(language, "success"),
         "avatar_url": current_user.avatar_url,
     }
 
@@ -619,14 +664,17 @@ async def upload_profile_image(
 
 @router.delete("/profile/image", response_model=dict)
 async def delete_profile_image(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Profil rasmini o'chirish
     """
     if not current_user.avatar_url:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Profil rasmi topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
         )
 
     # Delete file
@@ -647,7 +695,7 @@ async def delete_profile_image(
     current_user.updated_at = datetime.utcnow()
     db.commit()
 
-    return {"success": True, "message": "Profil rasmi o'chirildi"}
+    return {"success": True, "message": get_translation(language, "success")}
 
 
 @router.post("/favourites/add", response_model=dict)
@@ -655,6 +703,7 @@ async def add_favourite_salon(
     favourite_data: FavouriteSalonRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Sevimli salonga qo'shish
@@ -663,7 +712,8 @@ async def add_favourite_salon(
     salon = db.query(Salon).filter(Salon.id == favourite_data.salon_id).first()
     if not salon:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Salon topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
         )
 
     # Check if already in favourites
@@ -679,7 +729,7 @@ async def add_favourite_salon(
     if existing_favourite:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Salon allaqachon sevimlilar ro'yxatida",
+            detail=get_translation(language, "auth.userExists"),
         )
 
     # Add to favourites
@@ -692,7 +742,7 @@ async def add_favourite_salon(
     db.add(favourite)
     db.commit()
 
-    return {"success": True, "message": "Salon sevimlilar ro'yxatiga qo'shildi"}
+    return {"success": True, "message": get_translation(language, "success")}
 
 
 @router.post("/favourites/remove", response_model=dict)
@@ -700,6 +750,7 @@ async def remove_favourite_salon(
     favourite_data: FavouriteSalonRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Sevimli salondan olib tashlash
@@ -716,18 +767,19 @@ async def remove_favourite_salon(
     if not favourite:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Salon sevimlilar ro'yxatida topilmadi",
+            detail=get_translation(language, "errors.404"),
         )
 
     db.delete(favourite)
     db.commit()
 
-    return {"success": True, "message": "Salon sevimlilar ro'yxatidan olib tashlandi"}
+    return {"success": True, "message": get_translation(language, "success")}
 
 
 @router.get("/favourites", response_model=List[SalonResponse])
 async def get_favourite_salons(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     Sevimli salonlar ro'yxatini olish
@@ -771,6 +823,7 @@ async def add_payment_card(
     card_data: PaymentCardAdd,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     To'lov kartasini qo'shish
@@ -778,7 +831,7 @@ async def add_payment_card(
     # Validate card number using Luhn algorithm
     if not luhn_check(card_data.card_number):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Karta raqami noto'g'ri"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400")
         )
 
     # Check if card already exists
@@ -795,7 +848,7 @@ async def add_payment_card(
     if existing_card:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu karta allaqachon qo'shilgan",
+            detail=get_translation(language, "auth.userExists"),
         )
 
     # If this is the first card or set as default, make it default
@@ -835,7 +888,9 @@ async def add_payment_card(
 
 @router.get("/payment-cards", response_model=List[PaymentCardResponse])
 async def get_user_payment_cards(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+
 ):
     """
     Foydalanuvchi to'lov kartalari ro'yxatini olish
@@ -856,6 +911,7 @@ async def update_payment_card(
     card_update: PaymentCardUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     To'lov kartasini yangilash
@@ -868,7 +924,7 @@ async def update_payment_card(
 
     if not card:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Karta topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
         )
 
     # If setting as default, remove default from other cards
@@ -893,6 +949,7 @@ async def delete_payment_card(
     card_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     To'lov kartasini o'chirish
@@ -905,7 +962,7 @@ async def delete_payment_card(
 
     if not card:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Karta topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
         )
 
     was_default = card.is_default
@@ -921,7 +978,7 @@ async def delete_payment_card(
 
     db.commit()
 
-    return {"success": True, "message": "Karta muvaffaqiyatli o'chirildi"}
+    return {"success": True, "message": get_translation(language, "success")}
 
 
 @router.put("/payment-cards/{card_id}/set-default", response_model=PaymentCardResponse)
@@ -929,6 +986,7 @@ async def set_default_payment_card(
     card_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
     To'lov kartasini asosiy qilib belgilash
@@ -941,7 +999,7 @@ async def set_default_payment_card(
 
     if not card:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Karta topilmadi"
+            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
         )
 
     # Remove default from all cards

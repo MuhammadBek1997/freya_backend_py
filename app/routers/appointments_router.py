@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import date, time
 from pydantic import BaseModel, Field
 
 # Предполагаем, что у вас есть эти импорты
 from app.auth.dependencies import get_current_user
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models import Appointment, Schedule, User, Employee, Salon
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
@@ -78,7 +79,8 @@ async def generate_application_number(db: Session) -> str:
 async def create_appointment(
     appointment_data: AppointmentCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Создать новую заявку на прием"""
     
@@ -87,7 +89,7 @@ async def create_appointment(
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Jadval topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     # Получаем salon_id и employee_id
@@ -100,7 +102,7 @@ async def create_appointment(
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Salon topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     # Генерация номера заявки
@@ -128,7 +130,7 @@ async def create_appointment(
     
     return {
         "success": True,
-        "message": "Zayavka muvaffaqiyatli yaratildi",
+        "message": get_translation(language, "appointment.created"),
         "data": new_appointment
     }
 
@@ -141,7 +143,8 @@ async def get_all_appointments(
     status_filter: Optional[str] = Query(None, alias="status"),
     user_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить список всех заявок с пагинацией"""
     
@@ -172,7 +175,7 @@ async def get_all_appointments(
     
     return {
         "success": True,
-        "message": "Zayavkalar muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": appointments,
         "pagination": {
             "page": page,
@@ -187,7 +190,8 @@ async def get_all_appointments(
 @router.get("/{id}")
 async def get_appointment_by_id(
     id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить информацию о конкретной заявке"""
     
@@ -196,12 +200,12 @@ async def get_appointment_by_id(
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Zayavka topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     return {
         "success": True,
-        "message": "Zayavka ma'lumotlari muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": appointment
     }
 
@@ -212,7 +216,8 @@ async def update_appointment_status(
     id: str,
     status_data: AppointmentStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить статус заявки (для админов)"""
     
@@ -221,7 +226,7 @@ async def update_appointment_status(
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Zayavka topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     appointment.status = status_data.status
@@ -233,7 +238,7 @@ async def update_appointment_status(
     
     return {
         "success": True,
-        "message": "Zayavka statusi muvaffaqiyatli yangilandi",
+        "message": get_translation(language, "appointment.updated"),
         "data": appointment
     }
 
@@ -245,7 +250,8 @@ async def get_user_appointments(
     limit: int = Query(10, ge=1, le=100),
     status_filter: Optional[str] = Query(None, alias="status"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить заявки текущего пользователя"""
     
@@ -263,7 +269,7 @@ async def get_user_appointments(
     
     return {
         "success": True,
-        "message": "Foydalanuvchi zayavkalari muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": appointments,
         "pagination": {
             "page": page,
@@ -280,7 +286,8 @@ async def update_appointment(
     id: str,
     update_data: AppointmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить заявку (только свою)"""
     
@@ -291,13 +298,13 @@ async def update_appointment(
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Zayavka topilmadi yoki sizga tegishli emas"
+            detail=get_translation(language, "errors.404")
         )
     
     if appointment.status in ["done", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu zayavkani yangilab bo'lmaydi"
+            detail=get_translation(language, "errors.400")
         )
     
     # Обновляем только переданные поля
@@ -305,7 +312,7 @@ async def update_appointment(
     if not update_dict:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yangilanishi kerak bo'lgan maydon ko'rsatilmagan"
+            detail=get_translation(language, "errors.400")
         )
     
     for key, value in update_dict.items():
@@ -316,7 +323,7 @@ async def update_appointment(
     
     return {
         "success": True,
-        "message": "Zayavka muvaffaqiyatli yangilandi",
+        "message": get_translation(language, "appointment.updated"),
         "data": appointment
     }
 
@@ -326,7 +333,8 @@ async def update_appointment(
 async def cancel_appointment(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Отменить заявку (только свою)"""
     
@@ -337,13 +345,13 @@ async def cancel_appointment(
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Zayavka topilmadi yoki sizga tegishli emas"
+            detail=get_translation(language, "errors.404")
         )
     
     if appointment.status in ["done", "cancelled"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Bu zayavkani bekor qilib bo'lmaydi"
+            detail=get_translation(language, "errors.400")
         )
     
     appointment.status = "cancelled"
@@ -352,7 +360,7 @@ async def cancel_appointment(
     
     return {
         "success": True,
-        "message": "Zayavka muvaffaqiyatli bekor qilindi",
+        "message": get_translation(language, "appointment.cancelled"),
         "data": appointment
     }
 
@@ -362,7 +370,8 @@ async def cancel_appointment(
 async def delete_appointment(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить заявку (только свою)"""
     
@@ -373,13 +382,13 @@ async def delete_appointment(
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Zayavka topilmadi yoki sizga tegishli emas"
+            detail=get_translation(language, "errors.404")
         )
     
     if appointment.status in ["completed", "in_progress"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Yakunlangan yoki jarayonda bo'lgan zayavkani o'chirib bo'lmaydi"
+            detail=get_translation(language, "errors.400")
         )
     
     db.delete(appointment)
@@ -387,7 +396,7 @@ async def delete_appointment(
     
     return {
         "success": True,
-        "message": "Zayavka muvaffaqiyatli o'chirildi",
+        "message": get_translation(language, "appointment.deleted"),
         "data": appointment
     }
 
@@ -401,7 +410,8 @@ async def get_appointments_by_salon_id(
     status_filter: Optional[str] = Query(None, alias="status"),
     date_filter: Optional[date] = Query(None, alias="date"),
     employee_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить заявки конкретного салона"""
     
@@ -410,7 +420,7 @@ async def get_appointments_by_salon_id(
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Salon topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     offset = (page - 1) * limit
@@ -441,7 +451,7 @@ async def get_appointments_by_salon_id(
     
     return {
         "success": True,
-        "message": "Salon appointmentlari muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": appointments,
         "salon": {
             "id": salon.id,

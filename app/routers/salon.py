@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, text
-from typing import List, Optional
+from typing import List, Optional, Union
 import math
 import json
 from decimal import Decimal
@@ -9,6 +9,7 @@ from datetime import datetime
 import uuid
 
 from app.database import get_db
+from app.i18nMini import get_translation
 from app.models.salon import Salon
 from app.models.user import User
 from app.schemas.salon import (
@@ -65,7 +66,8 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 async def create_salon(
     salon_data: SalonCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Yangi salon yaratish"""
     try:
@@ -76,7 +78,7 @@ async def create_salon(
         if not salon_name or salon_name.strip() == '':
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Salon nomi (salon_name) majburiy"
+                detail=get_translation(language, "errors.400")
             )
         
         # Set default values (also when provided lists are empty)
@@ -124,7 +126,7 @@ async def create_salon(
         
         return StandardResponse(
             success=True,
-            message="Salon muvaffaqiyatli yaratildi",
+            message=get_translation(language, "success"),
             data={
                 "id": str(new_salon.id),
                 "salon_name": new_salon.salon_name,
@@ -140,7 +142,7 @@ async def create_salon(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/", response_model=SalonListResponse)
@@ -151,7 +153,8 @@ async def get_all_salons(
     isDiscount: bool = None,
     search: Optional[str] = Query(None),
     is_private: Optional[str] = Query(''),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Barcha salonlarni olish"""
     try:
@@ -235,13 +238,14 @@ async def get_all_salons(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/{salon_id}", response_model=SalonResponse)
 async def get_salon_by_id(
     salon_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """ID bo'yicha salonni olish"""
     try:
@@ -251,7 +255,7 @@ async def get_salon_by_id(
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Noto'g'ri salon ID formati"
+                detail=get_translation(language, "errors.400")
             )
         
         salon = db.query(Salon).filter(
@@ -261,7 +265,7 @@ async def get_salon_by_id(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Convert salon to SalonResponse with proper UUID handling
@@ -298,7 +302,7 @@ async def get_salon_by_id(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.put("/{salon_id}", response_model=StandardResponse)
@@ -306,7 +310,8 @@ async def update_salon(
     salon_id: str,
     salon_data: SalonUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salonni yangilash"""
     try:
@@ -315,7 +320,7 @@ async def update_salon(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Update fields
@@ -342,7 +347,7 @@ async def update_salon(
         
         return StandardResponse(
             success=True,
-            message="Salon muvaffaqiyatli yangilandi",
+            message=get_translation(language, "success"),
         )
         
     except HTTPException:
@@ -351,14 +356,15 @@ async def update_salon(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.delete("/{salon_id}", response_model=StandardResponse)
 async def delete_salon(
     salon_id: str,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salonni o'chirish (soft delete)"""
     try:
@@ -367,7 +373,7 @@ async def delete_salon(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         salon.is_active = False
@@ -375,7 +381,7 @@ async def delete_salon(
         
         return StandardResponse(
             success=True,
-            message="Salon muvaffaqiyatli o'chirildi"
+            message=get_translation(language, "success"),
         )
         
     except HTTPException:
@@ -384,13 +390,14 @@ async def delete_salon(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/apply-defaults", response_model=StandardResponse)
 async def apply_defaults_to_salons(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Bo'sh salon_types va salon_comfort uchun defaultlarni DBga qo'llash"""
     try:
@@ -409,7 +416,7 @@ async def apply_defaults_to_salons(
         db.commit()
         return StandardResponse(
             success=True,
-            message="Default qiymatlar qo'llandi",
+            message=get_translation(language, "success"),
             data={"updated_count": updated_count}
         )
     except HTTPException:
@@ -418,7 +425,7 @@ async def apply_defaults_to_salons(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/{salon_id}/comments", response_model=StandardResponse)
@@ -426,7 +433,8 @@ async def add_salon_comment(
     salon_id: str,
     comment_data: SalonCommentCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salon uchun izoh qo'shish"""
     try:
@@ -437,7 +445,7 @@ async def add_salon_comment(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         # Add comment to salon's comments JSON field
@@ -460,7 +468,7 @@ async def add_salon_comment(
         
         return StandardResponse(
             success=True,
-            message="Izoh muvaffaqiyatli qo'shildi",
+            message=get_translation(language, "success"),
             data=new_comment
         )
         
@@ -470,7 +478,7 @@ async def add_salon_comment(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/nearby", response_model=SalonListResponse)
@@ -481,7 +489,8 @@ async def get_nearby_salons(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     is_private: Optional[str] = Query(''),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Yaqin atrofdagi salonlarni olish"""
     try:
@@ -489,13 +498,13 @@ async def get_nearby_salons(
         if not -90 <= latitude <= 90:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Noto'g'ri latitude qiymati"
+                detail=get_translation(language, "errors.400")
             )
         
         if not -180 <= longitude <= 180:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Noto'g'ri longitude qiymati"
+                detail=get_translation(language, "errors.400")
             )
         
         # Get all active salons with location data
@@ -551,7 +560,7 @@ async def get_nearby_salons(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.get("/filter/types", response_model=SalonListResponse)
@@ -560,7 +569,8 @@ async def get_salons_by_types(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(''),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salon turlari bo'yicha filtrlash"""
     try:
@@ -570,7 +580,7 @@ async def get_salons_by_types(
         if not types_to_filter:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="salon_types parametri majburiy"
+                detail=get_translation(language, "errors.400")
             )
         
         # Base query
@@ -616,7 +626,7 @@ async def get_salons_by_types(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.post("/{salon_id}/photos", response_model=StandardResponse)
@@ -624,7 +634,8 @@ async def upload_salon_photos(
     salon_id: str,
     photo_data: PhotoUploadRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salon rasmlari yuklash"""
     try:
@@ -633,7 +644,7 @@ async def upload_salon_photos(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         current_photos = salon.salon_photos or []
@@ -644,7 +655,7 @@ async def upload_salon_photos(
         
         return StandardResponse(
             success=True,
-            message="Rasmlar muvaffaqiyatli yuklandi",
+            message=get_translation(language, "success"),
             data={
                 "salon_id": salon_id,
                 "salon_photos": updated_photos,
@@ -658,7 +669,7 @@ async def upload_salon_photos(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )
 
 @router.delete("/{salon_id}/photos", response_model=StandardResponse)
@@ -666,7 +677,8 @@ async def delete_salon_photo(
     salon_id: str,
     photo_data: PhotoDeleteRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_admin)
+    current_user = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Salon rasmini o'chirish"""
     try:
@@ -675,7 +687,7 @@ async def delete_salon_photo(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Salon topilmadi"
+                detail=get_translation(language, "errors.404")
             )
         
         current_photos = salon.salon_photos or []
@@ -683,7 +695,7 @@ async def delete_salon_photo(
         if photo_data.photo_index >= len(current_photos):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Noto'g'ri rasm indeksi"
+                detail=get_translation(language, "errors.400")
             )
         
         # Remove photo at specified index
@@ -694,7 +706,7 @@ async def delete_salon_photo(
         
         return StandardResponse(
             success=True,
-            message="Rasm muvaffaqiyatli o'chirildi",
+            message=get_translation(language, "success"),
             data={
                 "salon_id": salon_id,
                 "salon_photos": updated_photos,
@@ -709,5 +721,5 @@ async def delete_salon_photo(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Server xatoligi: {str(e)}"
+            detail=get_translation(language, "errors.500")
         )

@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import date, datetime
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
+from app.i18nMini import get_translation
 from app.models.user import User
 from app.database import get_db
 from app.models import Schedule, Salon
@@ -68,7 +69,8 @@ async def get_all_schedules(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить список всех расписаний с пагинацией и поиском"""
     
@@ -93,7 +95,7 @@ async def get_all_schedules(
     
     return {
         "success": True,
-        "message": "Jadvallar muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": schedules,
         "pagination": {
             "page": page,
@@ -108,7 +110,8 @@ async def get_all_schedules(
 @router.get("/{id}")
 async def get_schedule_by_id(
     id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить информацию о конкретном расписании"""
     
@@ -117,12 +120,12 @@ async def get_schedule_by_id(
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Jadval topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     return {
         "success": True,
-        "message": "Jadval ma'lumotlari muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": schedule
     }
 
@@ -132,7 +135,8 @@ async def get_schedule_by_id(
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Создать новое расписание"""
     
@@ -141,7 +145,7 @@ async def create_schedule(
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Salon topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     # Создание расписания
@@ -165,7 +169,7 @@ async def create_schedule(
     
     return {
         "success": True,
-        "message": "Jadval muvaffaqiyatli yaratildi",
+        "message": get_translation(language, "success"),
         "data": new_schedule
     }
 
@@ -176,7 +180,8 @@ async def update_schedule(
     id: str,
     update_data: ScheduleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить расписание"""
     
@@ -185,7 +190,7 @@ async def update_schedule(
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Jadval topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     # Обновляем только переданные поля
@@ -199,7 +204,7 @@ async def update_schedule(
     
     return {
         "success": True,
-        "message": "Jadval muvaffaqiyatli yangilandi",
+        "message": get_translation(language, "success"),
         "data": schedule
     }
 
@@ -209,7 +214,8 @@ async def update_schedule(
 async def delete_schedule(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить расписание"""
     
@@ -218,7 +224,7 @@ async def delete_schedule(
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Jadval topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     # Сохраняем данные перед удалением
@@ -233,7 +239,7 @@ async def delete_schedule(
     
     return {
         "success": True,
-        "message": "Jadval muvaffaqiyatli o'chirildi",
+        "message": get_translation(language, "success"),
         "data": schedule_data
     }
 
@@ -241,7 +247,8 @@ async def delete_schedule(
 # Получить расписания, сгруппированные по дням недели
 @router.get("/grouped/by-date")
 async def get_schedules_grouped_by_date(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить расписания, сгруппированные по дням недели"""
     
@@ -292,7 +299,7 @@ async def get_schedules_grouped_by_date(
     
     return {
         "success": True,
-        "message": "Sana bo'yicha guruhlangan jadvallar muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": day_list_items
     }
 
@@ -305,7 +312,8 @@ async def get_schedules_by_salon(
     limit: int = Query(10, ge=1, le=100),
     date_filter: Optional[date] = Query(None, alias="date"),
     is_active: Optional[bool] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить расписания конкретного салона"""
     
@@ -314,7 +322,7 @@ async def get_schedules_by_salon(
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Salon topilmadi"
+            detail=get_translation(language, "errors.404")
         )
     
     offset = (page - 1) * limit
@@ -338,7 +346,7 @@ async def get_schedules_by_salon(
     
     return {
         "success": True,
-        "message": "Salon jadvallari muvaffaqiyatli olindi",
+        "message": get_translation(language, "success"),
         "data": schedules,
         "salon": {
             "id": salon.id,
