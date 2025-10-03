@@ -140,7 +140,7 @@ app.include_router(photos_router, prefix="/api")
 
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-
+app.mount("/api/photos/", StaticFiles(directory="photos"), name="photos")
 
 # Custom docs endpoint with unpkg.com CDN
 @app.get("/api/docs", include_in_schema=False)
