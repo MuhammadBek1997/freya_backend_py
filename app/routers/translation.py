@@ -24,13 +24,13 @@ class DetectLanguageRequest(BaseModel):
 router = APIRouter(prefix="/translation", tags=["Translation"])
 
 
-@router.post("/translate", summary="Matnni tarjima qilish")
+@router.post("/translate", summary="Matnni tarjima qilish (Google Translate)")
 async def translate_text(
     request: TranslateTextRequest,
     current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Matnni berilgan tilga tarjima qilish
+    Matnni berilgan tilga tarjima qilish (googletrans)
     
     - **text**: Tarjima qilinadigan matn
     - **target_language**: Maqsadli til kodi (uz, ru, en)
@@ -61,13 +61,13 @@ async def translate_text(
         )
 
 
-@router.post("/translate-all", summary="Matnni barcha tillarga tarjima qilish")
+@router.post("/translate-all", summary="Matnni barcha tillarga tarjima qilish (Google Translate)")
 async def translate_to_all_languages(
     request: TranslateToAllLanguagesRequest,
     current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Matnni barcha qo'llab-quvvatlanadigan tillarga tarjima qilish
+    Matnni qo'llab-quvvatlanadigan tillarga googletrans yordamida tarjima qilish
     
     - **text**: Tarjima qilinadigan matn
     - **source_language**: Manba til kodi (ixtiyoriy)
@@ -97,13 +97,13 @@ async def translate_to_all_languages(
         )
 
 
-@router.post("/detect-language", summary="Matn tilini aniqlash")
+@router.post("/detect-language", summary="Matn tilini aniqlash (Google Translate)")
 async def detect_language(
     request: DetectLanguageRequest,
     current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
-    Matn tilini aniqlash
+    Matn tilini googletrans orqali aniqlash
     
     - **text**: Tahlil qilinadigan matn
     """
@@ -128,7 +128,7 @@ async def detect_language(
         )
 
 
-@router.get("/supported-languages", summary="Qo'llab-quvvatlanadigan tillar")
+@router.get("/supported-languages", summary="Qo'llab-quvvatlanadigan tillar (Google Translate)")
 async def get_supported_languages() -> Dict[str, Any]:
     """
     Qo'llab-quvvatlanadigan tillar ro'yxatini olish
@@ -148,29 +148,29 @@ async def get_supported_languages() -> Dict[str, Any]:
         )
 
 
-@router.get("/usage", summary="DeepL API ishlatish ma'lumotlari")
-async def get_usage_info(
-    current_admin: Admin = Depends(get_current_admin)
-) -> Dict[str, Any]:
-    """
-    DeepL API ishlatish ma'lumotlarini olish
-    """
-    try:
-        result = await translation_service.get_usage_info()
+# @router.get("/usage", summary="Google Translate usage (qo'llab-quvvatlanmaydi)")
+# async def get_usage_info(
+#     current_admin: Admin = Depends(get_current_admin)
+# ) -> Dict[str, Any]:
+#     """
+#     Google Translate uchun usage statistikasi mavjud emas
+#     """
+#     try:
+#         result = await translation_service.get_usage_info()
         
-        if not result["success"]:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result["error"]
-            )
+#         if not result["success"]:
+#             raise HTTPException(
+#                 status_code=status.HTTP_400_BAD_REQUEST,
+#                 detail=result["error"]
+#             )
         
-        return {
-            "success": True,
-            "message": "API ishlatish ma'lumotlari",
-            "data": result["data"]
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"API ma'lumotlarini olishda xatolik: {str(e)}"
-        )
+#         return {
+#             "success": True,
+#             "message": "API ishlatish ma'lumotlari",
+#             "data": result["data"]
+#         }
+#     except Exception as e:
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=f"API ma'lumotlarini olishda xatolik: {str(e)}"
+#         )

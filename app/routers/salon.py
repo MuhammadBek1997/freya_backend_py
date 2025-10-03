@@ -41,7 +41,7 @@ DEFAULT_SALON_COMFORT = [
     {"name": "pets", "isActive": False},
     {"name": "bath", "isActive": False},
     {"name": "towel", "isActive": False},
-    {"name": "kids", "isActive": True}
+    {"name": "kids", "isActive": False}
 ]
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -79,10 +79,14 @@ async def create_salon(
                 detail="Salon nomi (salon_name) majburiy"
             )
         
-        # Set default values
-        salon_types = salon_data.salon_types or DEFAULT_SALON_TYPES
+        # Set default values (also when provided lists are empty)
+        salon_types = (
+            salon_data.salon_types if (salon_data.salon_types and len(salon_data.salon_types) > 0) else DEFAULT_SALON_TYPES
+        )
         location = salon_data.location or DEFAULT_LOCATION
-        salon_comfort = salon_data.salon_comfort or DEFAULT_SALON_COMFORT
+        salon_comfort = (
+            salon_data.salon_comfort if (salon_data.salon_comfort and len(salon_data.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
+        )
         
         # Convert Pydantic models to dict for JSON storage
         salon_types_dict = [st.dict() if hasattr(st, 'dict') else st for st in salon_types]
@@ -191,16 +195,21 @@ async def get_all_salons(
         # Convert salons to SalonResponse objects with proper UUID handling
         salon_responses = []
         for salon in salons:
+            # Fallback to defaults when fields are empty
+            st = salon.salon_types if (salon.salon_types and len(salon.salon_types) > 0) else DEFAULT_SALON_TYPES
+            sc = salon.salon_comfort if (salon.salon_comfort and len(salon.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
+            loc = salon.location or DEFAULT_LOCATION
+
             salon_dict = {
                 "id": str(salon.id),
                 "salon_name": salon.salon_name,
                 "salon_phone": salon.salon_phone,
                 "salon_instagram": salon.salon_instagram,
                 "salon_rating": salon.salon_rating,
-                "salon_types": salon.salon_types,
+                "salon_types": st,
                 "private_salon": salon.private_salon,
-                "location": salon.location,
-                "salon_comfort": salon.salon_comfort,
+                "location": loc,
+                "salon_comfort": sc,
                 "salon_sale": salon.salon_sale,
                 "is_active": salon.is_active,
                 "is_private": salon.is_private,
@@ -256,6 +265,9 @@ async def get_salon_by_id(
             )
         
         # Convert salon to SalonResponse with proper UUID handling
+        st = salon.salon_types if (salon.salon_types and len(salon.salon_types) > 0) else DEFAULT_SALON_TYPES
+        sc = salon.salon_comfort if (salon.salon_comfort and len(salon.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
+        loc = salon.location or DEFAULT_LOCATION
         salon_dict = {
             "id": str(salon.id),
             "salon_name": salon.salon_name,
@@ -263,10 +275,10 @@ async def get_salon_by_id(
             "salon_instagram": salon.salon_instagram,
             "salon_rating": salon.salon_rating,
             "salon_description": salon.description_uz,  # Use description_uz as default
-            "salon_types": salon.salon_types,
+            "salon_types": st,
             "private_salon": salon.private_salon,
-            "location": salon.location,
-            "salon_comfort": salon.salon_comfort,
+            "location": loc,
+            "salon_comfort": sc,
             "salon_sale": salon.salon_sale,
             "is_active": salon.is_active,
             "is_private": salon.is_private,
@@ -311,11 +323,17 @@ async def update_salon(
         
         for field, value in update_data.items():
             if hasattr(salon, field):
-                # Convert Pydantic models to dict for JSON fields
-                if field in ['salon_types', 'salon_comfort'] and value:
-                    value = [item.dict() if hasattr(item, 'dict') else item for item in value]
-                elif field == 'location' and value:
-                    value = value.dict() if hasattr(value, 'dict') else value
+                # Convert Pydantic models to dict for JSON fields and apply defaults on empty
+                if field in ['salon_types', 'salon_comfort']:
+                    if value is None or (isinstance(value, list) and len(value) == 0):
+                        value = DEFAULT_SALON_TYPES if field == 'salon_types' else DEFAULT_SALON_COMFORT
+                    else:
+                        value = [item.dict() if hasattr(item, 'dict') else item for item in value]
+                elif field == 'location':
+                    if not value:
+                        value = DEFAULT_LOCATION
+                    else:
+                        value = value.dict() if hasattr(value, 'dict') else value
                 
                 setattr(salon, field, value)
         
@@ -360,6 +378,40 @@ async def delete_salon(
             message="Salon muvaffaqiyatli o'chirildi"
         )
         
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Server xatoligi: {str(e)}"
+        )
+
+@router.post("/apply-defaults", response_model=StandardResponse)
+async def apply_defaults_to_salons(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_admin)
+):
+    """Bo'sh salon_types va salon_comfort uchun defaultlarni DBga qo'llash"""
+    try:
+        salons = db.query(Salon).filter(Salon.is_active == True).all()
+        updated_count = 0
+        for salon in salons:
+            changed = False
+            if not salon.salon_types or (isinstance(salon.salon_types, list) and len(salon.salon_types) == 0):
+                salon.salon_types = DEFAULT_SALON_TYPES
+                changed = True
+            if not salon.salon_comfort or (isinstance(salon.salon_comfort, list) and len(salon.salon_comfort) == 0):
+                salon.salon_comfort = DEFAULT_SALON_COMFORT
+                changed = True
+            if changed:
+                updated_count += 1
+        db.commit()
+        return StandardResponse(
+            success=True,
+            message="Default qiymatlar qo'llandi",
+            data={"updated_count": updated_count}
+        )
     except HTTPException:
         raise
     except Exception as e:
