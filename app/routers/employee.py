@@ -672,11 +672,8 @@ async def get_employee_posts(
         
         offset = (page - 1) * limit
         
-        # Get posts with employee and salon info
-        posts_query = db.query(EmployeePost).options(
-            joinedload(EmployeePost.employee).joinedload(Employee.salon),
-            joinedload(EmployeePost.media)
-        ).filter(
+        # Get posts (fetch related info per item to avoid eager-load issues)
+        posts_query = db.query(EmployeePost).filter(
             and_(EmployeePost.employee_id == employee_id, EmployeePost.is_active == True)
         ).order_by(desc(EmployeePost.created_at))
         
@@ -689,22 +686,32 @@ async def get_employee_posts(
         # Format response
         formatted_posts = []
         for post in posts:
-            post_dict = {
-                "id": post.id,
-                "employee_id": post.employee_id,
-                "title": post.title,
-                "description": post.description,
-                "is_active": post.is_active,
-                "created_at": post.created_at,
-                "updated_at": post.updated_at,
-                "employee_name": post.employee.name if post.employee else None,
-                "employee_surname": post.employee.surname if post.employee else None,
-                "employee_profession": post.employee.profession if post.employee else None,
-                "salon_id": post.employee.salon_id if post.employee else None,
-                "salon_name": post.employee.salon.name if post.employee and post.employee.salon else None,
-                "media_files": [media.file_path for media in post.media] if post.media else []
-            }
-            formatted_posts.append(EmployeePostResponse(**post_dict))
+            try:
+                # Fetch employee and salon info per post
+                emp = db.query(Employee).options(joinedload(Employee.salon)).filter(Employee.id == post.employee_id).first()
+                media_items = db.query(PostMedia).filter(PostMedia.post_id == post.id).all()
+
+                post_dict = {
+                    "id": post.id,
+                    "employee_id": post.employee_id,
+                    "title": post.title,
+                    "description": post.description,
+                    "is_active": post.is_active,
+                    "created_at": post.created_at,
+                    "updated_at": post.updated_at,
+                    "employee_name": emp.name if emp else None,
+                    "employee_surname": emp.surname if emp else None,
+                    "employee_profession": emp.profession if emp else None,
+                    "salon_id": emp.salon_id if emp else None,
+                    "salon_name": emp.salon.salon_name if emp and emp.salon else None,
+                    "media_files": [m.file_path for m in media_items]
+                }
+                formatted_posts.append(EmployeePostResponse(**post_dict))
+            except Exception as fe:
+                try:
+                    print(f"Format error in get_employee_posts: {fe}. PostID: {post.id}")
+                except Exception:
+                    pass
         
         return EmployeePostListResponse(
             success=True,
@@ -719,6 +726,13 @@ async def get_employee_posts(
     except HTTPException:
         raise
     except Exception as e:
+        # Log the underlying error for debugging
+        try:
+            print(f"Error in get_employee_posts: {str(e)}")
+            import traceback
+            traceback.print_exc()
+        except Exception:
+            pass
         raise HTTPException(
             status_code=500,
             detail="Server xatosi yuz berdi"

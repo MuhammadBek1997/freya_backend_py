@@ -48,39 +48,19 @@ async def get_current_user(
             return user
             
         elif role == 'employee':
-            # First check admin record for employee
-            admin_employee = db.query(Admin).filter(
-                Admin.id == user_id,
-                Admin.role == 'employee',
-                Admin.is_active == True
-            ).first()
-            
-            if not admin_employee:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Employee admin record topilmadi"
-                )
-            
-            # Map admin username to employee name
-            employee_name = admin_employee.username
-            if employee_name in ['employee1', 'employee1_1']:
-                employee_name = 'Employee One'
-            
-            # Get actual employee record
+            # Authenticate using the actual Employee record
             employee = db.query(Employee).filter(
-                Employee.name == employee_name
+                Employee.id == user_id,
+                Employee.is_active == True
             ).first()
-            
+
             if not employee:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Employee topilmadi"
+                    detail="Xodim topilmadi yoki faol emas"
                 )
-            
-            # Combine admin and employee data
+
             employee.role = 'employee'
-            employee.admin_id = admin_employee.id
-            employee.salon_id = admin_employee.salon_id
             return employee
             
         else:  # user role
