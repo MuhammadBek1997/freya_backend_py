@@ -129,7 +129,7 @@ messages = {
 }
 
 
-def get_translation(language: str, section: str = None):
+def get_translation(language: str = "uz", section: str = None):
     keys = section.split(".") if section else []
     current = messages
     if language not in current:
