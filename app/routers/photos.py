@@ -78,11 +78,11 @@ async def upload_photo(
         )
 
 
-@router.get("/")
-async def get_photo(havola: str):
-    """Havola orqali rasmni ochish."""
-    photos_dir = os.path.join(os.getcwd(), "photos")
-    file_path = os.path.join(photos_dir, havola)
-    if not os.path.isfile(file_path):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rasm topilmadi")
-    return FileResponse(file_path)
+# @router.get("/")
+# async def get_photo(havola: str):
+#     """Havola orqali rasmni ochish."""
+#     photos_dir = os.path.join(os.getcwd(), "photos")
+#     file_path = os.path.join(photos_dir, havola)
+#     if not os.path.isfile(file_path):
+#         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rasm topilmadi")
+#     return FileResponse(file_path)
