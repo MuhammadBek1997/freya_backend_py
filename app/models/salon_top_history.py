@@ -1,13 +1,12 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Boolean
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
 class SalonTopHistory(BaseModel):
     __tablename__ = "salon_top_history"
     
-    salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id"), nullable=False)
-    admin_id = Column(UUID(as_uuid=True), ForeignKey("admins.id"), nullable=False)
+    salon_id = Column(String(36), ForeignKey("salons.id"), nullable=False)
+    admin_id = Column(String(36), ForeignKey("admins.id"), nullable=False)
     start_date = Column(DateTime, nullable=False)
     action = Column(String, nullable=False)  # e.g., 'promoted', 'demoted'
     end_date = Column(DateTime, nullable=True)

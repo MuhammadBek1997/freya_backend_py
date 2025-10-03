@@ -8,21 +8,15 @@ from app.config import settings
 # Create database engine (reads from settings.database_url)
 db_url = settings.database_url
 
-# Normalize legacy postgres scheme to postgresql for SQLAlchemy
-if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
-
 url = make_url(db_url)
 
-# Apply Postgres-specific connect args only when using Postgres
+# Connection args: keep minimal for MySQL; none needed for mysqlconnector
 connect_args = {}
-if url.get_backend_name() == "postgresql":
-    connect_args = {"options": "-c search_path=public"}
 
 engine = create_engine(
     db_url,
     pool_pre_ping=True,
-    pool_recycle=300,
+    pool_recycle=1800,
     echo=False,
     connect_args=connect_args,
 )
@@ -30,17 +24,13 @@ engine = create_engine(
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create Base class with default schema set to public
-Base = declarative_base(metadata=MetaData(schema="public"))
+# Create Base class without Postgres schema (MySQL does not use schemas)
+Base = declarative_base(metadata=MetaData())
 
 # Import all models to ensure they are registered with SQLAlchemy
 from app.models import *
 
-# Ensure 'public' schema exists for Postgres before creating tables
-if url.get_backend_name() == "postgresql":
-    # Use a transaction that commits automatically
-    with engine.begin() as conn:
-        conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
+# No Postgres-specific schema handling needed
 
 Base.metadata.create_all(engine)
 

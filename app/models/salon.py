@@ -1,5 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, Integer, DECIMAL
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import Column, String, Boolean, Text, Integer, DECIMAL, JSON
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -10,11 +9,11 @@ class Salon(BaseModel):
     salon_phone = Column(String(20))
     salon_instagram = Column(String(100))
     salon_rating = Column(DECIMAL(3,2), default=0)
-    salon_types = Column(JSONB, default=list)
+    salon_types = Column(JSON, default=list)
     private_salon = Column(Boolean, default=False)
-    location = Column(JSONB)
-    salon_comfort = Column(JSONB, default=list)
-    salon_sale = Column(JSONB)
+    location = Column(JSON)
+    salon_comfort = Column(JSON, default=list)
+    salon_sale = Column(JSON)
     is_active = Column(Boolean, default=True)
     is_private = Column(Boolean, default=False)
     is_top = Column(Boolean, default=False)

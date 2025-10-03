@@ -1,13 +1,12 @@
-from sqlalchemy import Column, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, ForeignKey, UniqueConstraint, String
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
 class UserFavorite(BaseModel):
     __tablename__ = "user_favorites"
     
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
-    content_id = Column(UUID(as_uuid=True), ForeignKey("content.id", ondelete="CASCADE"))
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"))
+    content_id = Column(String(36), ForeignKey("content.id", ondelete="CASCADE"))
     
     # Relationships
     user = relationship("User")

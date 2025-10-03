@@ -1,12 +1,11 @@
 from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, CheckConstraint, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
 class PaymentCard(BaseModel):
     __tablename__ = "payment_cards"
     
-    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     card_number_encrypted = Column(String(255), nullable=False)
     card_holder_name = Column(String(100), nullable=False)
     expiry_month = Column(Integer, CheckConstraint('expiry_month >= 1 AND expiry_month <= 12'), nullable=False)

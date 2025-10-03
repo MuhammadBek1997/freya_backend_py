@@ -1,12 +1,11 @@
 from sqlalchemy import Column, String, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
 class EmployeeTranslation(BaseModel):
     __tablename__ = "employee_translations"
     
-    employee_id = Column(UUID(as_uuid=True), ForeignKey("employees.id"), nullable=False)
+    employee_id = Column(String(36), ForeignKey("employees.id"), nullable=False)
     language_code = Column(String(10), nullable=False)  # e.g., 'uz', 'ru', 'en'
     name = Column(String(100), nullable=True)
     surname = Column(String(100), nullable=True)
@@ -25,7 +24,7 @@ class EmployeeTranslation(BaseModel):
 class SalonTranslation(BaseModel):
     __tablename__ = "salon_translations"
     
-    salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id"), nullable=False)
+    salon_id = Column(String(36), ForeignKey("salons.id"), nullable=False)
     language_code = Column(String(10), nullable=False)  # e.g., 'uz', 'ru', 'en'
     salon_name = Column(String(200), nullable=True)
     salon_description = Column(Text, nullable=True)

@@ -1,4 +1,4 @@
-from sqlalchemy import UUID, Column, Integer, String, Text, Numeric, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, Numeric, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -6,7 +6,7 @@ class Service(BaseModel):
     __tablename__ = "services"
     
     id = Column(Integer, primary_key=True, index=True)
-    salon_id = Column(UUID(as_uuid=True), ForeignKey("salons.id"), nullable=False)
+    salon_id = Column(String(36), ForeignKey("salons.id"), nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text)
     price = Column(Numeric(10, 2), nullable=False)

@@ -1,5 +1,4 @@
-from sqlalchemy import TIMESTAMP, Column, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Column, DateTime, func, String
 from app.database import Base
 import uuid
 
@@ -7,12 +6,12 @@ import uuid
 class BaseModel(Base):
     __abstract__ = True
     
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     created_at = Column(
-        TIMESTAMP(timezone=True), server_default=func.now()
+        DateTime, server_default=func.now()
     )
     updated_at = Column(
-        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+        DateTime, server_default=func.now(), onupdate=func.now()
     )
 
     class Config:
