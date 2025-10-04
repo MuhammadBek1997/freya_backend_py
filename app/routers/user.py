@@ -597,6 +597,15 @@ async def get_user_profile(
     return current_user
 
 
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Token yuborilganda joriy foydalanuvchi maʼlumotlarini qaytarish"""
+    return current_user
+
+
 @router.post("/profile/image/upload", response_model=dict)
 async def upload_profile_image(
     file: UploadFile = File(...),

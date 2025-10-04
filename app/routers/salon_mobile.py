@@ -8,7 +8,11 @@ import uuid
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
-from app.schemas.salon import MobileSalonItem
+from app.schemas.salon import MobileSalonItem, MobileSalonDetailResponse, MobileAddressInfo
+from app.models.employee import Employee, EmployeeComment
+from app.models.schedule import Schedule
+from app.models.appointment import Appointment
+from datetime import date, timedelta
 from app.models.user_favourite_salon import UserFavouriteSalon
 
 router = APIRouter(prefix="/mobile/salons", tags=["Mobile Salons"])
@@ -131,6 +135,179 @@ def _build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_
         rate=rate,
         reviews=reviews,
         news=news,
+        isFavorite=is_fav,
+    )
+
+
+def _amenity_flag(salon: Salon, key: str, aliases: List[str] = []) -> bool:
+    comforts = getattr(salon, "salon_comfort", None) or []
+    try:
+        for c in comforts:
+            name = (c.get("name") or "").lower()
+            is_active = bool(c.get("isActive"))
+            if name == key.lower() or name in [a.lower() for a in aliases]:
+                return is_active
+    except Exception:
+        pass
+    return False
+
+
+def _build_mobile_detail(
+    salon: Salon,
+    language: Optional[str],
+    db: Session,
+    user_id: Optional[str],
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+) -> MobileSalonDetailResponse:
+    description = _pick_description(salon, language) or ""
+    about = description
+
+    photos = getattr(salon, "photos", None) or []
+    logo = photos[0] if len(photos) > 0 else None
+    images = photos
+
+    # Address selection by language
+    addr_name = None
+    if language:
+        lang = language.lower()
+        if lang in ["uz", "ru", "en"]:
+            addr_name = getattr(salon, f"address_{lang}", None)
+    if not addr_name:
+        addr_name = salon.address_uz or salon.address_ru or salon.address_en
+
+    # Coordinates
+    lat = None
+    lng = None
+    if isinstance(salon.location, dict):
+        lat = salon.location.get("lat")
+        lng = salon.location.get("lng")
+
+    # Distance
+    dist = None
+    try:
+        if latitude is not None and longitude is not None and lat is not None and lng is not None:
+            dist = calculate_distance(float(latitude), float(longitude), float(lat), float(lng))
+            dist = round(dist, 2)
+    except Exception:
+        dist = None
+
+    # News and favorite
+    news = _compose_news(salon)
+    is_fav = _is_favourite(db, str(salon.id), user_id)
+
+    # Employees images
+    emp_images: List[str] = []
+    try:
+        emp_images = [e.avatar_url for e in db.query(Employee).filter(Employee.salon_id == str(salon.id), Employee.is_active == True).all() if e.avatar_url]
+    except Exception:
+        emp_images = []
+
+    # Reviews count (sum of employee comments)
+    try:
+        reviews_count = db.query(func.count(EmployeeComment.id)).join(Employee).filter(Employee.salon_id == str(salon.id)).scalar() or 0
+    except Exception:
+        reviews_count = 0
+
+    # Dynamic working hours: use today's appointments time range if available
+    day_work_time = None
+    try:
+        today = date.today()
+        min_time = (
+            db.query(func.min(Appointment.application_time))
+            .join(Employee)
+            .filter(Employee.salon_id == str(salon.id))
+            .filter(Appointment.application_date == today)
+            .scalar()
+        )
+        max_time = (
+            db.query(func.max(Appointment.application_time))
+            .join(Employee)
+            .filter(Employee.salon_id == str(salon.id))
+            .filter(Appointment.application_date == today)
+            .scalar()
+        )
+        if min_time and max_time:
+            try:
+                day_work_time = f"{min_time.strftime('%H:%M')} - {max_time.strftime('%H:%M')}"
+            except Exception:
+                day_work_time = f"{str(min_time)[:5]} - {str(max_time)[:5]}"
+    except Exception:
+        day_work_time = None
+
+    # Dynamic week work days: use schedules over next 7 days
+    week_work_day = None
+    try:
+        start = date.today()
+        end = start + timedelta(days=6)
+        sched_dates = (
+            db.query(Schedule.date)
+            .filter(Schedule.salon_id == str(salon.id))
+            .filter(Schedule.date >= start)
+            .filter(Schedule.date <= end)
+            .all()
+        )
+        weekdays = sorted({d[0].weekday() for d in sched_dates if d and d[0]})
+        names = [
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
+        ]
+        if weekdays:
+            week_work_day = ",".join(names[i] for i in weekdays)
+    except Exception:
+        week_work_day = None
+
+    # Amenities mapping with aliases
+    parking = _amenity_flag(salon, "parking")
+    water = _amenity_flag(salon, "water")
+    coffee = _amenity_flag(salon, "coffee", aliases=["cafee"])
+    pets = _amenity_flag(salon, "pets")
+    shower = _amenity_flag(salon, "shower", aliases=["bath"]) 
+    towel = _amenity_flag(salon, "towel")
+    children_service = _amenity_flag(salon, "children_service", aliases=["kids"]) 
+    only_women = _amenity_flag(salon, "onlyWomen", aliases=["onlyFemale"]) 
+
+    # Nearby metro station from orientation fields if present
+    metro = None
+    if language:
+        lang = language.lower()
+        if lang in ["uz", "ru", "en"]:
+            metro = getattr(salon, f"orientation_{lang}", None)
+    if not metro:
+        metro = salon.orientation_uz or salon.orientation_ru or salon.orientation_en
+
+    # Phones
+    phones: List[str] = []
+    if salon.salon_phone:
+        phones = [salon.salon_phone]
+
+    rate = float(salon.salon_rating) if salon.salon_rating is not None else 0.0
+
+    return MobileSalonDetailResponse(
+        id=str(salon.id),
+        name=salon.salon_name,
+        logo=logo,
+        salon_images=images,
+        description=description,
+        address=MobileAddressInfo(name=addr_name, latitude=lat, longitude=lng, distance=dist),
+        news=news,
+        note=None,
+        nearby_metro_station=metro,
+        phone=phones,
+        instagram_url=salon.salon_instagram,
+        rate=rate,
+        reviews_count=int(reviews_count),
+        day_work_time=day_work_time,
+        week_work_day=week_work_day,
+        about_salon=about,
+        employees_images=emp_images,
+        parking=parking,
+        water=water,
+        coffee=coffee,
+        pets=pets,
+        shower=shower,
+        towel=towel,
+        children_service=children_service,
+        onlyWomen=only_women,
         isFavorite=is_fav,
     )
 
@@ -295,12 +472,14 @@ async def get_nearby_salons_mobile(
             detail=get_translation(language, "errors.500")
         )
 
-@router.get("/{salon_id}", response_model=MobileSalonItem)
+@router.get("/{salon_id}", response_model=MobileSalonDetailResponse)
 async def get_salon_by_id_mobile(
     salon_id: str,
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
+    latitude: Optional[float] = Query(None),
+    longitude: Optional[float] = Query(None),
 ):
     """ID bo'yicha salonni olish (mobile)"""
     try:
@@ -320,10 +499,11 @@ async def get_salon_by_id_mobile(
                 detail=get_translation(language, "errors.404")
             )
 
-        return _build_mobile_item(salon, language, db, userId)
+        return _build_mobile_detail(salon, language, db, userId, latitude, longitude)
     except HTTPException:
         raise
-    except Exception:
+    except Exception as e:
+        print(f"Error in get_salon_by_id_mobile: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")

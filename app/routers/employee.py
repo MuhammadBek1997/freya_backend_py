@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, desc
 from typing import List, Optional, Union
-from uuid import UUID
 
 from app.database import get_db
 from app.i18nMini import get_translation
@@ -52,7 +51,7 @@ async def get_all_employees(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
-    salon_id: Optional[UUID] = Query(None),
+    salon_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):

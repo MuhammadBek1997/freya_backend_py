@@ -241,3 +241,39 @@ class MobileSalonItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+# Mobile-specific detailed address schema
+class MobileAddressInfo(BaseModel):
+    name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    distance: Optional[float] = None
+
+# Mobile-specific detailed salon response schema
+class MobileSalonDetailResponse(BaseModel):
+    id: str
+    name: str
+    logo: Optional[str] = None
+    salon_images: List[str] = []
+    description: Optional[str] = None
+    address: MobileAddressInfo
+    news: List[str] = []
+    note: Optional[str] = None
+    nearby_metro_station: Optional[str] = None
+    phone: List[str] = []
+    instagram_url: Optional[str] = None
+    rate: Optional[float] = 0.0
+    reviews_count: int = 0
+    day_work_time: Optional[str] = None
+    week_work_day: Optional[str] = None
+    about_salon: Optional[str] = None
+    employees_images: List[str] = []
+    parking: bool = False
+    water: bool = False
+    coffee: bool = False
+    pets: bool = False
+    shower: bool = False
+    towel: bool = False
+    children_service: bool = False
+    onlyWomen: bool = False
+    isFavorite: bool = False
