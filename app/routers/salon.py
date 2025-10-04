@@ -518,6 +518,7 @@ async def get_nearby_salons(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Yaqin atrofdagi salonlarni olish"""
+    print(f"Received coords: lat={latitude}, lng={longitude}, radius={radius}km1")
     try:
         # Validate coordinates
         if not -90 <= latitude <= 90:

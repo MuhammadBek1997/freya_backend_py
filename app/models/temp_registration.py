@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, Text
 from .base import BaseModel
 
 class TempRegistration(BaseModel):
@@ -9,7 +9,7 @@ class TempRegistration(BaseModel):
     verification_expires_at = Column(DateTime, nullable=False)
     attempts = Column(Integer, default=0)
     is_verified = Column(Boolean, default=False)
-    registration_data = Column(String, nullable=True)  # JSON string for additional data
+    registration_data = Column(Text, nullable=True)  # JSON string for additional data
     
     def __repr__(self):
         return f"<TempRegistration(phone='{self.phone}', is_verified={self.is_verified})>"

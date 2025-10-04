@@ -1,4 +1,4 @@
-from sqlalchemy import TIMESTAMP, Column, String, Boolean, DateTime, Integer, Numeric, func
+from sqlalchemy import TIMESTAMP, Column, String, Boolean, DateTime, Integer, Numeric, Text, func
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -22,7 +22,7 @@ class User(BaseModel):
     latitude = Column(Numeric(10, 8), nullable=True)
     longitude = Column(Numeric(11, 8), nullable=True)
     location_permission = Column(Boolean, default=False)
-    address = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
     city = Column(String(100), nullable=True)
     country = Column(String(100), nullable=True)
     location_updated_at = Column(

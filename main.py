@@ -93,6 +93,7 @@ app = FastAPI(
         },
     ],
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
+    debug=True
 )
 
 # CORS configuration
