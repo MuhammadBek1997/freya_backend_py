@@ -1,85 +1,4 @@
-# from typing import Union
-# from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, status, Request
-# from fastapi.responses import FileResponse
-# from sqlalchemy.orm import Session
-# import os
-# import uuid
-# from app.database import get_db
-# from app.i18nMini import get_translation
-# from app.middleware.auth import get_current_user
-# from app.models.photo import Photo
-# from app.schemas.photo import PhotoUploadResponse
-
-
-# router = APIRouter(prefix="/photos", tags=["Photos"])
-
-
-# @router.post("/upload", response_model=PhotoUploadResponse, status_code=status.HTTP_201_CREATED)
-# async def upload_photo(
-#     request: Request,
-#     file: UploadFile = File(...),
-#     db: Session = Depends(get_db),
-#     current_user = Depends(get_current_user),
-#     language: Union[str, None] = Header(None, alias="X-User-language"),
-# ):
-#     """Rasm yuklash endpointi. Superadmin ruxsat etilmaydi."""
-#     try:
-#         role = getattr(current_user, "role", None)
-#         if role == "superadmin":
-#             raise HTTPException(
-#                 status_code=status.HTTP_403_FORBIDDEN,
-#                 detail=get_translation(language, "errors.403")
-#             )
-
-#         # Faoliyat ko'rish: faqat tasvir fayllariga ruxsat
-#         if not file.content_type or not file.content_type.startswith("image/"):
-#             raise HTTPException(
-#                 status_code=status.HTTP_400_BAD_REQUEST,
-#                 detail=get_translation(language, "errors.400")
-#             )
-
-#         photos_dir = os.path.join(os.getcwd(), "photos")
-#         os.makedirs(photos_dir, exist_ok=True)
-
-#         # Fayl nomini generatsiya qilish (uuid + original extension)
-#         orig_name = file.filename or "image"
-#         _, ext = os.path.splitext(orig_name)
-#         if not ext:
-#             # MIME turidan extensionni taxmin qilish (minimal)
-#             ext = ".jpg" if file.content_type == "image/jpeg" else ".png"
-#         safe_name = f"{uuid.uuid4().hex}{ext}"
-#         save_path = os.path.join(photos_dir, safe_name)
-
-#         # Diskka saqlash
-#         with open(save_path, "wb") as out:
-#             content = await file.read()
-#             out.write(content)
-
-#         # To'liq URL yasash
-#         base = str(request.base_url).rstrip("/")
-#         url = f"{base}/api/photos/{safe_name}"
-
-#         # DB yozuvini saqlash
-#         photo = Photo(
-#             filename=safe_name,
-#             url=url,
-#             uploader_id=getattr(current_user, "id"),
-#             uploader_role=role or "user",
-#         )
-#         db.add(photo)
-#         db.commit()
-
-#         return PhotoUploadResponse(url=url)
-#     except HTTPException:
-#         raise
-#     except Exception as e:
-#         # Odatdagi xatolar
-#         raise HTTPException(
-#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-#             detail=get_translation(language, "errors.500")
-#         )
-
-from typing import Union, List
+from typing import List, Union
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, status, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -93,15 +12,16 @@ from app.schemas.photo import PhotoUploadResponse
 
 router = APIRouter(prefix="/photos", tags=["Photos"])
 
-@router.post("/upload", status_code=status.HTTP_201_CREATED)
-async def upload_photo(
+
+@router.post("/upload", response_model=List[PhotoUploadResponse], status_code=status.HTTP_201_CREATED)
+async def upload_photos(
     request: Request,
-    photos: List[UploadFile] = File(...),  # Ko'p fayllar qabul qilish
+    files: List[UploadFile] = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Rasm(lar) yuklash endpointi. Superadmin ruxsat etilmaydi."""
+    """Rasmlar yuklash endpointi. Superadmin ruxsat etilmaydi."""
     try:
         role = getattr(current_user, "role", None)
         if role == "superadmin":
@@ -109,60 +29,51 @@ async def upload_photo(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=get_translation(language, "errors.403")
             )
-        
-        uploaded_urls = []
-        photos_dir = os.path.join(os.getcwd(), "photos")
-        os.makedirs(photos_dir, exist_ok=True)
-        
-        # Har bir faylni qayta ishlash
-        for file in photos:
-            # Faqat rasm fayllariga ruxsat
+
+        # Faoliyat ko'rish: faqat tasvir fayllariga ruxsat
+        for file in files:
             if not file.content_type or not file.content_type.startswith("image/"):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Fayl '{file.filename}' rasm emas"
+                    detail=get_translation(language, "errors.400")
                 )
-            
-            # Fayl hajmini tekshirish (4MB)
-            content = await file.read()
-            if len(content) > 4 * 1024 * 1024:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Fayl '{file.filename}' juda katta (max 4MB)"
-                )
-            
-            # Fayl nomini generatsiya qilish
+
+        photos_dir = os.path.join(os.getcwd(), "photos")
+        os.makedirs(photos_dir, exist_ok=True)
+
+        results = []
+        for file in files:
+            # Fayl nomini generatsiya qilish (uuid + original extension)
             orig_name = file.filename or "image"
-            _, ext = os.path.splitext(orig_name)  # Sintaksis xatosi tuzatildi
+            _, ext = os.path.splitext(orig_name)
             if not ext:
+                # MIME turidan extensionni taxmin qilish (minimal)
                 ext = ".jpg" if file.content_type == "image/jpeg" else ".png"
-            
             safe_name = f"{uuid.uuid4().hex}{ext}"
             save_path = os.path.join(photos_dir, safe_name)
-            
+
             # Diskka saqlash
             with open(save_path, "wb") as out:
+                content = await file.read()
                 out.write(content)
-            
+
             # To'liq URL yasash
             base = str(request.base_url).rstrip("/")
             url = f"{base}/api/photos/{safe_name}"
-            
+
             # DB yozuvini saqlash
             photo = Photo(
                 filename=safe_name,
                 url=url,
-                uploader_id=str(getattr(current_user, "id", None)),
+                uploader_id=getattr(current_user, "id"),
                 uploader_role=role or "user",
             )
             db.add(photo)
-            uploaded_urls.append(url)
-        
-        db.commit()
-        
-        # Frontend kutgan format: {"urls": [...]}
-        return {"urls": uploaded_urls}
-        
+            db.commit()
+
+            results.append(PhotoUploadResponse(url=url))
+
+        return results
     except HTTPException:
         raise
     except Exception as e:

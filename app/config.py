@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     # Database
     database_url: str = (
         # MySQL DSN: user:password@host/dbname (password URL-encoded)
-        "mysql+mysqlconnector://Umidjon_Freya:FX%264FFmJaiibyY-q@vmi2413425.contaboserver.net/Umidjon_Freya"
+        "mysql+mysqlconnector://Umidjon_Freya:FX&4FFmJaiibyY-q@vmi2413425.contaboserver.net/Umidjon_Freya"
     )
     # Fix for Heroku
     # if database_url.startswith("postgres://"):
@@ -55,9 +55,9 @@ class Settings(BaseSettings):
     SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
 
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
+    # class Config:
+    #     env_file = ".env"
+    #     extra = "ignore"
 
 
 settings = Settings()

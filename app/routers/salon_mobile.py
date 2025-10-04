@@ -241,6 +241,60 @@ async def get_recomended_salons_mobile(
         )
 
 
+@router.get("/nearby", response_model=List[MobileSalonItem])
+async def get_nearby_salons_mobile(
+    latitude: float = Query(...),
+    longitude: float = Query(...),
+    radius: float = Query(10.0, ge=0.1, le=100),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    is_private: Optional[str] = Query(''),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    userId: Optional[str] = Query(None),
+):
+    """Yaqin atrofdagi salonlarni olish (mobile)"""
+    print(f"Received coords: lat={latitude}, lng={longitude}, radius={radius}km")
+    try:
+        if not (-90 <= latitude <= 90):
+            print("Latitude out of range")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+        if not (-180 <= longitude <= 180):
+            print("Longitude out of range2")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+        query = db.query(Salon).filter(and_(Salon.is_active == True, Salon.location.isnot(None)))
+        if is_private != '':
+            is_private_value = is_private.lower() == 'true'
+            query = query.filter(Salon.private_salon == is_private_value)
+
+        all_salons = query.all()
+
+        # Filter by distance
+        nearby: List[Salon] = []
+        for salon in all_salons:
+            try:
+                if salon.location and 'lat' in salon.location and 'lng' in salon.location:
+                    salon_lat = float(salon.location['lat'])
+                    salon_lng = float(salon.location['lng'])
+                    distance = calculate_distance(latitude, longitude, salon_lat, salon_lng)
+                    if distance <= radius:
+                        nearby.append(salon)
+            except Exception:
+                continue
+
+        offset = (page - 1) * limit
+        salons = nearby[offset: offset + limit]
+        return [_build_mobile_item(s, language, db, userId) for s in salons]
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_nearby_salons_mobile: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
 @router.get("/{salon_id}", response_model=MobileSalonItem)
 async def get_salon_by_id_mobile(
     salon_id: str,
@@ -275,53 +329,3 @@ async def get_salon_by_id_mobile(
             detail=get_translation(language, "errors.500")
         )
 
-
-@router.get("/nearby", response_model=List[MobileSalonItem])
-async def get_nearby_salons_mobile(
-    latitude: float = Query(...),
-    longitude: float = Query(...),
-    radius: float = Query(10.0, ge=0.1, le=100),
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    is_private: Optional[str] = Query(''),
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-    userId: Optional[str] = Query(None),
-):
-    """Yaqin atrofdagi salonlarni olish (mobile)"""
-    try:
-        if not -90 <= latitude <= 90:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
-        if not -180 <= longitude <= 180:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
-
-        query = db.query(Salon).filter(and_(Salon.is_active == True, Salon.location.isnot(None)))
-        if is_private != '':
-            is_private_value = is_private.lower() == 'true'
-            query = query.filter(Salon.private_salon == is_private_value)
-
-        all_salons = query.all()
-
-        # Filter by distance
-        nearby: List[Salon] = []
-        for salon in all_salons:
-            try:
-                if salon.location and 'lat' in salon.location and 'lng' in salon.location:
-                    salon_lat = float(salon.location['lat'])
-                    salon_lng = float(salon.location['lng'])
-                    distance = calculate_distance(latitude, longitude, salon_lat, salon_lng)
-                    if distance <= radius:
-                        nearby.append(salon)
-            except Exception:
-                continue
-
-        offset = (page - 1) * limit
-        salons = nearby[offset: offset + limit]
-        return [_build_mobile_item(s, language, db, userId) for s in salons]
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
-        )
