@@ -14,6 +14,7 @@ class Salon(BaseModel):
     location = Column(JSON)
     salon_comfort = Column(JSON, default=list)
     salon_sale = Column(JSON)
+    photos = Column(JSON, default=list)
     is_active = Column(Boolean, default=True)
     is_private = Column(Boolean, default=False)
     is_top = Column(Boolean, default=False)

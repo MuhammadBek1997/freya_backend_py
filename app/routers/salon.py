@@ -85,14 +85,24 @@ async def create_salon(
         salon_types = (
             salon_data.salon_types if (salon_data.salon_types and len(salon_data.salon_types) > 0) else DEFAULT_SALON_TYPES
         )
-        location = salon_data.location or DEFAULT_LOCATION
+        # Location: handle cases where Location object is provided but empty
+        if salon_data.location and hasattr(salon_data.location, 'dict'):
+            loc_dict = salon_data.location.dict()
+            lat_val = loc_dict.get('latitude')
+            lng_val = loc_dict.get('longitude')
+            if lat_val is None or lng_val is None:
+                location_dict = DEFAULT_LOCATION
+            else:
+                # Normalize keys to {lat, lng}
+                location_dict = {"lat": lat_val, "lng": lng_val}
+        else:
+            location_dict = DEFAULT_LOCATION
         salon_comfort = (
             salon_data.salon_comfort if (salon_data.salon_comfort and len(salon_data.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
         )
         
         # Convert Pydantic models to dict for JSON storage
         salon_types_dict = [st.dict() if hasattr(st, 'dict') else st for st in salon_types]
-        location_dict = location.dict() if hasattr(location, 'dict') else location
         salon_comfort_dict = [sc.dict() if hasattr(sc, 'dict') else sc for sc in salon_comfort]
         
         # Create new salon
@@ -335,10 +345,25 @@ async def update_salon(
                     else:
                         value = [item.dict() if hasattr(item, 'dict') else item for item in value]
                 elif field == 'location':
-                    if not value:
+                    # Normalize and apply defaults when Location is empty or partial
+                    if value is None:
                         value = DEFAULT_LOCATION
-                    else:
-                        value = value.dict() if hasattr(value, 'dict') else value
+                    elif hasattr(value, 'dict'):
+                        loc_dict = value.dict()
+                        lat_val = loc_dict.get('latitude')
+                        lng_val = loc_dict.get('longitude')
+                        if lat_val is None or lng_val is None:
+                            value = DEFAULT_LOCATION
+                        else:
+                            value = {"lat": lat_val, "lng": lng_val}
+                    elif isinstance(value, dict):
+                        # If dict is provided, try to standardize keys
+                        if 'lat' in value and 'lng' in value:
+                            value = {"lat": value['lat'], "lng": value['lng']}
+                        elif 'latitude' in value and 'longitude' in value:
+                            value = {"lat": value['latitude'], "lng": value['longitude']}
+                        else:
+                            value = DEFAULT_LOCATION
                 
                 setattr(salon, field, value)
         
@@ -647,10 +672,10 @@ async def upload_salon_photos(
                 detail=get_translation(language, "errors.404")
             )
         
-        current_photos = salon.salon_photos or []
+        current_photos = salon.photos or []
         updated_photos = current_photos + photo_data.photos
         
-        salon.salon_photos = updated_photos
+        salon.photos = updated_photos
         db.commit()
         
         return StandardResponse(
@@ -658,7 +683,7 @@ async def upload_salon_photos(
             message=get_translation(language, "success"),
             data={
                 "salon_id": salon_id,
-                "salon_photos": updated_photos,
+                "photos": updated_photos,
                 "total_photos": len(updated_photos)
             }
         )
@@ -690,7 +715,7 @@ async def delete_salon_photo(
                 detail=get_translation(language, "errors.404")
             )
         
-        current_photos = salon.salon_photos or []
+        current_photos = salon.photos or []
         
         if photo_data.photo_index >= len(current_photos):
             raise HTTPException(
@@ -701,7 +726,7 @@ async def delete_salon_photo(
         # Remove photo at specified index
         updated_photos = current_photos[:photo_data.photo_index] + current_photos[photo_data.photo_index + 1:]
         
-        salon.salon_photos = updated_photos
+        salon.photos = updated_photos
         db.commit()
         
         return StandardResponse(
@@ -709,7 +734,7 @@ async def delete_salon_photo(
             message=get_translation(language, "success"),
             data={
                 "salon_id": salon_id,
-                "salon_photos": updated_photos,
+                "photos": updated_photos,
                 "deleted_photo_index": photo_data.photo_index,
                 "remaining_photos_count": len(updated_photos)
             }

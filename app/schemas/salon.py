@@ -225,3 +225,19 @@ class ErrorResponse(BaseModel):
     success: bool = False
     message: Optional[Union[str, None]] = None
     error: Optional[str] = None
+
+# Mobile-specific lightweight salon item schema
+class MobileSalonItem(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = None
+    logo: Optional[str] = None
+    salonImage: Optional[str] = None
+    city: Optional[str] = None
+    rate: Optional[float] = 0.0
+    reviews: Optional[int] = 0
+    news: List[str] = []
+    isFavorite: bool = False
+
+    class Config:
+        from_attributes = True

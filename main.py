@@ -22,6 +22,9 @@ from app.routers.appointments_router import router as appointment_router
 from app.routers.schedules_router import router as schedule_router
 from app.middleware.cors_proxy import CorsProxyMiddleware
 from app.middleware.language import LanguageMiddleware
+from app.routers.salon_mobile import router as mobile_router
+
+
 
 # Load environment variables
 load_dotenv()
@@ -137,6 +140,8 @@ app.include_router(schedule_router, prefix="/api")
 # app.include_router(sms_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
 app.include_router(photos_router, prefix="/api")
+app.include_router(mobile_router, prefix="/api")
+
 
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
