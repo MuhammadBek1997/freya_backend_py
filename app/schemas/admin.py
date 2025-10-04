@@ -1,7 +1,7 @@
 """
 Admin schemas
 """
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 from pydantic import BaseModel
 
@@ -16,7 +16,7 @@ class SalonTopRequest(BaseModel):
 class SalonTopResponse(BaseModel):
     """Salon top qilish response schema"""
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     data: Optional[dict] = None
 
 
@@ -67,7 +67,7 @@ class SalonTopHistoryResponse(BaseModel):
 class SendSMSRequest(BaseModel):
     """SMS yuborish request schema"""
     phone: str
-    message: str
+    message: Optional[Union[str, None]] = None
 
 
 class VerifySMSRequest(BaseModel):
@@ -79,7 +79,7 @@ class VerifySMSRequest(BaseModel):
 class SMSResponse(BaseModel):
     """SMS response schema"""
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     data: Optional[dict] = None
 
 
@@ -96,5 +96,5 @@ class SalonUpdateRequest(BaseModel):
 class SalonPhotoUploadResponse(BaseModel):
     """Salon rasm yuklash response schema"""
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     photo_url: Optional[str] = None

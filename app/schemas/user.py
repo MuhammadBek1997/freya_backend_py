@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 from enum import Enum
 import uuid
@@ -252,12 +252,12 @@ class PaymentCardResponse(BaseModel):
 
 class LoginResponse(BaseModel):
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     token: str
     user: UserResponse
 
 
 class TokenResponse(BaseModel):
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     token: str

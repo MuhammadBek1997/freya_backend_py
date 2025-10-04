@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from decimal import Decimal
 
@@ -218,10 +218,10 @@ class PhotoDeleteRequest(BaseModel):
 # Standard Response Schemas
 class StandardResponse(BaseModel):
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     data: Optional[Any] = None
 
 class ErrorResponse(BaseModel):
     success: bool = False
-    message: str
+    message: Optional[Union[str, None]] = None
     error: Optional[str] = None

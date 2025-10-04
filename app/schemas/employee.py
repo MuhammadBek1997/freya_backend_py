@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator
-from typing import Optional, List
+from typing import Optional, List, Union
 from datetime import datetime
 from uuid import UUID
 
@@ -143,5 +143,5 @@ class EmployeePostListResponse(BaseModel):
 
 class SuccessResponse(BaseModel):
     success: bool
-    message: str
+    message: Optional[Union[str, None]] = None
     data: Optional[dict] = None

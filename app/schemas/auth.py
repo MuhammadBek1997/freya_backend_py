@@ -1,7 +1,7 @@
 """
 Authentication schemas
 """
-from typing import Optional
+from typing import Optional, Union
 from pydantic import BaseModel, EmailStr
 
 
@@ -13,7 +13,7 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     """Login response schema"""
-    message: str
+    message: Optional[Union[str, None]] = None
     token: str
     user: dict
 
