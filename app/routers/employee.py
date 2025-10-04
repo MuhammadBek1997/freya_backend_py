@@ -134,7 +134,7 @@ async def get_all_employees(
 
 @router.get("/salon/{salon_id}", response_model=EmployeeListResponse)
 async def get_employees_by_salon_id(
-    salon_id: UUID,
+    salon_id: str,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(None),
@@ -142,9 +142,11 @@ async def get_employees_by_salon_id(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Get employees by salon ID"""
+    print(f"Received salon_id: {salon_id}")
     try:
         # Check if salon exists
-        salon = db.query(Salon).filter(Salon.id == salon_id).first()
+        salon = db.query(Salon).where(Salon.id == str(salon_id)).first()
+        print(f"Salon found: {salon }")
         if not salon:
             raise HTTPException(
                 status_code=404,
