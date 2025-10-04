@@ -215,7 +215,7 @@ async def get_employees_by_salon_id(
 
 @router.get("/{employee_id}", response_model=EmployeeDetailResponseWrapper)
 async def get_employee_by_id(
-    employee_id: UUID,
+    employee_id: str,
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
@@ -386,7 +386,7 @@ async def create_employee(
 
 @router.put("/{employee_id}", response_model=SuccessResponse)
 async def update_employee(
-    employee_id: UUID,
+    employee_id: str,
     employee_data: EmployeeUpdate,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin),
@@ -454,7 +454,7 @@ async def update_employee(
 
 @router.delete("/{employee_id}", response_model=SuccessResponse)
 async def delete_employee(
-    employee_id: UUID,
+    employee_id: str,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin),
     language: Union[str, None] = Header(None, alias="X-User-language"),
@@ -488,7 +488,7 @@ async def delete_employee(
 
 @router.post("/{employee_id}/comments", response_model=SuccessResponse)
 async def add_employee_comment(
-    employee_id: UUID,
+    employee_id: str,
     comment_data: EmployeeCommentCreate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
@@ -538,7 +538,7 @@ async def add_employee_comment(
 
 @router.post("/{employee_id}/posts", response_model=SuccessResponse)
 async def add_employee_post(
-    employee_id: UUID,
+    employee_id: str,
     post_data: EmployeePostCreate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
@@ -666,7 +666,7 @@ async def add_employee_post(
 
 @router.get("/{employee_id}/posts", response_model=EmployeePostListResponse)
 async def get_employee_posts(
-    employee_id: UUID,
+    employee_id: str,
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -795,7 +795,7 @@ async def bulk_update_employee_waiting_status(
 
 @router.patch("/{employee_id}/waiting-status", response_model=SuccessResponse)
 async def update_employee_waiting_status(
-    employee_id: UUID,
+    employee_id: str,
     status_data: EmployeeWaitingStatusUpdate,
     db: Session = Depends(get_db),
     current_admin = Depends(get_current_admin),
