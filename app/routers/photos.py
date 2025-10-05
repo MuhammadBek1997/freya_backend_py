@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import Union
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File, status, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -13,10 +13,10 @@ from app.schemas.photo import PhotoUploadResponse
 router = APIRouter(prefix="/photos", tags=["Photos"])
 
 
-@router.post("/upload", response_model=List[PhotoUploadResponse], status_code=status.HTTP_201_CREATED)
+@router.post("/upload", response_model=PhotoUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_photos(
     request: Request,
-    files: List[UploadFile] = File(...),
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
@@ -31,49 +31,44 @@ async def upload_photos(
             )
 
         # Faoliyat ko'rish: faqat tasvir fayllariga ruxsat
-        for file in files:
-            if not file.content_type or not file.content_type.startswith("image/"):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_translation(language, "errors.400")
-                )
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400")
+            )
 
         photos_dir = os.path.join(os.getcwd(), "photos")
         os.makedirs(photos_dir, exist_ok=True)
 
-        results = []
-        for file in files:
-            # Fayl nomini generatsiya qilish (uuid + original extension)
-            orig_name = file.filename or "image"
-            _, ext = os.path.splitext(orig_name)
-            if not ext:
-                # MIME turidan extensionni taxmin qilish (minimal)
-                ext = ".jpg" if file.content_type == "image/jpeg" else ".png"
-            safe_name = f"{uuid.uuid4().hex}{ext}"
-            save_path = os.path.join(photos_dir, safe_name)
+        # Fayl nomini generatsiya qilish (uuid + original extension)
+        orig_name = file.filename or "image"
+        _, ext = os.path.splitext(orig_name)
+        if not ext:
+            # MIME turidan extensionni taxmin qilish (minimal)
+            ext = ".jpg" if file.content_type == "image/jpeg" else ".png"
+        safe_name = f"{uuid.uuid4().hex}{ext}"
+        save_path = os.path.join(photos_dir, safe_name)
 
-            # Diskka saqlash
-            with open(save_path, "wb") as out:
-                content = await file.read()
-                out.write(content)
+        # Diskka saqlash
+        with open(save_path, "wb") as out:
+            content = await file.read()
+            out.write(content)
 
-            # To'liq URL yasash
-            base = str(request.base_url).rstrip("/")
-            url = f"{base}/api/photos/{safe_name}"
+        # To'liq URL yasash
+        base = str(request.base_url).rstrip("/")
+        url = f"{base}/api/photos/{safe_name}"
 
-            # DB yozuvini saqlash
-            photo = Photo(
-                filename=safe_name,
-                url=url,
-                uploader_id=getattr(current_user, "id"),
-                uploader_role=role or "user",
-            )
-            db.add(photo)
-            db.commit()
+        # DB yozuvini saqlash
+        photo = Photo(
+            filename=safe_name,
+            url=url,
+            uploader_id=getattr(current_user, "id"),
+            uploader_role=role or "user",
+        )
+        db.add(photo)
+        db.commit()
 
-            results.append(PhotoUploadResponse(url=url))
-
-        return results
+        return PhotoUploadResponse(url=url)
     except HTTPException:
         raise
     except Exception as e:
