@@ -6,10 +6,10 @@ from datetime import date, time
 from pydantic import BaseModel, Field
 
 # Предполагаем, что у вас есть эти импорты
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.models import Appointment, Schedule, User, Employee, Salon
+from app.models import Appointment, Schedule, User, Employee, Salon, Admin
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -79,7 +79,7 @@ async def generate_application_number(db: Session) -> str:
 async def create_appointment(
     appointment_data: AppointmentCreate,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[Union[Admin, User, Employee]] = Depends(get_current_user_optional),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Создать новую заявку на прием"""
@@ -111,7 +111,8 @@ async def create_appointment(
     # Создание заявки
     new_appointment = Appointment(
         application_number=application_number,
-        user_id=current_user.id if current_user else None,
+        # user_id faqat oddiy foydalanuvchi bo'lsa yoziladi
+        user_id=(current_user.id if isinstance(current_user, User) else None),
         user_name=appointment_data.user_name,
         phone_number=appointment_data.phone_number,
         application_date=appointment_data.application_date,
@@ -216,11 +217,18 @@ async def update_appointment_status(
     id: str,
     status_data: AppointmentStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Обновить статус заявки (для админов)"""
+    """Обновить статус заявки (только для сотрудников)"""
     
+    # Faqat xodim (employee)ga ruxsat, admin/superadmin/userga taqiqlanadi
+    if getattr(current_user, "role", None) != "employee":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_translation(language, "errors.403")
+        )
+
     appointment = db.query(Appointment).filter(Appointment.id == id).first()
     
     if not appointment:

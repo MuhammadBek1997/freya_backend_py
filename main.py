@@ -63,12 +63,12 @@ app = FastAPI(
     - 📅 **Vaqt jadvali boshqaruvi** (Booking, Schedule)
     - 💳 **To'lov tizimi** (Click.uz integratsiyasi)
     - 📱 **SMS xabarnomalar** (Eskiz.uz integratsiyasi)
-    - 🌐 **Tarjima xizmati** (DeepL API)
+    - 🌐 **Tarjima xizmati** (gogletrans API)
     
     ### Texnologiyalar:
     - **FastAPI** - Web framework
     - **SQLAlchemy** - ORM
-    - **PostgreSQL/SQLite** - Database
+    - **MySQL** - Database
     - **JWT** - Authentication
     - **Pydantic** - Data validation
     

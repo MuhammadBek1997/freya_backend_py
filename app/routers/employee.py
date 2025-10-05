@@ -770,24 +770,42 @@ async def get_employee_posts(
 async def bulk_update_employee_waiting_status(
     status_data: BulkEmployeeWaitingStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Bulk update employees waiting status"""
+    """Bulk update employees waiting status (faqat salon admin)"""
     try:
+        # faqat salon admin huquqi
+        if getattr(current_user, "role", None) != "admin" or not getattr(current_user, "salon_id", None):
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
+            )
+
         if not status_data.employee_ids:
             raise HTTPException(
                 status_code=400,
                 detail=get_translation(language, "errors.400")
             )
         
-        # Update employees
-        updated_count = db.query(Employee).filter(
-            Employee.id.in_(status_data.employee_ids)
-        ).update(
-            {"is_waiting": status_data.is_waiting},
-            synchronize_session=False
-        )
+        # Faqat shu adminning salonidagi xodimlarni yangilash
+        allowed_employees = db.query(Employee).filter(
+            and_(
+                Employee.id.in_(status_data.employee_ids),
+                Employee.salon_id == current_user.salon_id
+            )
+        ).all()
+
+        allowed_ids = [emp.id for emp in allowed_employees]
+
+        updated_count = 0
+        if allowed_ids:
+            updated_count = db.query(Employee).filter(
+                Employee.id.in_(allowed_ids)
+            ).update(
+                {"is_waiting": status_data.is_waiting},
+                synchronize_session=False
+            )
         
         db.commit()
         
@@ -796,7 +814,7 @@ async def bulk_update_employee_waiting_status(
             message=get_translation(language, "success"),
             data={
                 "updated_count": updated_count,
-                "employee_ids": [str(id) for id in status_data.employee_ids],
+                "employee_ids": [str(id) for id in allowed_ids],
                 "is_waiting": status_data.is_waiting
             }
         )
@@ -814,16 +832,30 @@ async def update_employee_waiting_status(
     employee_id: str,
     status_data: EmployeeWaitingStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Update employee waiting status"""
+    """Update employee waiting status (faqat salon admin)"""
     try:
+        # faqat salon admin huquqi
+        if getattr(current_user, "role", None) != "admin" or not getattr(current_user, "salon_id", None):
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
+            )
+
         employee = db.query(Employee).filter(Employee.id == employee_id).first()
         if not employee:
             raise HTTPException(
                 status_code=404,
                 detail=get_translation(language, "errors.404")
+            )
+        
+        # faqat o'z salonidagi xodimni o'zgartirish
+        if str(employee.salon_id) != str(current_user.salon_id):
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
             )
         
         employee.is_waiting = status_data.is_waiting
