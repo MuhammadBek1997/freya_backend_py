@@ -34,6 +34,7 @@ class Employee(BaseModel):
     appointments = relationship("Appointment", back_populates="employee")
     user_chats = relationship("UserChat", back_populates="employee")
     translations = relationship("EmployeeTranslation", back_populates="employee", cascade="all, delete-orphan")
+    schedule_books = relationship("ScheduleBook", back_populates="employee")
 
 class EmployeeComment(BaseModel):
     __tablename__ = "employee_comments"
