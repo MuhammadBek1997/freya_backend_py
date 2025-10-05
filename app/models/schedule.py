@@ -9,6 +9,9 @@ class Schedule(BaseModel):
     name = Column(String(200), nullable=False)
     title = Column(String(300))
     date = Column(Date, nullable=False)
+    # Ish vaqti (start/end) qo'shildi
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
     repeat = Column(Boolean, default=False)
     repeat_value = Column(Text)
     employee_list = Column(JSON, default=list)

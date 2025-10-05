@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import Optional, List, Dict, Any, Union
-from datetime import date, datetime
+from datetime import date, time
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
@@ -20,6 +20,8 @@ class ScheduleCreate(BaseModel):
     name: str
     title: Optional[str] = None
     date: date
+    start_time: time
+    end_time: time
     repeat: bool = False
     repeat_value: Optional[str] = None
     employee_list: List[int] = []
@@ -33,7 +35,9 @@ class ScheduleUpdate(BaseModel):
     salon_id: Optional[str] = None
     name: Optional[str] = None
     title: Optional[str] = None
-    date: Optional[datetime] = None
+    date: Optional[date] = None
+    start_time: Optional[time] = None
+    end_time: Optional[time] = None
     repeat: Optional[bool] = None
     repeat_value: Optional[str] = None
     employee_list: Optional[List[int]] = None
@@ -49,6 +53,8 @@ class ScheduleResponse(BaseModel):
     name: str
     title: Optional[str]
     date: date
+    start_time: Optional[time]
+    end_time: Optional[time]
     repeat: bool
     repeat_value: Optional[str]
     employee_list: Optional[List[int]]
@@ -148,12 +154,21 @@ async def create_schedule(
             detail=get_translation(language, "errors.404")
         )
     
+    # Validatsiya: boshlanish vaqti tugash vaqtidan kichik bo'lishi kerak
+    if schedule_data.start_time >= schedule_data.end_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start time must be earlier than end time"
+        )
+
     # Создание расписания
     new_schedule = Schedule(
         salon_id=schedule_data.salon_id,
         name=schedule_data.name,
         title=schedule_data.title,
         date=schedule_data.date,
+        start_time=schedule_data.start_time,
+        end_time=schedule_data.end_time,
         repeat=schedule_data.repeat,
         repeat_value=schedule_data.repeat_value,
         employee_list=schedule_data.employee_list,
@@ -193,6 +208,14 @@ async def update_schedule(
             detail=get_translation(language, "errors.404")
         )
     
+    # Validatsiya: agar ikkala vaqt berilsa, start < end bo'lishi shart
+    if update_data.start_time is not None and update_data.end_time is not None:
+        if update_data.start_time >= update_data.end_time:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Start time must be earlier than end time"
+            )
+
     # Обновляем только переданные поля
     update_dict = update_data.model_dump(exclude_unset=True)
     
@@ -278,8 +301,8 @@ async def get_schedules_grouped_by_date(
             "deposit": schedule.deposit,
             "is_active": schedule.is_active,
             "dayOfWeek": day_of_week,
-            "start_time": "09:00",  # Значение по умолчанию
-            "end_time": "18:00",    # Значение по умолчанию
+            "start_time": (schedule.start_time.strftime("%H:%M") if getattr(schedule, "start_time", None) else "09:00"),
+            "end_time": (schedule.end_time.strftime("%H:%M") if getattr(schedule, "end_time", None) else "18:00"),
             "created_at": str(schedule.created_at) if schedule.created_at else None,
             "updated_at": str(schedule.updated_at) if schedule.updated_at else None
         }
