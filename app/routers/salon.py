@@ -116,6 +116,7 @@ async def create_salon(
             location=location_dict,
             salon_comfort=salon_comfort_dict,
             salon_sale=salon_data.salon_sale,
+            logo=salon_data.logo,
             is_active=True,
             is_private=salon_data.is_private or False,
 
@@ -141,6 +142,7 @@ async def create_salon(
                 "id": str(new_salon.id),
                 "salon_name": new_salon.salon_name,
                 "salon_phone": new_salon.salon_phone,
+                "logo": new_salon.logo,
                 "is_active": new_salon.is_active,
                 "created_at": new_salon.created_at.isoformat() if new_salon.created_at else None
             }
@@ -226,6 +228,8 @@ async def get_all_salons(
                 "salon_sale": salon.salon_sale,
                 "is_active": salon.is_active,
                 "is_private": salon.is_private,
+                "photos": salon.photos,
+                "logo": salon.logo,
                 "description_uz": salon.description_uz,
                 "description_ru": salon.description_ru,
                 "description_en": salon.description_en,
@@ -296,6 +300,8 @@ async def get_salon_by_id(
             "salon_sale": salon.salon_sale,
             "is_active": salon.is_active,
             "is_private": salon.is_private,
+            "photos": salon.photos,
+            "logo": salon.logo,
             "description_uz": salon.description_uz,
             "description_ru": salon.description_ru,
             "description_en": salon.description_en,

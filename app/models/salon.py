@@ -15,6 +15,8 @@ class Salon(BaseModel):
     salon_comfort = Column(JSON, default=list)
     salon_sale = Column(JSON)
     photos = Column(JSON, default=list)
+    # Salon logo URL (ixtiyoriy)
+    logo = Column(String(500))
     is_active = Column(Boolean, default=True)
     is_private = Column(Boolean, default=False)
     is_top = Column(Boolean, default=False)
