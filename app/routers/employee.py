@@ -312,26 +312,43 @@ async def create_employee(
 ):
     """Create new employee"""
     try:
-        # Check if salon exists
-        salon = db.query(Salon).filter(Salon.id == employee_data.salon_id).first()
+        # Admin salonini avtomatik aniqlash
+        admin_salon_id = str(current_admin.salon_id) if getattr(current_admin, "salon_id", None) else None
+
+        # Agar bodyda salon_id kelgan bo‘lsa, adminning saloniga mosligini tekshiramiz
+        # if employee_data.salon_id and str(employee_data.salon_id) != admin_salon_id:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail=get_translation(language, "errors.403")
+        #     )
+
+        # Check if salon exists (adminning salon_id bo‘yicha)
+        salon = db.query(Salon).filter(Salon.id == admin_salon_id).first()
         if not salon:
             raise HTTPException(
                 status_code=404,
                 detail=get_translation(language, "errors.404")
             )
 
+        # Only the salon's own admin can create employees
+        if current_admin.role != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=get_translation(language, "errors.403")
+            )
+
         filters = []
         if employee_data.employee_phone:
-            print(type(employee_data.employee_phone))
             filters.append(Employee.phone == employee_data.employee_phone)
         if employee_data.employee_email:
-            print(type(employee_data.employee_email))
             filters.append(Employee.email == employee_data.employee_email)
         if employee_data.username:
-            print(type(employee_data.username))
             filters.append(Employee.username == employee_data.username)
 
-        existing_employee = db.query(Employee).filter(or_(*filters)).count()
+        # Avoid calling or_ with empty filters which can raise errors
+        existing_employee = 0
+        if filters:
+            existing_employee = db.query(Employee).filter(or_(*filters)).count()
         
         if existing_employee:
             raise HTTPException(
@@ -344,7 +361,7 @@ async def create_employee(
         
         # Create employee
         new_employee = Employee(
-            salon_id=employee_data.salon_id,
+            salon_id=admin_salon_id,
             name=employee_data.employee_name,
             phone=employee_data.employee_phone,
             email=employee_data.employee_email,

@@ -5,7 +5,8 @@ from uuid import UUID
 
 # Employee schemas
 class EmployeeCreate(BaseModel):
-    salon_id: UUID
+    # salon_id endi majburiy emas; admin.salon_id avtomatik olinadi
+    # salon_id: Optional[str] = None
     employee_name: str
     employee_phone: str
     employee_email: EmailStr
