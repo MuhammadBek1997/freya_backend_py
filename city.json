@@ -1,0 +1,16 @@
+{
+  "districts": [
+    { "id": 1,  "uz": "Bektemir tumani",          "ru": "Бектемирский район",        "en": "Bektemir District" },
+    { "id": 2,  "uz": "Chilonzor tumani",          "ru": "Чиланзарский район",        "en": "Chilanzar District" },
+    { "id": 3,  "uz": "Yashnobod tumani",          "ru": "Яшнабадский район",         "en": "Yashnabad District" },
+    { "id": 4,  "uz": "Mirobod tumani",            "ru": "Мирабадский район",         "en": "Mirabad District" },
+    { "id": 5,  "uz": "Mirzo Ulug'bek tumani",     "ru": "Мирзо-Улугбекский район",   "en": "Mirzo Ulugbek District" },
+    { "id": 6,  "uz": "Sergeli tumani",            "ru": "Сергелийский район",        "en": "Sergeli District" },
+    { "id": 7,  "uz": "Shayxontoxur tumani",       "ru": "Шайхонтахурский район",     "en": "Shaykhontokhur District" },
+    { "id": 8,  "uz": "Olmazor tumani",            "ru": "Алмазарский район",         "en": "Almazar District" },
+    { "id": 9,  "uz": "Uchtepa tumani",            "ru": "Учтепинский район",         "en": "Uchtepa District" },
+    { "id": 10, "uz": "Yakkasaroy tumani",         "ru": "Яккасаройский район",       "en": "Yakkasaroy District" },
+    { "id": 11, "uz": "Yunusobod tumani",          "ru": "Юнусабадский район",        "en": "Yunusabad District" },
+    { "id": 12, "uz": "Yangihayot tumani",         "ru": "Янгихаётский район",        "en": "Yangihayot District" }
+  ]
+}

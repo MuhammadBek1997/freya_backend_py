@@ -24,6 +24,7 @@ from app.routers.schedules_router import router as schedule_router
 from app.middleware.cors_proxy import CorsProxyMiddleware
 from app.middleware.language import LanguageMiddleware
 from app.routers.salon_mobile import router as mobile_router
+from app.routers.city import router as city_router
 
 
 
@@ -144,6 +145,7 @@ app.include_router(translation_router, prefix="/api")
 app.include_router(photos_router, prefix="/api")
 app.include_router(mobile_router, prefix="/api")
 app.include_router(messages_router, prefix="/api")
+app.include_router(city_router, prefix="/api")
 
 
 # Static files
