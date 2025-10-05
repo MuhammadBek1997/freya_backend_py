@@ -23,3 +23,16 @@ class Schedule(BaseModel):
     # Relationships
     salon = relationship("Salon", back_populates="schedules")
     appointments = relationship("Appointment", back_populates="schedule")
+
+class ScheduleBook(BaseModel):
+    __tablename__ = "schedule_books"
+
+    salon_id = Column(String(36), ForeignKey("salons.id", ondelete="CASCADE"))
+    full_name = Column(String(200), nullable=False)
+    phone = Column(String(20), nullable=False)
+    time = Column(Date, nullable=False)
+    employee_id = Column(String(36), ForeignKey("employees.id"), nullable=True)
+    
+    # Relationships
+    salon = relationship("Salon", back_populates="schedule_books")
+    employee = relationship("Employee", back_populates="schedule_books")

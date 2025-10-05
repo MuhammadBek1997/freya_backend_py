@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import Optional, List, Dict, Any, Union
-from datetime import date, time
+from datetime import date, datetime, time
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
@@ -30,6 +30,12 @@ class ScheduleCreate(BaseModel):
     deposit: Optional[float] = None
     is_active: bool = True
 
+class ScheduleBook(BaseModel):
+    salon_id: str
+    full_name: str
+    phone: str
+    time: datetime
+    employee_id: Optional[int] = None
 
 class ScheduleUpdate(BaseModel):
     salon_id: Optional[str] = None
@@ -186,6 +192,148 @@ async def create_schedule(
         "success": True,
         "message": get_translation(language, "success"),
         "data": new_schedule
+    }
+
+@router.post("/book", status_code=status.HTTP_201_CREATED)
+async def book_schedule(
+    booking_data: ScheduleBook,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Забронировать время в расписании"""
+    
+    # Проверка существования салона
+    salon = db.query(Salon).filter(Salon.id == booking_data.salon_id).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    # Создание записи о бронировании (пример, можно адаптировать под вашу модель)
+    new_booking = {
+        "salon_id": booking_data.salon_id,
+        "full_name": booking_data.full_name,
+        "phone": booking_data.phone,
+        "time": booking_data.time,
+        "employee_id": booking_data.employee_id
+    }
+    
+    # Здесь можно добавить логику сохранения бронирования в базу данных
+    db.add(ScheduleBook(**new_booking))  # Пример, адаптируйте под вашу модель бронирования
+    db.commit()
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": new_booking
+    }
+
+@router.get("/book")
+async def get_bookings(
+    salon_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить все бронирования для конкретного салона"""
+    
+    # Проверка существования салона
+    salon = db.query(Salon).filter(Salon.id == salon_id).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    # Получение всех бронирований для данного салона
+    bookings = db.query(ScheduleBook).filter(ScheduleBook.salon_id == salon_id).all()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": bookings
+    }
+
+@router.get("/book/{id}")
+async def get_booking_by_id(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить информацию о конкретном бронировании"""
+    
+    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": booking
+    }
+
+@router.delete("/book/{id}")
+async def delete_booking(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Удалить бронирование"""
+    
+    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    db.delete(booking)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+    }
+
+@router.post("/book/{id}", status_code=status.HTTP_201_CREATED)
+async def update_booking(
+    id: str,
+    booking_data: ScheduleBook,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Обновить бронирование"""
+    
+    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    # Обновление полей бронирования
+    booking.full_name = booking_data.full_name
+    booking.phone = booking_data.phone
+    booking.time = booking_data.time
+    booking.employee_id = booking_data.employee_id
+    
+    db.commit()
+    db.refresh(booking)
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": booking
     }
 
 
