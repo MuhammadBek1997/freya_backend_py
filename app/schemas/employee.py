@@ -1,7 +1,6 @@
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List, Union
 from datetime import datetime
-from uuid import UUID
 
 # Employee schemas
 class EmployeeCreate(BaseModel):
@@ -24,8 +23,8 @@ class EmployeeUpdate(BaseModel):
     profession: Optional[str] = None
 
 class EmployeeResponse(BaseModel):
-    id: UUID
-    salon_id: Optional[UUID] = None
+    id: str
+    salon_id: Optional[str] = None
     name: Optional[str] = None
     surname: Optional[str] = None
     phone: Optional[str] = None
@@ -84,9 +83,9 @@ class EmployeeCommentCreate(BaseModel):
         return v
 
 class EmployeeCommentResponse(BaseModel):
-    id: UUID
-    employee_id: UUID
-    user_id: UUID
+    id: str
+    employee_id: str
+    user_id: str
     text: str
     rating: int
     created_at: datetime
@@ -102,8 +101,8 @@ class EmployeePostCreate(BaseModel):
     media: Optional[List[str]] = []
 
 class EmployeePostResponse(BaseModel):
-    id: UUID
-    employee_id: UUID
+    id: str
+    employee_id: str
     title: str
     description: str
     is_active: bool
@@ -112,7 +111,7 @@ class EmployeePostResponse(BaseModel):
     employee_name: Optional[str] = None
     employee_surname: Optional[str] = None
     employee_profession: Optional[str] = None
-    salon_id: Optional[UUID] = None
+    salon_id: Optional[str] = None
     salon_name: Optional[str] = None
     media_files: List[str] = []
 
@@ -124,7 +123,7 @@ class EmployeeWaitingStatusUpdate(BaseModel):
     is_waiting: bool
 
 class BulkEmployeeWaitingStatusUpdate(BaseModel):
-    employee_ids: List[UUID]
+    employee_ids: List[str]
     is_waiting: bool
 
 # Response schemas

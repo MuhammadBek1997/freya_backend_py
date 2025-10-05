@@ -2,7 +2,6 @@ from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List, Union
 from datetime import datetime
 from enum import Enum
-import uuid
 
 
 class GenderEnum(str, Enum):
@@ -206,7 +205,7 @@ class PaymentCardUpdate(BaseModel):
 
 # Response schemas
 class UserResponse(BaseModel):
-    id: uuid.UUID
+    id: str
     username: Optional[str] = None
     email: Optional[str] = None
     phone: str
@@ -224,9 +223,6 @@ class UserResponse(BaseModel):
 
     class Config:
         from_attributes = True
-        json_encoders = {
-            uuid.UUID: str
-        }
 
 
 class UserLocationResponse(BaseModel):
