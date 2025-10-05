@@ -24,7 +24,7 @@ class ScheduleCreate(BaseModel):
     end_time: time
     repeat: bool = False
     repeat_value: Optional[str] = None
-    employee_list: List[int] = []
+    employee_list: List[str] = []
     price: float
     full_pay: Optional[float] = None
     deposit: Optional[float] = None
@@ -35,7 +35,7 @@ class ScheduleBook(BaseModel):
     full_name: str
     phone: str
     time: datetime
-    employee_id: Optional[int] = None
+    employee_id: Optional[str] = None
 
 class ScheduleUpdate(BaseModel):
     salon_id: Optional[str] = None
@@ -46,7 +46,7 @@ class ScheduleUpdate(BaseModel):
     end_time: Optional[time] = None
     repeat: Optional[bool] = None
     repeat_value: Optional[str] = None
-    employee_list: Optional[List[int]] = None
+    employee_list: Optional[List[str]] = None
     price: Optional[float] = None
     full_pay: Optional[float] = None
     deposit: Optional[float] = None
@@ -63,7 +63,7 @@ class ScheduleResponse(BaseModel):
     end_time: Optional[time]
     repeat: bool
     repeat_value: Optional[str]
-    employee_list: Optional[List[int]]
+    employee_list: Optional[List[str]]
     price: float
     full_pay: Optional[float]
     deposit: Optional[float]
