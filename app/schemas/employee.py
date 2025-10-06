@@ -22,6 +22,20 @@ class EmployeeUpdate(BaseModel):
     username: Optional[str] = None
     profession: Optional[str] = None
 
+class EmployeeAvatarUpdate(BaseModel):
+    avatar_url: str
+
+    @validator('avatar_url')
+    def validate_avatar_url(cls, v):
+        if not v:
+            raise ValueError('avatar_url talab qilinadi')
+        v = v.strip()
+        if len(v) > 500:
+            raise ValueError('URL uzunligi 500 belgidan oshmasligi kerak')
+        if not (v.startswith('http://') or v.startswith('https://')):
+            raise ValueError("URL noto'g'ri formatda (http yoki https)")
+        return v
+
 class EmployeeResponse(BaseModel):
     id: str
     salon_id: Optional[str] = None

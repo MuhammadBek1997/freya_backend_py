@@ -13,12 +13,57 @@ from app.schemas.employee import (
     EmployeeCreate, EmployeeUpdate, EmployeeResponse, EmployeeDetailResponse,
     EmployeeCommentCreate, EmployeeCommentResponse, EmployeePostCreate, EmployeePostResponse,
     EmployeeWaitingStatusUpdate, BulkEmployeeWaitingStatusUpdate,
-    EmployeeListResponse, EmployeeDetailResponseWrapper, EmployeePostListResponse, SuccessResponse
+    EmployeeListResponse, EmployeeDetailResponseWrapper, EmployeePostListResponse, SuccessResponse,
+    EmployeeAvatarUpdate
 )
 from app.auth.dependencies import get_current_user, get_current_admin
 from app.auth.jwt_utils import JWTUtils
 
 router = APIRouter(prefix="/employees", tags=["employees"])
+
+# Xodim o'z avatar rasmini URL orqali yangilashi
+@router.put("/me/avatar", response_model=SuccessResponse)
+async def update_my_avatar(
+    payload: EmployeeAvatarUpdate,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Xodim o'z profil rasmini (avatar_url) URL orqali yangilaydi"""
+    try:
+        # Faqat xodimlar uchun ruxsat
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        # Joriy xodim yozuvini olish
+        employee = db.query(Employee).filter(
+            and_(
+                Employee.id == current_user.id,
+                Employee.is_active == True,
+                Employee.deleted_at.is_(None)
+            )
+        ).first()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+
+        # Schema validatorlari allaqachon formatni tekshiradi
+        employee.avatar_url = payload.avatar_url.strip()
+        db.commit()
+        db.refresh(employee)
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "data": {
+                "employee_id": str(employee.id),
+                "avatar_url": employee.avatar_url,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 def add_multilingual_fields(employee):
     """Add multilingual fields to employee object"""
