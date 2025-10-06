@@ -4,8 +4,6 @@ from datetime import datetime
 
 # Employee schemas
 class EmployeeCreate(BaseModel):
-    # salon_id endi majburiy emas; admin.salon_id avtomatik olinadi
-    # salon_id: Optional[str] = None
     employee_name: str
     employee_phone: str
     employee_email: EmailStr
@@ -104,9 +102,17 @@ class EmployeeCommentResponse(BaseModel):
     rating: int
     created_at: datetime
     full_name: Optional[str] = None
+    user_avatar: Optional[str] = None
 
     class Config:
         from_attributes = True
+
+# NEW: Employee comment list response
+class EmployeeCommentListResponse(BaseModel):
+    success: bool
+    data: List[EmployeeCommentResponse]
+    pagination: dict
+    avg_rating: Optional[float] = 0.0
 
 # Employee post schemas
 class EmployeePostCreate(BaseModel):
