@@ -282,6 +282,22 @@ def _build_mobile_detail(
 
     rate = float(salon.salon_rating) if salon.salon_rating is not None else 0.0
 
+    # Qo'shimcha hisoblar: xizmat ko'rsatilgan odamlar va xodimlar soni
+    try:
+        served_users_count = db.query(func.count(Appointment.id)) \
+            .join(Employee, Appointment.employee_id == Employee.id) \
+            .filter(Employee.salon_id == salon.id, Appointment.status == 'done') \
+            .scalar() or 0
+    except Exception:
+        served_users_count = 0
+
+    try:
+        employees_count = db.query(func.count(Employee.id)) \
+            .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None)) \
+            .scalar() or 0
+    except Exception:
+        employees_count = 0
+
     return MobileSalonDetailResponse(
         id=str(salon.id),
         name=salon.salon_name,
@@ -309,6 +325,8 @@ def _build_mobile_detail(
         children_service=children_service,
         onlyWomen=only_women,
         isFavorite=is_fav,
+        served_users_count=served_users_count,
+        employees_count=employees_count,
     )
 
 

@@ -24,6 +24,7 @@ class User(BaseModel):
     location_permission = Column(Boolean, default=False)
     address = Column(Text, nullable=True)
     city = Column(String(100), nullable=True)
+    city_id = Column(Integer, nullable=True)
     country = Column(String(100), nullable=True)
     location_updated_at = Column(
         TIMESTAMP(timezone=False), server_default=func.now()

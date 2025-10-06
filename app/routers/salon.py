@@ -12,6 +12,8 @@ from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
 from app.models.user import User
+from app.models.employee import Employee
+from app.models.appointment import Appointment
 from app.schemas.salon import (
     SalonCreate, SalonUpdate, SalonResponse, SalonListResponse,
     SalonCommentCreate, SalonCommentResponse, NearbySalonsRequest,
@@ -215,31 +217,39 @@ async def get_all_salons(
             sc = salon.salon_comfort if (salon.salon_comfort and len(salon.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
             loc = salon.location or DEFAULT_LOCATION
 
-            salon_dict = {
-                "id": str(salon.id),
-                "salon_name": salon.salon_name,
-                "salon_phone": salon.salon_phone,
-                "salon_instagram": salon.salon_instagram,
-                "salon_rating": salon.salon_rating,
-                "salon_types": st,
-                "private_salon": salon.private_salon,
-                "location": loc,
-                "salon_comfort": sc,
-                "salon_sale": salon.salon_sale,
-                "is_active": salon.is_active,
-                "is_private": salon.is_private,
-                "photos": salon.photos,
-                "logo": salon.logo,
-                "description_uz": salon.description_uz,
-                "description_ru": salon.description_ru,
-                "description_en": salon.description_en,
-                "address_uz": salon.address_uz,
-                "address_ru": salon.address_ru,
-                "address_en": salon.address_en,
-                "created_at": salon.created_at,
-                "updated_at": salon.updated_at
-            }
-            salon_responses.append(SalonResponse(**salon_dict))
+        salon_dict = {
+            "id": str(salon.id),
+            "salon_name": salon.salon_name,
+            "salon_phone": salon.salon_phone,
+            "salon_instagram": salon.salon_instagram,
+            "salon_rating": salon.salon_rating,
+            "salon_types": st,
+            "private_salon": salon.private_salon,
+            "location": loc,
+            "salon_comfort": sc,
+            "salon_sale": salon.salon_sale,
+            "is_active": salon.is_active,
+            "is_private": salon.is_private,
+            "photos": salon.photos,
+            "logo": salon.logo,
+            "description_uz": salon.description_uz,
+            "description_ru": salon.description_ru,
+            "description_en": salon.description_en,
+            "address_uz": salon.address_uz,
+            "address_ru": salon.address_ru,
+            "address_en": salon.address_en,
+            # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
+            "served_users_count": db.query(func.count(Appointment.id))
+            .join(Employee, Appointment.employee_id == Employee.id)
+            .filter(Employee.salon_id == salon.id, Appointment.status == 'done')
+            .scalar() or 0,
+            "employees_count": db.query(func.count(Employee.id))
+            .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None))
+            .scalar() or 0,
+            "created_at": salon.created_at,
+            "updated_at": salon.updated_at
+        }
+        salon_responses.append(SalonResponse(**salon_dict))
         
         return SalonListResponse(
             salons=salon_responses,
@@ -308,6 +318,14 @@ async def get_salon_by_id(
             "address_uz": salon.address_uz,
             "address_ru": salon.address_ru,
             "address_en": salon.address_en,
+            # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
+            "served_users_count": db.query(func.count(Appointment.id))
+            .join(Employee, Appointment.employee_id == Employee.id)
+            .filter(Employee.salon_id == salon.id, Appointment.status == 'done')
+            .scalar() or 0,
+            "employees_count": db.query(func.count(Employee.id))
+            .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None))
+            .scalar() or 0,
             "created_at": salon.created_at,
             "updated_at": salon.updated_at
         }
@@ -568,6 +586,14 @@ async def get_nearby_salons(
                     # Add distance to salon object
                     salon_dict = salon.__dict__.copy()
                     salon_dict['distance'] = round(distance, 2)
+                    # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
+                    salon_dict['served_users_count'] = db.query(func.count(Appointment.id)) \
+                        .join(Employee, Appointment.employee_id == Employee.id) \
+                        .filter(Employee.salon_id == salon.id, Appointment.status == 'done') \
+                        .scalar() or 0
+                    salon_dict['employees_count'] = db.query(func.count(Employee.id)) \
+                        .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None)) \
+                        .scalar() or 0
                     nearby_salons.append(salon_dict)
         
         # Sort by distance
@@ -646,8 +672,48 @@ async def get_salons_by_types(
         
         total_pages = math.ceil(total / limit)
         
+        # Map and enrich salons with counts
+        salon_responses: List[SalonResponse] = []
+        for salon in salons:
+            st = salon.salon_types if (salon.salon_types and len(salon.salon_types) > 0) else DEFAULT_SALON_TYPES
+            sc = salon.salon_comfort if (salon.salon_comfort and len(salon.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
+            loc = salon.location or DEFAULT_LOCATION
+            salon_dict = {
+                "id": str(salon.id),
+                "salon_name": salon.salon_name,
+                "salon_phone": salon.salon_phone,
+                "salon_instagram": salon.salon_instagram,
+                "salon_rating": salon.salon_rating,
+                "salon_types": st,
+                "private_salon": salon.private_salon,
+                "location": loc,
+                "salon_comfort": sc,
+                "salon_sale": salon.salon_sale,
+                "is_active": salon.is_active,
+                "is_private": salon.is_private,
+                "photos": salon.photos,
+                "logo": salon.logo,
+                "description_uz": salon.description_uz,
+                "description_ru": salon.description_ru,
+                "description_en": salon.description_en,
+                "address_uz": salon.address_uz,
+                "address_ru": salon.address_ru,
+                "address_en": salon.address_en,
+                # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
+                "served_users_count": db.query(func.count(Appointment.id))
+                .join(Employee, Appointment.employee_id == Employee.id)
+                .filter(Employee.salon_id == salon.id, Appointment.status == 'done')
+                .scalar() or 0,
+                "employees_count": db.query(func.count(Employee.id))
+                .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None))
+                .scalar() or 0,
+                "created_at": salon.created_at,
+                "updated_at": salon.updated_at
+            }
+            salon_responses.append(SalonResponse(**salon_dict))
+
         return SalonListResponse(
-            salons=salons,
+            salons=salon_responses,
             total=total,
             page=page,
             limit=limit,

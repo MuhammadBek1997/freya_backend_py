@@ -599,7 +599,7 @@ async def get_user_city(
     """
     Foydalanuvchi tanlagan shaharni olish (agar bo'lmasa None)
     """
-    return {"city": current_user.city}
+    return {"city": current_user.city, "city_id": current_user.city_id}
 
 
 @router.put("/city", response_model=UserCityResponse)
@@ -627,10 +627,11 @@ async def update_user_city(
         )
 
     current_user.city = _name_by_lang(district, (language or "uz"))
+    current_user.city_id = request.city_id
     current_user.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(current_user)
-    return {"city": current_user.city}
+    return {"city": current_user.city, "city_id": current_user.city_id}
 
 
 @router.get("/profile", response_model=UserResponse)

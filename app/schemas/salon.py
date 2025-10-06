@@ -124,6 +124,8 @@ class SalonResponse(BaseModel):
 
     photos: Optional[List[str]] = None  # Rasm URL manzillari
     logo: Optional[str] = None  # Logo URL manzili
+    served_users_count: Optional[int] = 0
+    employees_count: Optional[int] = 0
     created_at: datetime
     updated_at: datetime
 
@@ -277,3 +279,5 @@ class MobileSalonDetailResponse(BaseModel):
     children_service: bool = False
     onlyWomen: bool = False
     isFavorite: bool = False
+    served_users_count: Optional[int] = 0
+    employees_count: Optional[int] = 0

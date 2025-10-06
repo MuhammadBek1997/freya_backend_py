@@ -234,6 +234,7 @@ class UserLocationResponse(BaseModel):
 
 class UserCityResponse(BaseModel):
     city: Optional[str]
+    city_id: Optional[int]
 
 
 class UserCityUpdate(BaseModel):
