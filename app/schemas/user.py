@@ -157,6 +157,17 @@ class EmployeeContactRequest(BaseModel):
     employee_id: str
 
 
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+    @validator('new_password')
+    def validate_new_password(cls, v):
+        if len(v) < 6:
+            raise ValueError("Parol kamida 6 ta belgidan iborat bo'lishi kerak")
+        return v
+
+
 class PaymentCardAdd(BaseModel):
     card_number: str
     card_holder_name: str

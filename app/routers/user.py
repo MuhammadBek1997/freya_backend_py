@@ -42,6 +42,7 @@ from app.schemas.user import (
     UserLocationUpdate,
     FavouriteSalonRequest,
     EmployeeContactRequest,
+    PasswordChangeRequest,
     PaymentCardAdd,
     PaymentCardUpdate,
     UserResponse,
@@ -327,6 +328,31 @@ async def login_user(
         token=access_token,
         user=UserResponse.model_validate(user),
     )
+
+
+@router.post("/password/change", response_model=dict)
+async def change_password(
+    change_data: PasswordChangeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchi parolini yangilash: eski parolni tekshirib, yangisini saqlash
+    """
+    # Verify old password
+    if not JWTUtils.verify_password(change_data.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "auth.invalidCredentials"),
+        )
+
+    # Update to new password
+    current_user.password_hash = JWTUtils.hash_password(change_data.new_password)
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"success": True, "message": get_translation(language, "auth.success")}
 
 
 @router.post("/password-reset/send-code", response_model=dict)
