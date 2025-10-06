@@ -46,7 +46,9 @@ def setup_cors(app: FastAPI):
             "Accept",
             "Authorization",
             "X-Language",
-            "X-User-language"
+            "X-User-language",
+            "X-User-Language",
+            "Accept-Language"
         ],
         expose_headers=["Content-Length", "X-Foo", "X-Bar"],
         max_age=86400  # 24 hours
