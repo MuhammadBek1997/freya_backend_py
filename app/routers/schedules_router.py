@@ -10,6 +10,7 @@ from app.i18nMini import get_translation
 from app.models.user import User
 from app.database import get_db
 from app.models import Schedule, Salon
+from app.models.schedule import ScheduleBook as ScheduleBookModel
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -30,7 +31,7 @@ class ScheduleCreate(BaseModel):
     deposit: Optional[float] = None
     is_active: bool = True
 
-class ScheduleBook(BaseModel):
+class ScheduleBookSchema(BaseModel):
     salon_id: str
     full_name: str
     phone: str
@@ -51,7 +52,6 @@ class ScheduleUpdate(BaseModel):
     full_pay: Optional[float] = None
     deposit: Optional[float] = None
     is_active: Optional[bool] = None
-
 
 class ScheduleResponse(BaseModel):
     id: str
@@ -75,7 +75,297 @@ class ScheduleResponse(BaseModel):
         from_attributes = True
 
 
-# Получить все расписания с пагинацией и поиском
+# ===== BOOKING ENDPOINTS (ANIQ ROUTE'LAR BIRINCHI) =====
+
+@router.post("/book", status_code=status.HTTP_201_CREATED)
+async def book_schedule(
+    booking_data: ScheduleBookSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Забронировать время в расписании"""
+    
+    salon = db.query(Salon).filter(Salon.id == booking_data.salon_id).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    new_booking = ScheduleBookModel(
+        salon_id=booking_data.salon_id,
+        full_name=booking_data.full_name,
+        phone=booking_data.phone,
+        time=booking_data.time,
+        employee_id=booking_data.employee_id
+    )
+    
+    db.add(new_booking)
+    db.commit()
+    db.refresh(new_booking)
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": {
+            "id": str(new_booking.id),
+            "salon_id": str(new_booking.salon_id),
+            "full_name": new_booking.full_name,
+            "phone": new_booking.phone,
+            "time": new_booking.time.isoformat(),
+            "employee_id": str(new_booking.employee_id) if new_booking.employee_id else None,
+            "created_at": new_booking.created_at.isoformat() if new_booking.created_at else None
+        }
+    }
+
+
+@router.get("/book")
+async def get_bookings(
+    salon_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить все бронирования для конкретного салона"""
+    
+    salon = db.query(Salon).filter(Salon.id == salon_id).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    bookings = db.query(ScheduleBookModel).filter(
+        ScheduleBookModel.salon_id == salon_id
+    ).all()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": [
+            {
+                "id": str(b.id),
+                "salon_id": str(b.salon_id),
+                "full_name": b.full_name,
+                "phone": b.phone,
+                "time": b.time.isoformat(),
+                "employee_id": str(b.employee_id) if b.employee_id else None,
+                "created_at": b.created_at.isoformat() if b.created_at else None
+            }
+            for b in bookings
+        ]
+    }
+
+
+@router.get("/book/{id}")
+async def get_booking_by_id(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить информацию о конкретном бронировании"""
+    
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": {
+            "id": str(booking.id),
+            "salon_id": str(booking.salon_id),
+            "full_name": booking.full_name,
+            "phone": booking.phone,
+            "time": booking.time.isoformat(),
+            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None
+        }
+    }
+
+
+@router.put("/book/{id}")
+async def update_booking(
+    id: str,
+    booking_data: ScheduleBookSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Обновить бронирование"""
+    
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    booking.full_name = booking_data.full_name
+    booking.phone = booking_data.phone
+    booking.time = booking_data.time
+    booking.employee_id = booking_data.employee_id
+    
+    db.commit()
+    db.refresh(booking)
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": {
+            "id": str(booking.id),
+            "salon_id": str(booking.salon_id),
+            "full_name": booking.full_name,
+            "phone": booking.phone,
+            "time": booking.time.isoformat(),
+            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None
+        }
+    }
+
+
+@router.delete("/book/{id}")
+async def delete_booking(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Удалить бронирование"""
+    
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    db.delete(booking)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success")
+    }
+
+
+# ===== GROUPED/SPECIAL ENDPOINTS =====
+
+@router.get("/grouped/by-date")
+async def get_schedules_grouped_by_date(
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить расписания, сгруппированные по дням недели"""
+    
+    schedules = db.query(Schedule).order_by(Schedule.date, Schedule.created_at).all()
+    
+    weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
+    grouped_by_date: Dict[str, List[Dict[str, Any]]] = {}
+    
+    for schedule in schedules:
+        day_of_week = weekdays[schedule.date.weekday() + 1 if schedule.date.weekday() < 6 else 0]
+        
+        schedule_item = {
+            "id": schedule.id,
+            "salon_id": schedule.salon_id,
+            "name": schedule.name,
+            "title": schedule.title,
+            "date": str(schedule.date),
+            "repeat": schedule.repeat,
+            "repeat_value": schedule.repeat_value,
+            "employee_list": schedule.employee_list,
+            "price": schedule.price,
+            "full_pay": schedule.full_pay,
+            "deposit": schedule.deposit,
+            "is_active": schedule.is_active,
+            "dayOfWeek": day_of_week,
+            "start_time": (schedule.start_time.strftime("%H:%M") if getattr(schedule, "start_time", None) else "09:00"),
+            "end_time": (schedule.end_time.strftime("%H:%M") if getattr(schedule, "end_time", None) else "18:00"),
+            "created_at": str(schedule.created_at) if schedule.created_at else None,
+            "updated_at": str(schedule.updated_at) if schedule.updated_at else None
+        }
+        
+        if day_of_week not in grouped_by_date:
+            grouped_by_date[day_of_week] = []
+        grouped_by_date[day_of_week].append(schedule_item)
+    
+    ordered_weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    day_list_items = [
+        grouped_by_date[day]
+        for day in ordered_weekdays
+        if day in grouped_by_date and len(grouped_by_date[day]) > 0
+    ]
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": day_list_items
+    }
+
+
+@router.get("/salon/{salon_id}")
+async def get_schedules_by_salon(
+    salon_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    date_filter: Optional[date] = Query(None, alias="date"),
+    is_active: Optional[bool] = None,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Получить расписания конкретного салона"""
+    
+    salon = db.query(Salon).filter(Salon.id == salon_id).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    offset = (page - 1) * limit
+    
+    query = db.query(Schedule).filter(Schedule.salon_id == salon_id)
+    count_query = db.query(func.count(Schedule.id)).filter(Schedule.salon_id == salon_id)
+    
+    if date_filter:
+        query = query.filter(Schedule.date == date_filter)
+        count_query = count_query.filter(Schedule.date == date_filter)
+    
+    if is_active is not None:
+        query = query.filter(Schedule.is_active == is_active)
+        count_query = count_query.filter(Schedule.is_active == is_active)
+    
+    total = count_query.scalar()
+    schedules = query.order_by(Schedule.date.desc(), Schedule.created_at.desc()).offset(offset).limit(limit).all()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": schedules,
+        "salon": {
+            "id": salon.id,
+            "salon_name": salon.salon_name
+        },
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit
+        }
+    }
+
+
+# ===== GENERAL SCHEDULE ENDPOINTS (UMUMIY ROUTE'LAR OXIRIDA) =====
+
 @router.get("/")
 async def get_all_schedules(
     page: int = Query(1, ge=1),
@@ -88,11 +378,9 @@ async def get_all_schedules(
     
     offset = (page - 1) * limit
     
-    # Базовый запрос
     query = db.query(Schedule)
     count_query = db.query(func.count(Schedule.id))
     
-    # Поиск по имени и заголовку
     if search:
         search_filter = or_(
             Schedule.name.ilike(f"%{search}%"),
@@ -101,7 +389,6 @@ async def get_all_schedules(
         query = query.filter(search_filter)
         count_query = count_query.filter(search_filter)
     
-    # Получаем данные
     total = count_query.scalar()
     schedules = query.order_by(Schedule.created_at.desc()).offset(offset).limit(limit).all()
     
@@ -118,31 +405,6 @@ async def get_all_schedules(
     }
 
 
-# Получить расписание по ID
-@router.get("/{id}")
-async def get_schedule_by_id(
-    id: str,
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Получить информацию о конкретном расписании"""
-    
-    schedule = db.query(Schedule).filter(Schedule.id == id).first()
-    
-    if not schedule:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": schedule
-    }
-
-
-# Создать новое расписание
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     schedule_data: ScheduleCreate,
@@ -152,7 +414,6 @@ async def create_schedule(
 ):
     """Создать новое расписание"""
     
-    # Проверка существования салона
     salon = db.query(Salon).filter(Salon.id == schedule_data.salon_id).first()
     if not salon:
         raise HTTPException(
@@ -160,14 +421,12 @@ async def create_schedule(
             detail=get_translation(language, "errors.404")
         )
     
-    # Validatsiya: boshlanish vaqti tugash vaqtidan kichik bo'lishi kerak
     if schedule_data.start_time >= schedule_data.end_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Start time must be earlier than end time"
         )
 
-    # Создание расписания
     new_schedule = Schedule(
         salon_id=schedule_data.salon_id,
         name=schedule_data.name,
@@ -194,79 +453,18 @@ async def create_schedule(
         "data": new_schedule
     }
 
-@router.post("/book", status_code=status.HTTP_201_CREATED)
-async def book_schedule(
-    booking_data: ScheduleBook,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Забронировать время в расписании"""
-    
-    # Проверка существования салона
-    salon = db.query(Salon).filter(Salon.id == booking_data.salon_id).first()
-    if not salon:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    # Создание записи о бронировании (пример, можно адаптировать под вашу модель)
-    new_booking = {
-        "salon_id": booking_data.salon_id,
-        "full_name": booking_data.full_name,
-        "phone": booking_data.phone,
-        "time": booking_data.time,
-        "employee_id": booking_data.employee_id
-    }
-    
-    # Здесь можно добавить логику сохранения бронирования в базу данных
-    db.add(ScheduleBook(**new_booking))  # Пример, адаптируйте под вашу модель бронирования
-    db.commit()
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": new_booking
-    }
 
-@router.get("/book")
-async def get_bookings(
-    salon_id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Получить все бронирования для конкретного салона"""
-    
-    # Проверка существования салона
-    salon = db.query(Salon).filter(Salon.id == salon_id).first()
-    if not salon:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    # Получение всех бронирований для данного салона
-    bookings = db.query(ScheduleBook).filter(ScheduleBook.salon_id == salon_id).all()
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": bookings
-    }
-
-@router.get("/book/{id}")
-async def get_booking_by_id(
+@router.get("/{id}")
+async def get_schedule_by_id(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Получить информацию о конкретном бронировании"""
+    """Получить информацию о конкретном расписании"""
     
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    schedule = db.query(Schedule).filter(Schedule.id == id).first()
     
-    if not booking:
+    if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=get_translation(language, "errors.404")
@@ -275,69 +473,10 @@ async def get_booking_by_id(
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": booking
-    }
-
-@router.delete("/book/{id}")
-async def delete_booking(
-    id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Удалить бронирование"""
-    
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
-    
-    if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    db.delete(booking)
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-    }
-
-@router.post("/book/{id}", status_code=status.HTTP_201_CREATED)
-async def update_booking(
-    id: str,
-    booking_data: ScheduleBook,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Обновить бронирование"""
-    
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
-    
-    if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    # Обновление полей бронирования
-    booking.full_name = booking_data.full_name
-    booking.phone = booking_data.phone
-    booking.time = booking_data.time
-    booking.employee_id = booking_data.employee_id
-    
-    db.commit()
-    db.refresh(booking)
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": booking
+        "data": schedule
     }
 
 
-# Обновить расписание
 @router.put("/{id}")
 async def update_schedule(
     id: str,
@@ -356,7 +495,6 @@ async def update_schedule(
             detail=get_translation(language, "errors.404")
         )
     
-    # Validatsiya: agar ikkala vaqt berilsa, start < end bo'lishi shart
     if update_data.start_time is not None and update_data.end_time is not None:
         if update_data.start_time >= update_data.end_time:
             raise HTTPException(
@@ -364,7 +502,6 @@ async def update_schedule(
                 detail="Start time must be earlier than end time"
             )
 
-    # Обновляем только переданные поля
     update_dict = update_data.model_dump(exclude_unset=True)
     
     for key, value in update_dict.items():
@@ -380,7 +517,6 @@ async def update_schedule(
     }
 
 
-# Удалить расписание
 @router.delete("/{id}")
 async def delete_schedule(
     id: str,
@@ -398,7 +534,6 @@ async def delete_schedule(
             detail=get_translation(language, "errors.404")
         )
     
-    # Сохраняем данные перед удалением
     schedule_data = {
         "id": schedule.id,
         "name": schedule.name,
@@ -412,121 +547,4 @@ async def delete_schedule(
         "success": True,
         "message": get_translation(language, "success"),
         "data": schedule_data
-    }
-
-
-# Получить расписания, сгруппированные по дням недели
-@router.get("/grouped/by-date")
-async def get_schedules_grouped_by_date(
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Получить расписания, сгруппированные по дням недели"""
-    
-    # Получаем все расписания, отсортированные по дате
-    schedules = db.query(Schedule).order_by(Schedule.date, Schedule.created_at).all()
-    
-    # Группируем по дням недели
-    weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
-    grouped_by_date: Dict[str, List[Dict[str, Any]]] = {}
-    
-    for schedule in schedules:
-        # Определяем день недели
-        day_of_week = weekdays[schedule.date.weekday() + 1 if schedule.date.weekday() < 6 else 0]
-        
-        # Формируем объект расписания с дополнительными полями
-        schedule_item = {
-            "id": schedule.id,
-            "salon_id": schedule.salon_id,
-            "name": schedule.name,
-            "title": schedule.title,
-            "date": str(schedule.date),
-            "repeat": schedule.repeat,
-            "repeat_value": schedule.repeat_value,
-            "employee_list": schedule.employee_list,
-            "price": schedule.price,
-            "full_pay": schedule.full_pay,
-            "deposit": schedule.deposit,
-            "is_active": schedule.is_active,
-            "dayOfWeek": day_of_week,
-            "start_time": (schedule.start_time.strftime("%H:%M") if getattr(schedule, "start_time", None) else "09:00"),
-            "end_time": (schedule.end_time.strftime("%H:%M") if getattr(schedule, "end_time", None) else "18:00"),
-            "created_at": str(schedule.created_at) if schedule.created_at else None,
-            "updated_at": str(schedule.updated_at) if schedule.updated_at else None
-        }
-        
-        # Добавляем в группу
-        if day_of_week not in grouped_by_date:
-            grouped_by_date[day_of_week] = []
-        grouped_by_date[day_of_week].append(schedule_item)
-    
-    # Упорядочиваем дни недели
-    ordered_weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    day_list_items = [
-        grouped_by_date[day]
-        for day in ordered_weekdays
-        if day in grouped_by_date and len(grouped_by_date[day]) > 0
-    ]
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": day_list_items
-    }
-
-
-# Дополнительный эндпоинт: получить расписания по салону
-@router.get("/salon/{salon_id}")
-async def get_schedules_by_salon(
-    salon_id: str,
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    date_filter: Optional[date] = Query(None, alias="date"),
-    is_active: Optional[bool] = None,
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Получить расписания конкретного салона"""
-    
-    # Проверка существования салона
-    salon = db.query(Salon).filter(Salon.id == salon_id).first()
-    if not salon:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    offset = (page - 1) * limit
-    
-    # Базовый запрос
-    query = db.query(Schedule).filter(Schedule.salon_id == salon_id)
-    count_query = db.query(func.count(Schedule.id)).filter(Schedule.salon_id == salon_id)
-    
-    # Фильтры
-    if date_filter:
-        query = query.filter(Schedule.date == date_filter)
-        count_query = count_query.filter(Schedule.date == date_filter)
-    
-    if is_active is not None:
-        query = query.filter(Schedule.is_active == is_active)
-        count_query = count_query.filter(Schedule.is_active == is_active)
-    
-    # Получаем данные
-    total = count_query.scalar()
-    schedules = query.order_by(Schedule.date.desc(), Schedule.created_at.desc()).offset(offset).limit(limit).all()
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "data": schedules,
-        "salon": {
-            "id": salon.id,
-            "salon_name": salon.salon_name
-        },
-        "pagination": {
-            "page": page,
-            "limit": limit,
-            "total": total,
-            "pages": (total + limit - 1) // limit
-        }
     }

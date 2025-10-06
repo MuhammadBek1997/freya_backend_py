@@ -19,9 +19,10 @@ class CorsProxyMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             response = Response()
             response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-User-Language, Accept-Language, Origin, Accept"
             response.headers["Access-Control-Max-Age"] = "86400"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
             return response
         
         # Process the request
@@ -30,8 +31,9 @@ class CorsProxyMiddleware(BaseHTTPMiddleware):
             
             # Add CORS headers to response
             response.headers["Access-Control-Allow-Origin"] = "*"
-            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, X-User-Language, Accept-Language, Origin, Accept"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
             
             return response
             
@@ -42,7 +44,8 @@ class CorsProxyMiddleware(BaseHTTPMiddleware):
                 content={"error": "Internal server error"},
                 headers={
                     "Access-Control-Allow-Origin": "*",
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, X-User-Language, Accept-Language, Origin, Accept",
+                    "Access-Control-Allow-Credentials": "true"
                 }
             )
