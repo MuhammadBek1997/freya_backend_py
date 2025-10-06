@@ -158,7 +158,7 @@ class EmployeeContactRequest(BaseModel):
 
 
 class PasswordChangeRequest(BaseModel):
-    old_password: str
+    # old_password: str
     new_password: str
 
     @validator('new_password')
