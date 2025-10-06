@@ -54,6 +54,8 @@ async def get_conversations(
                 "type": "employee",
                 "id": chat.employee_id,
                 "name": getattr(employee, "name", None),
+                "avatar_url": getattr(employee, "avatar_url", None),
+                "profession": getattr(employee, "profession", None),
             }
         elif chat.salon_id:
             salon = db.query(Salon).filter(Salon.id == chat.salon_id).first()
@@ -71,6 +73,8 @@ async def get_conversations(
                 "last_message": chat.last_message,
                 "last_message_time": chat.last_message_time,
                 "unread_count": unread_count,
+                "user_avatar_url": getattr(current_user, "avatar_url", None),
+                "employee_avatar_url": getattr(employee, "avatar_url", None) if chat.employee_id else None,
             }
         )
 
@@ -110,6 +114,29 @@ async def get_conversation_messages(
             detail=get_translation(language, "errors.404"),
         )
 
+    # Build participant details and avatars/profession
+    participant = None
+    employee_avatar = None
+    employee_profession = None
+    if chat.employee_id:
+        emp = db.query(Employee).filter(Employee.id == chat.employee_id).first()
+        participant = {
+            "type": "employee",
+            "id": chat.employee_id,
+            "name": getattr(emp, "name", None),
+            "avatar_url": getattr(emp, "avatar_url", None),
+            "profession": getattr(emp, "profession", None),
+        }
+        employee_avatar = getattr(emp, "avatar_url", None)
+        employee_profession = getattr(emp, "profession", None)
+    elif chat.salon_id:
+        salon = db.query(Salon).filter(Salon.id == chat.salon_id).first()
+        participant = {
+            "type": "salon",
+            "id": chat.salon_id,
+            "name": getattr(salon, "name", None),
+        }
+
     messages = (
         db.query(Message)
         .filter(Message.user_chat_id == chat.id)
@@ -141,7 +168,11 @@ async def get_conversation_messages(
         "data": {
             "chat_id": chat.id,
             "chat_type": chat.chat_type,
+            "participant": participant,
             "messages": data,
+            "user_avatar_url": getattr(current_user, "avatar_url", None),
+            "employee_avatar_url": employee_avatar,
+            "employee_profession": employee_profession,
         },
     }
 
@@ -354,6 +385,7 @@ async def get_employee_conversations(
                 "type": "user",
                 "id": chat.user_id,
                 "name": getattr(user, "full_name", None) or getattr(user, "username", None),
+                "avatar_url": getattr(user, "avatar_url", None),
             }
 
         data.append(
@@ -364,6 +396,8 @@ async def get_employee_conversations(
                 "last_message": chat.last_message,
                 "last_message_time": chat.last_message_time,
                 "unread_count": unread_count,
+                "user_avatar_url": getattr(user, "avatar_url", None) if chat.user_id else None,
+                "employee_avatar_url": getattr(current_user, "avatar_url", None),
             }
         )
 
@@ -411,6 +445,15 @@ async def get_employee_conversation_messages(
         .all()
     )
 
+    # Participant details for employee-side conversation
+    user = db.query(User).filter(User.id == user_id).first()
+    participant = {
+        "type": "user",
+        "id": user_id,
+        "name": getattr(user, "full_name", None) or getattr(user, "username", None),
+        "avatar_url": getattr(user, "avatar_url", None),
+    }
+
     data = [
         {
             "id": m.id,
@@ -430,7 +473,14 @@ async def get_employee_conversation_messages(
     return {
         "success": True,
         "message": get_translation(language, "messages.conversationFetched"),
-        "data": {"chat_id": chat.id, "chat_type": chat.chat_type, "messages": data},
+        "data": {
+            "chat_id": chat.id,
+            "chat_type": chat.chat_type,
+            "participant": participant,
+            "messages": data,
+            "user_avatar_url": getattr(user, "avatar_url", None),
+            "employee_avatar_url": getattr(current_user, "avatar_url", None),
+        },
     }
 
 

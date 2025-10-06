@@ -153,6 +153,10 @@ class FavouriteSalonRequest(BaseModel):
     salon_id: str
 
 
+class EmployeeContactRequest(BaseModel):
+    employee_id: str
+
+
 class PaymentCardAdd(BaseModel):
     card_number: str
     card_holder_name: str

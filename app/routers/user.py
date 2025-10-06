@@ -26,6 +26,8 @@ from app.i18nMini import get_translation
 from app.models.user import User
 from app.models.payment_card import PaymentCard
 from app.models.salon import Salon
+from app.models.employee import Employee
+from app.models.user_employee_contact import UserEmployeeContact
 from app.models.user_favourite_salon import UserFavouriteSalon
 from app.schemas.salon import SalonResponse
 from app.schemas.user import (
@@ -39,6 +41,7 @@ from app.schemas.user import (
     UserUpdate,
     UserLocationUpdate,
     FavouriteSalonRequest,
+    EmployeeContactRequest,
     PaymentCardAdd,
     PaymentCardUpdate,
     UserResponse,
@@ -49,6 +52,7 @@ from app.schemas.user import (
     UserCityResponse,
     UserCityUpdate,
 )
+from app.schemas.employee import EmployeeResponse
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.auth.jwt_utils import JWTUtils
 from app.config import settings
@@ -872,6 +876,132 @@ async def get_favourite_salons(
             ),
         }
         for salon in salons
+    ]
+
+
+# Employee contacts endpoints
+@router.post("/contacts/employees/add", response_model=dict)
+async def add_employee_contact(
+    contact_data: EmployeeContactRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchi uchun xodimni (employee) kontaktlarga qo'shish
+    """
+    # Check if employee exists and active
+    employee = (
+        db.query(Employee)
+        .filter(Employee.id == contact_data.employee_id, Employee.is_active == True)
+        .first()
+    )
+    if not employee:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
+
+    # Check if already in contacts
+    existing_contact = (
+        db.query(UserEmployeeContact)
+        .filter(
+            UserEmployeeContact.user_id == current_user.id,
+            UserEmployeeContact.employee_id == contact_data.employee_id,
+        )
+        .first()
+    )
+    if existing_contact:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "auth.userExists"),
+        )
+
+    # Add to contacts
+    contact = UserEmployeeContact(
+        user_id=current_user.id,
+        employee_id=contact_data.employee_id,
+        created_at=datetime.utcnow(),
+    )
+    db.add(contact)
+    db.commit()
+
+    return {"success": True, "message": get_translation(language, "success")}
+
+
+@router.post("/contacts/employees/remove", response_model=dict)
+async def remove_employee_contact(
+    contact_data: EmployeeContactRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchi kontaktlaridan xodimni olib tashlash
+    """
+    contact = (
+        db.query(UserEmployeeContact)
+        .filter(
+            UserEmployeeContact.user_id == current_user.id,
+            UserEmployeeContact.employee_id == contact_data.employee_id,
+        )
+        .first()
+    )
+    if not contact:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
+
+    db.delete(contact)
+    db.commit()
+
+    return {"success": True, "message": get_translation(language, "success")}
+
+
+@router.get("/contacts/employees", response_model=List[EmployeeResponse])
+async def get_employee_contacts(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchi kontaktlaridagi xodimlar ro'yxatini olish
+    """
+    contacts = (
+        db.query(UserEmployeeContact)
+        .filter(UserEmployeeContact.user_id == current_user.id)
+        .all()
+    )
+    employee_ids = [c.employee_id for c in contacts]
+    if not employee_ids:
+        return []
+
+    employees = db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
+
+    # Map to response format
+    return [
+        {
+            "id": emp.id,
+            "salon_id": emp.salon_id,
+            "name": emp.name,
+            "surname": emp.surname,
+            "phone": emp.phone,
+            "email": emp.email,
+            "role": emp.role,
+            "username": emp.username,
+            "profession": emp.profession,
+            "bio": emp.bio,
+            "specialization": emp.specialization,
+            "avatar_url": emp.avatar_url,
+            "is_active": emp.is_active,
+            "is_waiting": emp.is_waiting,
+            "created_at": emp.created_at,
+            "updated_at": emp.updated_at,
+            "deleted_at": emp.deleted_at,
+            "salon_name": emp.salon.salon_name if emp.salon else None,
+        }
+        for emp in employees
     ]
 
 

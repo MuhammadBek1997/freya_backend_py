@@ -21,6 +21,7 @@ from .user_favourite_salon import UserFavouriteSalon
 from .content import Content
 from .user_favorite import UserFavorite
 from .photo import Photo
+from .user_employee_contact import UserEmployeeContact
 
 __all__ = [
     # "BaseModel",
@@ -50,5 +51,6 @@ __all__ = [
     "UserFavouriteSalon",
     "Content",
     "UserFavorite",
-    "Photo"
+    "Photo",
+    "UserEmployeeContact"
 ]
