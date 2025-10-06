@@ -27,11 +27,31 @@ router = APIRouter(prefix="/salons", tags=["Salons"])
 
 # Default values
 DEFAULT_SALON_TYPES = [
-    {"type": "Beauty Salon", "selected": True},
-    {"type": "Fitness", "selected": False},
-    {"type": "Functional Training", "selected": False},
-    {"type": "Yoga", "selected": False},
-    {"type": "Massage", "selected": False}
+    {"type": "beauty_salon", "selected": True},
+    {"type": "fitness", "selected": False},
+    {"type": "functional_training", "selected": False},
+    {"type": "massage", "selected": False},
+    {"type": "yoga", "selected": False},
+    {"type": "nail_service", "selected": False},
+    {"type": "scratching", "selected": False},
+    {"type": "pilates", "selected": False},
+    {"type": "eyebrow_and_eyelash_shaping", "selected": False},
+    {"type": "hair_services", "selected": False},
+    {"type": "gyms", "selected": False},
+    {"type": "dancing", "selected": False},
+    {"type": "body_care", "selected": False},
+    {"type": "facial_care", "selected": False},
+    {"type": "spa_and_wellness", "selected": False},
+    {"type": "swimming_pool", "selected": False},
+    {"type": "martial_arts", "selected": False},
+    {"type": "entertainment", "selected": False},
+    {"type": "meditation", "selected": False},
+    {"type": "active_recreation", "selected": False},
+    {"type": "water_sports", "selected": False},
+    {"type": "gymnastics", "selected": False},
+    {"type": "eastern_practices", "selected": False},
+    {"type": "foreign_languages", "selected": False},
+    {"type": "for_children", "selected": False}
 ]
 
 DEFAULT_LOCATION = {"lat": 41, "lng": 64}
@@ -217,40 +237,40 @@ async def get_all_salons(
             sc = salon.salon_comfort if (salon.salon_comfort and len(salon.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
             loc = salon.location or DEFAULT_LOCATION
 
-        salon_dict = {
-            "id": str(salon.id),
-            "salon_name": salon.salon_name,
-            "salon_phone": salon.salon_phone,
-            "salon_instagram": salon.salon_instagram,
-            "salon_rating": salon.salon_rating,
-            "salon_types": st,
-            "private_salon": salon.private_salon,
-            "location": loc,
-            "salon_comfort": sc,
-            "salon_sale": salon.salon_sale,
-            "is_active": salon.is_active,
-            "is_private": salon.is_private,
-            "photos": salon.photos,
-            "logo": salon.logo,
-            "description_uz": salon.description_uz,
-            "description_ru": salon.description_ru,
-            "description_en": salon.description_en,
-            "address_uz": salon.address_uz,
-            "address_ru": salon.address_ru,
-            "address_en": salon.address_en,
-            # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
-            "served_users_count": db.query(func.count(Appointment.id))
-            .join(Employee, Appointment.employee_id == Employee.id)
-            .filter(Employee.salon_id == salon.id, Appointment.status == 'done')
-            .scalar() or 0,
-            "employees_count": db.query(func.count(Employee.id))
-            .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None))
-            .scalar() or 0,
-            "created_at": salon.created_at,
-            "updated_at": salon.updated_at
-        }
-        salon_responses.append(SalonResponse(**salon_dict))
-        
+            salon_dict = {
+                "id": str(salon.id),
+                "salon_name": salon.salon_name,
+                "salon_phone": salon.salon_phone,
+                "salon_instagram": salon.salon_instagram,
+                "salon_rating": salon.salon_rating,
+                "salon_types": st,
+                "private_salon": salon.private_salon,
+                "location": loc,
+                "salon_comfort": sc,
+                "salon_sale": salon.salon_sale,
+                "is_active": salon.is_active,
+                "is_private": salon.is_private,
+                "photos": salon.photos,
+                "logo": salon.logo,
+                "description_uz": salon.description_uz,
+                "description_ru": salon.description_ru,
+                "description_en": salon.description_en,
+                "address_uz": salon.address_uz,
+                "address_ru": salon.address_ru,
+                "address_en": salon.address_en,
+                # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
+                "served_users_count": db.query(func.count(Appointment.id))
+                .join(Employee, Appointment.employee_id == Employee.id)
+                .filter(Employee.salon_id == salon.id, Appointment.status == 'done')
+                .scalar() or 0,
+                "employees_count": db.query(func.count(Employee.id))
+                .filter(Employee.salon_id == salon.id, Employee.is_active == True, Employee.deleted_at.is_(None))
+                .scalar() or 0,
+                "created_at": salon.created_at,
+                "updated_at": salon.updated_at
+            }
+            salon_responses.append(SalonResponse(**salon_dict))
+
         return SalonListResponse(
             salons=salon_responses,
             total=total,
@@ -624,7 +644,7 @@ async def get_nearby_salons(
 
 @router.get("/filter/types", response_model=SalonListResponse)
 async def get_salons_by_types(
-    salon_types: str = Query(...),
+    types: Optional[str] = Query(None, description="Comma-separated salon types"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = Query(''),
@@ -634,7 +654,7 @@ async def get_salons_by_types(
     """Salon turlari bo'yicha filtrlash"""
     try:
         # Parse salon_types (comma-separated string)
-        types_to_filter = [t.strip() for t in salon_types.split(',')]
+        types_to_filter = [t.strip() for t in types.split(',')]
         
         if not types_to_filter:
             raise HTTPException(
@@ -657,9 +677,12 @@ async def get_salons_by_types(
         type_conditions = []
         for salon_type in types_to_filter:
             type_conditions.append(
-                Salon.salon_types.op('@>')([{"type": salon_type}])
+                func.JSON_CONTAINS(
+                    Salon.salon_types,
+                    f'{{"type": "{salon_type}", "selected": true}}'
+                )
             )
-        
+
         if type_conditions:
             query = query.filter(or_(*type_conditions))
         
@@ -723,6 +746,7 @@ async def get_salons_by_types(
     except HTTPException:
         raise
     except Exception as e:
+        print(f"Error: {e}, line: {e.__traceback__.tb_lineno}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")

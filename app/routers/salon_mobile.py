@@ -19,11 +19,31 @@ router = APIRouter(prefix="/mobile/salons", tags=["Mobile Salons"])
 
 # Default values
 DEFAULT_SALON_TYPES = [
-    {"type": "Beauty Salon", "selected": True},
-    {"type": "Fitness", "selected": False},
-    {"type": "Functional Training", "selected": False},
-    {"type": "Yoga", "selected": False},
-    {"type": "Massage", "selected": False}
+    {"type": "beauty_salon", "selected": True},
+    {"type": "fitness", "selected": False},
+    {"type": "functional_training", "selected": False},
+    {"type": "massage", "selected": False},
+    {"type": "yoga", "selected": False},
+    {"type": "nail_service", "selected": False},
+    {"type": "scratching", "selected": False},
+    {"type": "pilates", "selected": False},
+    {"type": "eyebrow_and_eyelash_shaping", "selected": False},
+    {"type": "hair_services", "selected": False},
+    {"type": "gyms", "selected": False},
+    {"type": "dancing", "selected": False},
+    {"type": "body_care", "selected": False},
+    {"type": "facial_care", "selected": False},
+    {"type": "spa_and_wellness", "selected": False},
+    {"type": "swimming_pool", "selected": False},
+    {"type": "martial_arts", "selected": False},
+    {"type": "entertainment", "selected": False},
+    {"type": "meditation", "selected": False},
+    {"type": "active_recreation", "selected": False},
+    {"type": "water_sports", "selected": False},
+    {"type": "gymnastics", "selected": False},
+    {"type": "eastern_practices", "selected": False},
+    {"type": "foreign_languages", "selected": False},
+    {"type": "for_children", "selected": False}
 ]
 
 DEFAULT_LOCATION = {"lat": 41, "lng": 64}
@@ -32,6 +52,7 @@ DEFAULT_SALON_COMFORT = [
     {"name": "parking", "isActive": False},
     {"name": "cafee", "isActive": False},
     {"name": "onlyFemale", "isActive": False},
+    {"name": "onlyWoman", "isActive": False},
     {"name": "water", "isActive": False},
     {"name": "pets", "isActive": False},
     {"name": "bath", "isActive": False},
@@ -489,6 +510,90 @@ async def get_nearby_salons_mobile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")
         )
+
+@router.get("/filter")
+async def filter_salons_mobile(
+    only_women: bool = None,
+    only_female: bool = None,
+    types: Optional[str] = Query(None, description="Comma-separated salon types"),
+    latitude: Optional[float] = Query(None),
+    longitude: Optional[float] = Query(None),
+    radius: float = Query(10.0, ge=0.1, le=100),
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    userId: Optional[str] = Query(None),
+):
+    try:
+        query = db.query(Salon).filter(and_(Salon.is_active == True, Salon.location.isnot(None)))
+
+
+        
+        return_values = query.all()
+        # Filter by distance
+        if latitude or longitude:
+            if not (-90 <= latitude <= 90):
+                print("Latitude out of range")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+            if not (-180 <= longitude <= 180):
+                print("Longitude out of range2")
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+            nearby: List[Salon] = []
+            for salon in return_values:
+                try:
+                    if salon.location and 'lat' in salon.location and 'lng' in salon.location:
+                        salon_lat = float(salon.location['lat'])
+                        salon_lng = float(salon.location['lng'])
+                        distance = calculate_distance(latitude, longitude, salon_lat, salon_lng)
+                        if distance <= radius:
+                            nearby.append(salon)
+                except Exception:
+                    continue
+            offset = (page - 1) * limit
+            salons = nearby[offset: offset + limit]
+            nearby = [_build_mobile_item(s, language, db, userId) for s in salons]
+
+            return_values = nearby
+        if types:
+            selected_types = [t.strip().lower() for t in types.split(",") if t.strip()]
+            filtered = []
+            for salon in return_values:
+                salon_types = [t["type"].lower() for t in (salon.salon_types or []) if t["selected"]]
+                salon_type = salon_types or []
+                for selected_type in selected_types:
+
+                    if selected_type in salon_type:
+                        filtered.append(salon)
+
+            return_values = filtered
+        if only_women or only_female:
+            filtered = []
+            for salon in return_values:
+                comforts = salon.salon_comfort or []
+                is_women = any(c["name"] == "onlyFemale" and c["isActive"] for c in comforts)
+                is_female = any(c["name"] == "onlyFemale" and c["isActive"] for c in comforts)
+                if (only_women and is_women) or (only_female and is_female):
+                    filtered.append(salon)
+            return_values = filtered
+        if not return_values:
+            return_values = []
+        
+        return return_values
+
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in filter_salons_mobile: {e}, line: {e.__traceback__.tb_lineno}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
+
+
 
 @router.get("/{salon_id}", response_model=MobileSalonDetailResponse)
 async def get_salon_by_id_mobile(
