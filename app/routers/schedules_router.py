@@ -10,6 +10,7 @@ from app.i18nMini import get_translation
 from app.models.user import User
 from app.database import get_db
 from app.models import Schedule, Salon
+from app.models.schedule import ScheduleBook as ScheduleBookModel  # ✅ SQLAlchemy model
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -30,7 +31,7 @@ class ScheduleCreate(BaseModel):
     deposit: Optional[float] = None
     is_active: bool = True
 
-class ScheduleBook(BaseModel):
+class ScheduleBookSchema(BaseModel):  # ✅ Renamed to avoid conflict
     salon_id: str
     full_name: str
     phone: str
@@ -194,9 +195,12 @@ async def create_schedule(
         "data": new_schedule
     }
 
+
+# ===== BOOKING ENDPOINTS =====
+
 @router.post("/book", status_code=status.HTTP_201_CREATED)
 async def book_schedule(
-    booking_data: ScheduleBook,
+    booking_data: ScheduleBookSchema,  # ✅ Pydantic schema
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
@@ -211,23 +215,33 @@ async def book_schedule(
             detail=get_translation(language, "errors.404")
         )
     
-    # Создание записи о бронировании (пример, можно адаптировать под вашу модель)
-    new_booking = {
-        "salon_id": booking_data.salon_id,
-        "full_name": booking_data.full_name,
-        "phone": booking_data.phone,
-        "time": booking_data.time,
-        "employee_id": booking_data.employee_id
-    }
+    # ✅ Создание бронирования через SQLAlchemy модель
+    new_booking = ScheduleBookModel(
+        salon_id=booking_data.salon_id,
+        full_name=booking_data.full_name,
+        phone=booking_data.phone,
+        time=booking_data.time,
+        employee_id=booking_data.employee_id
+    )
     
-    # Здесь можно добавить логику сохранения бронирования в базу данных
-    db.add(ScheduleBook(**new_booking))  # Пример, адаптируйте под вашу модель бронирования
+    db.add(new_booking)
     db.commit()
+    db.refresh(new_booking)
+    
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": new_booking
+        "data": {
+            "id": str(new_booking.id),
+            "salon_id": str(new_booking.salon_id),
+            "full_name": new_booking.full_name,
+            "phone": new_booking.phone,
+            "time": new_booking.time.isoformat(),
+            "employee_id": str(new_booking.employee_id) if new_booking.employee_id else None,
+            "created_at": new_booking.created_at.isoformat() if new_booking.created_at else None
+        }
     }
+
 
 @router.get("/book")
 async def get_bookings(
@@ -246,14 +260,28 @@ async def get_bookings(
             detail=get_translation(language, "errors.404")
         )
     
-    # Получение всех бронирований для данного салона
-    bookings = db.query(ScheduleBook).filter(ScheduleBook.salon_id == salon_id).all()
+    # ✅ Получение бронирований через SQLAlchemy модель
+    bookings = db.query(ScheduleBookModel).filter(
+        ScheduleBookModel.salon_id == salon_id
+    ).all()
     
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": bookings
+        "data": [
+            {
+                "id": str(b.id),
+                "salon_id": str(b.salon_id),
+                "full_name": b.full_name,
+                "phone": b.phone,
+                "time": b.time.isoformat(),
+                "employee_id": str(b.employee_id) if b.employee_id else None,
+                "created_at": b.created_at.isoformat() if b.created_at else None
+            }
+            for b in bookings
+        ]
     }
+
 
 @router.get("/book/{id}")
 async def get_booking_by_id(
@@ -264,7 +292,7 @@ async def get_booking_by_id(
 ):
     """Получить информацию о конкретном бронировании"""
     
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
     
     if not booking:
         raise HTTPException(
@@ -275,45 +303,29 @@ async def get_booking_by_id(
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": booking
+        "data": {
+            "id": str(booking.id),
+            "salon_id": str(booking.salon_id),
+            "full_name": booking.full_name,
+            "phone": booking.phone,
+            "time": booking.time.isoformat(),
+            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None
+        }
     }
 
-@router.delete("/book/{id}")
-async def delete_booking(
-    id: str,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """Удалить бронирование"""
-    
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
-    
-    if not booking:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
-        )
-    
-    db.delete(booking)
-    db.commit()
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-    }
 
-@router.post("/book/{id}", status_code=status.HTTP_201_CREATED)
+@router.put("/book/{id}")  # ✅ PUT instead of POST
 async def update_booking(
     id: str,
-    booking_data: ScheduleBook,
+    booking_data: ScheduleBookSchema,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить бронирование"""
     
-    booking = db.query(ScheduleBook).filter(ScheduleBook.id == id).first()
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
     
     if not booking:
         raise HTTPException(
@@ -333,9 +345,45 @@ async def update_booking(
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": booking
+        "data": {
+            "id": str(booking.id),
+            "salon_id": str(booking.salon_id),
+            "full_name": booking.full_name,
+            "phone": booking.phone,
+            "time": booking.time.isoformat(),
+            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "created_at": booking.created_at.isoformat() if booking.created_at else None
+        }
     }
 
+
+@router.delete("/book/{id}")
+async def delete_booking(
+    id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Удалить бронирование"""
+    
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
+    
+    if not booking:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
+    
+    db.delete(booking)
+    db.commit()
+    
+    return {
+        "success": True,
+        "message": get_translation(language, "success")
+    }
+
+
+# ===== SCHEDULE ENDPOINTS =====
 
 # Обновить расписание
 @router.put("/{id}")
