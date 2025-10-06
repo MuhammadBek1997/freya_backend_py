@@ -18,6 +18,8 @@ import secrets
 import re
 from datetime import datetime, timedelta
 import httpx
+from pathlib import Path
+import json
 
 from app.database import get_db
 from app.i18nMini import get_translation
@@ -44,6 +46,8 @@ from app.schemas.user import (
     PaymentCardResponse,
     LoginResponse,
     TokenResponse,
+    UserCityResponse,
+    UserCityUpdate,
 )
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.auth.jwt_utils import JWTUtils
@@ -586,6 +590,49 @@ async def get_user_location(
     }
 
 
+@router.get("/city", response_model=UserCityResponse)
+async def get_user_city(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchi tanlagan shaharni olish (agar bo'lmasa None)
+    """
+    return {"city": current_user.city}
+
+
+@router.put("/city", response_model=UserCityResponse)
+async def update_user_city(
+    request: UserCityUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchining shahrini city_id orqali yangilash
+    """
+    district = next(
+        (
+            d
+            for d in _districts
+            if d.get("id") is not None and int(d.get("id")) == request.city_id
+        ),
+        None,
+    )
+    if not district:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
+
+    current_user.city = _name_by_lang(district, (language or "uz"))
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return {"city": current_user.city}
+
+
 @router.get("/profile", response_model=UserResponse)
 async def get_user_profile(
     current_user: User = Depends(get_current_user),
@@ -1022,3 +1069,21 @@ async def set_default_payment_card(
     db.refresh(card)
 
     return card
+"""
+City dataset (districts) loader for user city selection
+"""
+CITY_DATA_PATH = Path(__file__).resolve().parents[2] / "city.json"
+_districts = []
+try:
+    with CITY_DATA_PATH.open("r", encoding="utf-8") as f:
+        _city_data = json.load(f)
+        _districts = _city_data.get("districts", [])
+except Exception:
+    _districts = []
+
+
+def _name_by_lang(item: dict, lang: str) -> str:
+    lang = (lang or "uz").lower()
+    if lang not in ("uz", "ru", "en"):
+        lang = "uz"
+    return item.get(lang) or item.get("uz") or ""

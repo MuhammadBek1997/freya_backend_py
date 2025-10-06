@@ -232,6 +232,14 @@ class UserLocationResponse(BaseModel):
     location_updated_at: Optional[datetime]
 
 
+class UserCityResponse(BaseModel):
+    city: Optional[str]
+
+
+class UserCityUpdate(BaseModel):
+    city_id: int
+
+
 class PaymentCardResponse(BaseModel):
     id: int
     masked_card_number: str

@@ -63,7 +63,7 @@ app = FastAPI(
     - 📅 **Vaqt jadvali boshqaruvi** (Booking, Schedule)
     - 💳 **To'lov tizimi** (Click.uz integratsiyasi)
     - 📱 **SMS xabarnomalar** (Eskiz.uz integratsiyasi)
-    - 🌐 **Tarjima xizmati** (gogletrans API)
+    - 🌐 **Tarjima xizmati** (Gogletrans API)
     
     ### Texnologiyalar:
     - **FastAPI** - Web framework

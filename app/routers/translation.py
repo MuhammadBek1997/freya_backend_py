@@ -27,7 +27,7 @@ router = APIRouter(prefix="/translation", tags=["Translation"])
 @router.post("/translate", summary="Matnni tarjima qilish (Google Translate)")
 async def translate_text(
     request: TranslateTextRequest,
-    current_admin: Admin = Depends(get_current_admin)
+    # current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
     Matnni berilgan tilga tarjima qilish (googletrans)
@@ -64,7 +64,7 @@ async def translate_text(
 @router.post("/translate-all", summary="Matnni barcha tillarga tarjima qilish (Google Translate)")
 async def translate_to_all_languages(
     request: TranslateToAllLanguagesRequest,
-    current_admin: Admin = Depends(get_current_admin)
+    # current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
     Matnni qo'llab-quvvatlanadigan tillarga googletrans yordamida tarjima qilish
@@ -100,7 +100,7 @@ async def translate_to_all_languages(
 @router.post("/detect-language", summary="Matn tilini aniqlash (Google Translate)")
 async def detect_language(
     request: DetectLanguageRequest,
-    current_admin: Admin = Depends(get_current_admin)
+    # current_admin: Admin = Depends(get_current_admin)
 ) -> Dict[str, Any]:
     """
     Matn tilini googletrans orqali aniqlash
