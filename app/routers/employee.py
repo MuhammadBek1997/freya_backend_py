@@ -919,3 +919,86 @@ async def update_employee_waiting_status(
             status_code=500,
             detail=get_translation(language, "errors.500")
         )
+
+
+@router.get("/{employee_id}/comments", response_model=EmployeeCommentListResponse)
+async def get_employee_comments(
+    employee_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Get employee comments with pagination"""
+    try:
+        # Check if employee exists
+        employee = db.query(Employee).filter(
+            and_(
+                Employee.id == employee_id,
+                Employee.deleted_at.is_(None)
+            )
+        ).first()
+        
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404")
+            )
+        
+        offset = (page - 1) * limit
+        
+        # Build query with user info
+        query = db.query(EmployeeComment).options(
+            joinedload(EmployeeComment.user)
+        ).filter(
+            EmployeeComment.employee_id == employee_id
+        ).order_by(desc(EmployeeComment.created_at))
+        
+        # Get total count
+        total = query.count()
+        
+        # Get paginated results
+        comments = query.offset(offset).limit(limit).all()
+        
+        # Format response
+        formatted_comments = []
+        for comment in comments:
+            comment_dict = {
+                "id": str(comment.id),
+                "employee_id": str(comment.employee_id),
+                "user_id": str(comment.user_id),
+                "text": comment.text,
+                "rating": comment.rating,
+                "created_at": comment.created_at,
+                "full_name": comment.user.full_name if comment.user else None,
+                "user_avatar": getattr(comment.user, 'avatar_url', None) if comment.user else None
+            }
+            formatted_comments.append(EmployeeCommentResponse(**comment_dict))
+        
+        # Calculate average rating
+        avg_rating = 0.0
+        if formatted_comments:
+            total_rating = sum(c.rating for c in formatted_comments)
+            avg_rating = round(total_rating / len(formatted_comments), 1)
+        
+        return EmployeeCommentListResponse(
+            success=True,
+            data=formatted_comments,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit
+            },
+            avg_rating=avg_rating
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in get_employee_comments: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=get_translation(language, "errors.500")
+        )
