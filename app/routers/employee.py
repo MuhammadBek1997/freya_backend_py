@@ -14,7 +14,7 @@ from app.schemas.employee import (
     EmployeeCommentCreate, EmployeeCommentResponse, EmployeePostCreate, EmployeePostResponse,
     EmployeeWaitingStatusUpdate, BulkEmployeeWaitingStatusUpdate,
     EmployeeListResponse, EmployeeDetailResponseWrapper, EmployeePostListResponse, SuccessResponse,
-    EmployeeAvatarUpdate
+    EmployeeAvatarUpdate, EmployeeCommentListResponse  # ← Buni qo'shing
 )
 from app.auth.dependencies import get_current_user, get_current_admin
 from app.auth.jwt_utils import JWTUtils
