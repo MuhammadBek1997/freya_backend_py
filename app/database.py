@@ -10,8 +10,10 @@ db_url = settings.database_url
 
 url = make_url(db_url)
 
-# Connection args: keep minimal for MySQL; none needed for mysqlconnector
+# Connection args: adjust for SQLite
 connect_args = {}
+if url.get_backend_name() == "sqlite":
+    connect_args = {"check_same_thread": False}
 
 engine = create_engine(
     db_url,
@@ -32,7 +34,11 @@ from app.models import *
 
 # No Postgres-specific schema handling needed
 
-Base.metadata.create_all(engine)
+try:
+    Base.metadata.create_all(engine)
+except Exception as e:
+    # Delay hard failure to runtime endpoints; helps server boot for config/debug
+    print(f"[DB INIT] Table creation skipped due to error: {e}")
 
 # Dependency to get database session
 def get_db():

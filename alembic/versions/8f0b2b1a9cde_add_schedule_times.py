@@ -17,10 +17,24 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('schedules', sa.Column('start_time', sa.Time(), nullable=True))
-    op.add_column('schedules', sa.Column('end_time', sa.Time(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'schedules' in tables:
+        columns = {c['name'] for c in inspector.get_columns('schedules')}
+        if 'start_time' not in columns:
+            op.add_column('schedules', sa.Column('start_time', sa.Time(), nullable=True))
+        if 'end_time' not in columns:
+            op.add_column('schedules', sa.Column('end_time', sa.Time(), nullable=True))
 
 
 def downgrade():
-    op.drop_column('schedules', 'end_time')
-    op.drop_column('schedules', 'start_time')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'schedules' in tables:
+        columns = {c['name'] for c in inspector.get_columns('schedules')}
+        if 'end_time' in columns:
+            op.drop_column('schedules', 'end_time')
+        if 'start_time' in columns:
+            op.drop_column('schedules', 'start_time')

@@ -5,10 +5,8 @@ from typing import Optional, Union
 
 class Settings(BaseSettings):
     # Database
-    database_url: str = (
-        # MySQL DSN: user:password@host/dbname (password URL-encoded)
-        "mysql+mysqlconnector://Umidjon_Freya:FX&4FFmJaiibyY-q@vmi2413425.contaboserver.net/Umidjon_Freya"
-    )
+    # Fallback to local SQLite for fresh setups; override with DATABASE_URL in .env
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
     # Fix for Heroku
     # if database_url.startswith("postgres://"):
     #     database_url = database_url.replace("postgres://", "postgresql://", 1)
@@ -55,9 +53,9 @@ class Settings(BaseSettings):
     SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
 
-    # class Config:
-    #     env_file = ".env"
-    #     extra = "ignore"
+    class Config:
+        env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

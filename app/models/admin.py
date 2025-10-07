@@ -13,7 +13,7 @@ class Admin(BaseModel):
     phone = Column(String(20), nullable=True)
     is_active = Column(Boolean, default=True)
     role = Column(String(50), default='admin')
-    avatar_url = Column(String(500), nullable=True)
+    avatar_url = Column(String(255), nullable=True)
 
     # Relationships
     salon = relationship("Salon", back_populates="admins")

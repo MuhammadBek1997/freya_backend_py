@@ -17,8 +17,20 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('users', sa.Column('city_id', sa.Integer(), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'users' in tables:
+        columns = {c['name'] for c in inspector.get_columns('users')}
+        if 'city_id' not in columns:
+            op.add_column('users', sa.Column('city_id', sa.Integer(), nullable=True))
 
 
 def downgrade():
-    op.drop_column('users', 'city_id')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'users' in tables:
+        columns = {c['name'] for c in inspector.get_columns('users')}
+        if 'city_id' in columns:
+            op.drop_column('users', 'city_id')

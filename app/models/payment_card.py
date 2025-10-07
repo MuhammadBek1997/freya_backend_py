@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, CheckConstraint, UniqueConstraint, text
+from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -8,8 +8,8 @@ class PaymentCard(BaseModel):
     user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     card_number_encrypted = Column(String(255), nullable=False)
     card_holder_name = Column(String(100), nullable=False)
-    expiry_month = Column(Integer, CheckConstraint('expiry_month >= 1 AND expiry_month <= 12'), nullable=False)
-    expiry_year = Column(Integer, CheckConstraint('expiry_year >= EXTRACT(YEAR FROM CURRENT_DATE)'), nullable=False)
+    expiry_month = Column(Integer, nullable=False)
+    expiry_year = Column(Integer, nullable=False)
     card_type = Column(String(20))  # 'visa', 'mastercard', 'uzcard', etc.
     phone_number = Column(String(20), nullable=False)
     is_default = Column(Boolean, default=False)

@@ -17,8 +17,20 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column('salons', sa.Column('logo', sa.String(length=500), nullable=True))
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'salons' in tables:
+        columns = {c['name'] for c in inspector.get_columns('salons')}
+        if 'logo' not in columns:
+            op.add_column('salons', sa.Column('logo', sa.String(length=500), nullable=True))
 
 
 def downgrade():
-    op.drop_column('salons', 'logo')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    tables = set(inspector.get_table_names())
+    if 'salons' in tables:
+        columns = {c['name'] for c in inspector.get_columns('salons')}
+        if 'logo' in columns:
+            op.drop_column('salons', 'logo')
