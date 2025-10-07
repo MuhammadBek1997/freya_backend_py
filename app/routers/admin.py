@@ -277,7 +277,7 @@ async def get_all_salons(
         )
 
 
-@router.get("/my-salon", response_model=SalonDetailResponse)
+        @router.get("/my-salon", response_model=SalonDetailResponse)
 async def get_my_salon(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
@@ -287,11 +287,17 @@ async def get_my_salon(
     Admin'ning o'z salonini olish
     """
     try:
+        # ✅ Tekshirish
+        if not current_admin:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=get_translation(language, "errors.401")
+            )
         
         if not current_admin.salon_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_translation(language, "errors.404")
+                detail="Admin uchun salon biriktirilmagan"
             )
 
         salon = db.query(Salon).filter(Salon.id == current_admin.salon_id).first()
@@ -301,59 +307,156 @@ async def get_my_salon(
                 detail=get_translation(language, "errors.404")
             )
 
-        # Salon xodimlarini olish
-        employees = db.query(Employee).filter(
-            Employee.salon_id == salon.id,
-            Employee.is_active == True
-        ).all()
+        # ✅ Xatolarni handle qilish
+        employees = []
+        try:
+            employees = db.query(Employee).filter(
+                Employee.salon_id == salon.id,
+                Employee.is_active == True
+            ).all()
+        except Exception as e:
+            logger.warning(f"Xodimlarni olishda xato: {e}")
 
-        # Salon xizmatlarini olish
-        services = db.query(Service).filter(
-            Service.salon_id == salon.id,
-            Service.is_active == True
-        ).all()
+        services = []
+        try:
+            services = db.query(Service).filter(
+                Service.salon_id == salon.id,
+                Service.is_active == True
+            ).all()
+        except Exception as e:
+            logger.warning(f"Xizmatlarni olishda xato: {e}")
+
+        # ✅ Photos handling
+        photos = []
+        if hasattr(salon, 'salon_photos') and salon.salon_photos:
+            if isinstance(salon.salon_photos, list):
+                photos = salon.salon_photos
+            elif isinstance(salon.salon_photos, str):
+                try:
+                    import json
+                    photos = json.loads(salon.salon_photos)
+                except:
+                    photos = [salon.salon_photos]
 
         return SalonDetailResponse(
             id=str(salon.id),
-            name=salon.salon_name,
+            name=salon.salon_name or "",
             address=salon.address_uz or salon.address_ru or salon.address_en or "",
             phone=salon.salon_phone or "",
             email="",
             description=salon.salon_description or "",
-            is_active=salon.is_active,
-            is_top=salon.is_top,
+            is_active=getattr(salon, 'is_active', True),
+            is_top=getattr(salon, 'is_top', False),
             rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
-            photos=[],
+            photos=photos,
             services=[
                 {
                     "id": str(service.id),
-                    "name": service.name,
-                    "price": float(service.price),
-                    "duration": service.duration
+                    "name": service.name or "",
+                    "price": float(service.price) if service.price else 0.0,
+                    "duration": service.duration or 0
                 }
                 for service in services
             ],
             employees=[
                 {
                     "id": str(employee.id),
-                    "full_name": f"{employee.name} {employee.surname or ''}".strip(),
-                    "phone": employee.phone,
-                    "role": employee.role
+                    "full_name": f"{employee.name or ''} {employee.surname or ''}".strip(),
+                    "phone": employee.phone or "",
+                    "role": employee.role or "employee"
                 }
                 for employee in employees
             ],
-            created_at=salon.created_at.isoformat(),
-            updated_at=salon.updated_at.isoformat()
+            created_at=salon.created_at.isoformat() if salon.created_at else datetime.now().isoformat(),
+            updated_at=salon.updated_at.isoformat() if salon.updated_at else datetime.now().isoformat()
         )
 
     except HTTPException:
         raise
     except Exception as error:
-        logger.error(f"Salon ma'lumotlari olish xatosi: {error}")
+        logger.error(f"Salon ma'lumotlari olish xatosi: {error}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=f"Salon ma'lumotlarini olishda xatolik: {str(error)}"
         )
+
+# @router.get("/my-salon", response_model=SalonDetailResponse)
+# async def get_my_salon(
+#     db: Session = Depends(get_db),
+#     current_admin: Admin = Depends(get_current_admin),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """
+#     Admin'ning o'z salonini olish
+#     """
+#     try:
+        
+#         if not current_admin.salon_id:
+#             raise HTTPException(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 detail=get_translation(language, "errors.404")
+#             )
+
+#         salon = db.query(Salon).filter(Salon.id == current_admin.salon_id).first()
+#         if not salon:
+#             raise HTTPException(
+#                 status_code=status.HTTP_404_NOT_FOUND,
+#                 detail=get_translation(language, "errors.404")
+#             )
+
+#         # Salon xodimlarini olish
+#         employees = db.query(Employee).filter(
+#             Employee.salon_id == salon.id,
+#             Employee.is_active == True
+#         ).all()
+
+#         # Salon xizmatlarini olish
+#         services = db.query(Service).filter(
+#             Service.salon_id == salon.id,
+#             Service.is_active == True
+#         ).all()
+
+#         return SalonDetailResponse(
+#             id=str(salon.id),
+#             name=salon.salon_name,
+#             address=salon.address_uz or salon.address_ru or salon.address_en or "",
+#             phone=salon.salon_phone or "",
+#             email="",
+#             description=salon.salon_description or "",
+#             is_active=salon.is_active,
+#             is_top=salon.is_top,
+#             rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
+#             photos=[],
+#             services=[
+#                 {
+#                     "id": str(service.id),
+#                     "name": service.name,
+#                     "price": float(service.price),
+#                     "duration": service.duration
+#                 }
+#                 for service in services
+#             ],
+#             employees=[
+#                 {
+#                     "id": str(employee.id),
+#                     "full_name": f"{employee.name} {employee.surname or ''}".strip(),
+#                     "phone": employee.phone,
+#                     "role": employee.role
+#                 }
+#                 for employee in employees
+#             ],
+#             created_at=salon.created_at.isoformat(),
+#             updated_at=salon.updated_at.isoformat()
+#         )
+
+#     except HTTPException:
+#         raise
+#     except Exception as error:
+#         logger.error(f"Salon ma'lumotlari olish xatosi: {error}")
+#         raise HTTPException(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             detail=get_translation(language, "errors.500")
+#         )
 
 
 # @router.post("/send-sms", response_model=SMSResponse)
