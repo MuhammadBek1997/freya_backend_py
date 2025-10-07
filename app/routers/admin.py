@@ -277,7 +277,8 @@ async def get_all_salons(
         )
 
 
-        @router.get("/my-salon", response_model=SalonDetailResponse)
+
+@router.get("/my-salon", response_model=SalonDetailResponse)
 async def get_my_salon(
     db: Session = Depends(get_db),
     current_admin: Admin = Depends(get_current_admin),
