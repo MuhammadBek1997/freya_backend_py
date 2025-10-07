@@ -1,7 +1,7 @@
 """
 Admin routes
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Header, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 from typing import List, Optional, Union
@@ -322,7 +322,7 @@ async def get_my_salon(
             address=salon.address_uz or salon.address_ru or salon.address_en or "",
             phone=salon.salon_phone or "",
             email="",
-            description=salon.salon_description or "",
+            description=(salon.description_uz or salon.description_ru or salon.description_en or ""),
             is_active=salon.is_active,
             is_top=salon.is_top,
             rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
@@ -353,6 +353,139 @@ async def get_my_salon(
         raise
     except Exception as error:
         logger.error(f"Salon ma'lumotlari olish xatosi: {error}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
+
+@router.post("/profile/image/upload", response_model=dict)
+async def upload_admin_avatar(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin profil rasmini yuklash (avatar)."""
+    try:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400")
+            )
+
+        # uploads/admin_avatars ichiga saqlaymiz
+        import os, uuid
+        base_dir = os.getcwd()
+        upload_dir = os.path.join(base_dir, "uploads", "admin_avatars")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # unique filename
+        _, ext = os.path.splitext(file.filename or "avatar.jpg")
+        if not ext:
+            ext = ".jpg"
+        safe_name = f"{current_admin.id}_{uuid.uuid4().hex}{ext}"
+        save_path = os.path.join(upload_dir, safe_name)
+
+        content = await file.read()
+        with open(save_path, "wb") as out:
+            out.write(content)
+
+        # URL ni yaratamiz (static mount bilan uyg‘un): /uploads/admin_avatars/<file>
+        avatar_url = f"/uploads/admin_avatars/{safe_name}"
+
+        # Admin modelida avatar_url bo‘lmasa, commit xato bo‘lishi mumkin.
+        try:
+            setattr(current_admin, "avatar_url", avatar_url)
+            db.commit()
+        except Exception:
+            db.rollback()
+            # Agar ustun mavjud bo‘lmasa, faqat URLni qaytaramiz
+            return {
+                "success": True,
+                "message": get_translation(language, "success"),
+                "avatar_url": avatar_url,
+                "note": "Admin jadvalida avatar_url ustuni mavjud bo‘lmasa, migratsiya kerak"
+            }
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "avatar_url": avatar_url,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Admin avatar yuklash xatosi: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
+
+@router.post("/employees/{employee_id}/avatar/upload", response_model=dict)
+async def upload_employee_avatar_by_admin(
+    employee_id: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_admin: Admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin o‘z salonidagi xodim uchun avatar yuklaydi."""
+    try:
+        if not file.content_type or not file.content_type.startswith("image/"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400")
+            )
+
+        employee = db.query(Employee).filter(
+            Employee.id == employee_id,
+            Employee.is_active == True,
+            Employee.deleted_at.is_(None)
+        ).first()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+
+        # Admin faqat o‘z salonidagi xodim uchun ruxsat
+        if not current_admin.salon_id or str(employee.salon_id) != str(current_admin.salon_id):
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        import os, uuid
+        base_dir = os.getcwd()
+        upload_dir = os.path.join(base_dir, "uploads", "employee_avatars")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        _, ext = os.path.splitext(file.filename or "avatar.jpg")
+        if not ext:
+            ext = ".jpg"
+        safe_name = f"{employee.id}_{uuid.uuid4().hex}{ext}"
+        save_path = os.path.join(upload_dir, safe_name)
+
+        content = await file.read()
+        with open(save_path, "wb") as out:
+            out.write(content)
+
+        avatar_url = f"/uploads/employee_avatars/{safe_name}"
+        employee.avatar_url = avatar_url
+        db.commit()
+        db.refresh(employee)
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "data": {
+                "employee_id": str(employee.id),
+                "avatar_url": avatar_url
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Employee avatar yuklash xatosi: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")

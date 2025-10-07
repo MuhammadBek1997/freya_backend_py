@@ -165,3 +165,18 @@ class SuccessResponse(BaseModel):
     success: bool
     message: Optional[Union[str, None]] = None
     data: Optional[dict] = None
+
+# Mobile-specific employee item
+class MobileEmployeeItem(BaseModel):
+    id: str
+    name: str
+    avatar: Optional[str] = None
+    workType: Optional[str] = None
+    rate: Optional[float] = 0.0
+    reviewsCount: int = 0
+
+# Mobile-specific employee list response with pagination
+class MobileEmployeeListResponse(BaseModel):
+    success: bool
+    data: List[MobileEmployeeItem]
+    pagination: dict
