@@ -22,6 +22,7 @@ from app.schemas.salon import (
 )
 from app.auth.jwt_utils import JWTUtils
 from app.middleware.auth import get_current_user, get_current_admin
+from app.services.translation_service import translation_service
 
 router = APIRouter(prefix="/salons", tags=["Salons"])
 
@@ -126,7 +127,62 @@ async def create_salon(
         # Convert Pydantic models to dict for JSON storage
         salon_types_dict = [st.dict() if hasattr(st, 'dict') else st for st in salon_types]
         salon_comfort_dict = [sc.dict() if hasattr(sc, 'dict') else sc for sc in salon_comfort]
-        
+        # Auto-translate description to all languages
+        description_lang = await translation_service.detect_language(salon_data.salon_description)
+        if description_lang.get('success'):
+            detected_lang = description_lang['data']['language']
+        else:
+            detected_lang = 'uz'  # Default to Uzbek if detection fails
+        translates = await translation_service.translate_to_all_languages(
+            text=salon_data.salon_description or salon_data.description,
+            source_language=detected_lang
+        )
+        if translates.get('success'):
+            translations = translates['data']['translations']
+            description_uz = translations.get('uz', salon_data.salon_description)
+            description_ru = translations.get('ru', salon_data.salon_description)
+            description_en = translations.get('en', salon_data.salon_description)
+        else:
+            description_uz = salon_data.salon_description
+            description_ru = salon_data.salon_description
+            description_en = salon_data.salon_description
+
+        address_lang = await translation_service.detect_language(salon_data.address)
+        if address_lang.get('success'):
+            detected_lang = address_lang['data']['language']
+        else:
+            detected_lang = 'uz'  # Default to Uzbek if detection fails
+        translates = await translation_service.translate_to_all_languages(
+            text=salon_data.address or salon_data.address,
+            source_language=detected_lang
+        )
+        if translates.get('success'):
+            translations = translates['data']['translations']
+            address_uz = translations.get('uz', salon_data.address)
+            address_ru = translations.get('ru', salon_data.address)
+            address_en = translations.get('en', salon_data.address)
+        else:
+            address_uz = salon_data.address
+            address_ru = salon_data.address
+            address_en = salon_data.address
+        orentation_lang = await translation_service.detect_language(salon_data.orientation)
+        if orentation_lang.get('success'):
+            detected_lang = orentation_lang['data']['language']
+        else:
+            detected_lang = 'uz'  # Default to Uzbek if detection fails
+        translates = await translation_service.translate_to_all_languages(
+            text=salon_data.orientation or salon_data.orientation,
+            source_language=detected_lang
+        )
+        if translates.get('success'):
+            translations = translates['data']['translations']
+            orientation_uz = translations.get('uz', salon_data.orientation)
+            orientation_ru = translations.get('ru', salon_data.orientation)
+            orientation_en = translations.get('en', salon_data.orientation)
+        else:
+            orientation_uz = salon_data.orientation
+            orientation_ru = salon_data.orientation
+            orientation_en = salon_data.orientation
         # Create new salon
         new_salon = Salon(
             salon_name=salon_name,
@@ -142,15 +198,15 @@ async def create_salon(
             is_active=True,
             is_private=salon_data.is_private or False,
 
-            description_uz=salon_data.description_uz,
-            description_ru=salon_data.description_ru,
-            description_en=salon_data.description_en,
-            address_uz=salon_data.address_uz,
-            address_ru=salon_data.address_ru,
-            address_en=salon_data.address_en,
-            orientation_uz=salon_data.orientation_uz,
-            orientation_ru=salon_data.orientation_ru,
-            orientation_en=salon_data.orientation_en,
+            description_uz=description_uz,
+            description_ru=description_ru,
+            description_en=description_en,
+            address_uz=address_uz,
+            address_ru=address_ru,
+            address_en=address_en,
+            orientation_uz=orientation_uz,
+            orientation_ru=orientation_ru,
+            orientation_en=orientation_en,
         )
         
         db.add(new_salon)

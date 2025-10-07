@@ -58,6 +58,7 @@ class SalonCreate(BaseModel):
     email: Optional[str] = None
     description: Optional[str] = None
     address: Optional[str] = None
+    orientation: Optional[str] = None
     working_hours: Optional[WorkingHours] = None
     photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
 
