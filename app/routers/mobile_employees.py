@@ -9,6 +9,7 @@ from app.i18nMini import get_translation
 from app.models.employee import Employee, EmployeeComment
 from app.models.salon import Salon
 from app.schemas.employee import MobileEmployeeListResponse, MobileEmployeeItem, MobileEmployeeDetailResponse
+from app.schemas.salon import MobileSalonItem
 from app.models.appointment import Appointment
 from app.models.user_favourite_salon import UserFavouriteSalon
 
@@ -16,7 +17,97 @@ from app.models.user_favourite_salon import UserFavouriteSalon
 router = APIRouter(prefix="/mobile/employees", tags=["Mobile Employees"])
 
 
-@router.get("/salon/{salon_id}", response_model=MobileEmployeeListResponse)
+@router.get(
+    "/salon/{salon_id}",
+    response_model=MobileEmployeeListResponse,
+    summary="Mobil: Salon xodimlari ro'yxati",
+    description="X-User-language (uz|ru|en) headeri bo'yicha UI uchun ko'rsatma misollar beriladi.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "uz": {
+                            "summary": "Uzbek example",
+                            "value": {
+                                "success": True,
+                                "data": [
+                                    {
+                                        "id": "emp_001",
+                                        "name": "Anna Sergeyeva",
+                                        "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                        "workType": "Massajchi",
+                                        "rate": 4.8,
+                                        "reviewsCount": 127
+                                    },
+                                    {
+                                        "id": "emp_002",
+                                        "name": "Sara Ahmedova",
+                                        "avatar": "https://cdn.example.com/avatars/emp_002.jpg",
+                                        "workType": "Manual terapevt",
+                                        "rate": 4.6,
+                                        "reviewsCount": 89
+                                    }
+                                ],
+                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
+                            }
+                        },
+                        "ru": {
+                            "summary": "Russian example",
+                            "value": {
+                                "success": True,
+                                "data": [
+                                    {
+                                        "id": "emp_001",
+                                        "name": "Анна Сергеева",
+                                        "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                        "workType": "Массажист",
+                                        "rate": 4.8,
+                                        "reviewsCount": 127
+                                    },
+                                    {
+                                        "id": "emp_002",
+                                        "name": "Сара Ахмедова",
+                                        "avatar": "https://cdn.example.com/avatars/emp_002.jpg",
+                                        "workType": "Мануальный терапевт",
+                                        "rate": 4.6,
+                                        "reviewsCount": 89
+                                    }
+                                ],
+                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
+                            }
+                        },
+                        "en": {
+                            "summary": "English example",
+                            "value": {
+                                "success": True,
+                                "data": [
+                                    {
+                                        "id": "emp_001",
+                                        "name": "Anna Sergeeva",
+                                        "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                        "workType": "Masseur",
+                                        "rate": 4.8,
+                                        "reviewsCount": 127
+                                    },
+                                    {
+                                        "id": "emp_002",
+                                        "name": "Sara Akhmedova",
+                                        "avatar": "https://cdn.example.com/avatars/emp_002.jpg",
+                                        "workType": "Manual therapist",
+                                        "rate": 4.6,
+                                        "reviewsCount": 89
+                                    }
+                                ],
+                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_employees_by_salon_mobile(
     salon_id: str,
     page: int = Query(1, ge=1),
@@ -112,7 +203,94 @@ async def get_employees_by_salon_mobile(
     )
 
 
-@router.get("/{employee_id}", response_model=MobileEmployeeDetailResponse)
+@router.get(
+    "/{employee_id}",
+    response_model=MobileEmployeeDetailResponse,
+    summary="Mobil: Xodim batafsil",
+    description="X-User-language (uz|ru|en) headeri bo'yicha salon tavsifi va nomlar misollari ko'rsatiladi.",
+    responses={
+        200: {
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "uz": {
+                            "summary": "Uzbek example",
+                            "value": {
+                                "id": "emp_001",
+                                "name": "Anna Sergeyeva",
+                                "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                "position": "Massajchi",
+                                "works": 112,
+                                "reviews_count": 27,
+                                "per_week": 6,
+                                "salon": {
+                                    "id": "sal_001",
+                                    "name": "GLAMFACE",
+                                    "description": "Qulay joylashuv, tajribali ustozlar va shinam muhit.",
+                                    "logo": "https://cdn.example.com/salons/sal_001/logo.jpg",
+                                    "salonImage": "https://cdn.example.com/salons/sal_001/cover.jpg",
+                                    "city": "Toshkent, Yunusobod",
+                                    "rate": 4.8,
+                                    "reviews": 127,
+                                    "news": ["new", "top", "discount-20%"],
+                                    "isFavorite": True
+                                }
+                            }
+                        },
+                        "ru": {
+                            "summary": "Russian example",
+                            "value": {
+                                "id": "emp_001",
+                                "name": "Анна Сергеева",
+                                "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                "position": "Массажист",
+                                "works": 112,
+                                "reviews_count": 27,
+                                "per_week": 6,
+                                "salon": {
+                                    "id": "sal_001",
+                                    "name": "GLAMFACE",
+                                    "description": "Удобное расположение, опытные мастера и уютная атмосфера.",
+                                    "logo": "https://cdn.example.com/salons/sal_001/logo.jpg",
+                                    "salonImage": "https://cdn.example.com/salons/sal_001/cover.jpg",
+                                    "city": "Ташкент, Юнусабад",
+                                    "rate": 4.8,
+                                    "reviews": 127,
+                                    "news": ["new", "top", "discount-20%"],
+                                    "isFavorite": True
+                                }
+                            }
+                        },
+                        "en": {
+                            "summary": "English example",
+                            "value": {
+                                "id": "emp_001",
+                                "name": "Anna Sergeeva",
+                                "avatar": "https://cdn.example.com/avatars/emp_001.jpg",
+                                "position": "Masseur",
+                                "works": 112,
+                                "reviews_count": 27,
+                                "per_week": 6,
+                                "salon": {
+                                    "id": "sal_001",
+                                    "name": "GLAMFACE",
+                                    "description": "Convenient location, experienced masters and cozy ambience.",
+                                    "logo": "https://cdn.example.com/salons/sal_001/logo.jpg",
+                                    "salonImage": "https://cdn.example.com/salons/sal_001/cover.jpg",
+                                    "city": "Tashkent, Yunusabad",
+                                    "rate": 4.8,
+                                    "reviews": 127,
+                                    "news": ["new", "top", "discount-20%"],
+                                    "isFavorite": True
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
 async def get_employee_by_id_mobile(
     employee_id: str,
     db: Session = Depends(get_db),
