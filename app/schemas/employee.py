@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, validator
 from typing import Optional, List, Union
+from app.schemas.salon import MobileSalonItem
 from datetime import datetime
 
 # Employee schemas
@@ -180,3 +181,14 @@ class MobileEmployeeListResponse(BaseModel):
     success: bool
     data: List[MobileEmployeeItem]
     pagination: dict
+
+# Mobile employee detailed response
+class MobileEmployeeDetailResponse(BaseModel):
+    id: str
+    name: str
+    avatar: Optional[str] = None
+    position: Optional[str] = None
+    works: int = 0
+    reviews_count: int = 0
+    per_week: int = 0
+    salon: MobileSalonItem
