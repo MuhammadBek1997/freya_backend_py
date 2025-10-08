@@ -31,36 +31,36 @@ class WorkingHours(BaseModel):
 # Salon Create Schema
 class SalonCreate(BaseModel):
     salon_name: str
-    salon_phone: Optional[str] = None
-    salon_instagram: Optional[str] = None
-    salon_rating: Optional[Decimal] = 0
-    salon_description: Optional[str] = None
-    salon_types: Optional[List[SalonType]] = None
+    # salon_phone: Optional[str] = None
+    # salon_instagram: Optional[str] = None
+    # salon_rating: Optional[Decimal] = 0
+    # salon_description: Optional[str] = None
+    # salon_types: Optional[List[SalonType]] = None
     private_salon: Optional[bool] = False
-    location: Optional[Location] = None
-    salon_comfort: Optional[List[SalonComfort]] = None
-    salon_sale: Optional[Dict[str, Any]] = None
-    is_private: Optional[bool] = False
-    description_uz: Optional[str] = None
-    description_ru: Optional[str] = None
-    description_en: Optional[str] = None
-    address_uz: Optional[str] = None
-    address_ru: Optional[str] = None
-    address_en: Optional[str] = None
-    orientation_uz: Optional[str] = None
-    orientation_ru: Optional[str] = None
-    orientation_en: Optional[str] = None
+    # location: Optional[Location] = None
+    # salon_comfort: Optional[List[SalonComfort]] = None
+    # salon_sale: Optional[Dict[str, Any]] = None
+    # is_private: Optional[bool] = False
+    # description_uz: Optional[str] = None
+    # description_ru: Optional[str] = None
+    # description_en: Optional[str] = None
+    # address_uz: Optional[str] = None
+    # address_ru: Optional[str] = None
+    # address_en: Optional[str] = None
+    # orientation_uz: Optional[str] = None
+    # orientation_ru: Optional[str] = None
+    # orientation_en: Optional[str] = None
     
-    # Legacy fields for backward compatibility
-    logo: Optional[str] = None
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    description: Optional[str] = None
-    address: Optional[str] = None
-    orientation: Optional[str] = None
-    working_hours: Optional[WorkingHours] = None
-    photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
+    # # Legacy fields for backward compatibility
+    # logo: Optional[str] = None
+    # name: Optional[str] = None
+    # phone: Optional[str] = None
+    # email: Optional[str] = None
+    # description: Optional[str] = None
+    # address: Optional[str] = None
+    # orientation: Optional[str] = None
+    # working_hours: Optional[WorkingHours] = None
+    # photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
 
     @validator('salon_name', pre=True)
     def validate_salon_name(cls, v, values):

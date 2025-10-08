@@ -818,10 +818,10 @@ async def bulk_update_employee_waiting_status(
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Bulk update employees waiting status (faqat salon admin)"""
+    """Bulk update employees waiting status (faqat xodim o'zi)"""
     try:
-        # faqat salon admin huquqi
-        if getattr(current_user, "role", None) != "admin" or not getattr(current_user, "salon_id", None):
+        # Faqat xodimga ruxsat
+        if getattr(current_user, "role", None) != "employee":
             raise HTTPException(
                 status_code=403,
                 detail=get_translation(language, "errors.403")
@@ -832,40 +832,32 @@ async def bulk_update_employee_waiting_status(
                 status_code=400,
                 detail=get_translation(language, "errors.400")
             )
-        
-        # Faqat shu adminning salonidagi xodimlarni yangilash
-        allowed_employees = db.query(Employee).filter(
-            and_(
-                Employee.id.in_(status_data.employee_ids),
-                Employee.salon_id == current_user.salon_id
-            )
-        ).all()
 
-        allowed_ids = [emp.id for emp in allowed_employees]
-
-        updated_count = 0
-        if allowed_ids:
-            updated_count = db.query(Employee).filter(
-                Employee.id.in_(allowed_ids)
-            ).update(
-                {"is_waiting": status_data.is_waiting},
-                synchronize_session=False
+        # Faqat o'z ID sini o'zgartirishga ruxsat
+        if str(current_user.id) not in [str(eid) for eid in status_data.employee_ids]:
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
             )
-        
+
+        employee = db.query(Employee).filter(Employee.id == current_user.id).first()
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404")
+            )
+
+        employee.is_waiting = status_data.is_waiting
         db.commit()
-        
+
         return SuccessResponse(
             success=True,
             message=get_translation(language, "success"),
-            data={
-                "updated_count": updated_count,
-                "employee_ids": [str(id) for id in allowed_ids],
-                "is_waiting": status_data.is_waiting
-            }
+            data={"updated_count": 1, "employee_id": str(current_user.id), "is_waiting": status_data.is_waiting}
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=500,
@@ -880,10 +872,17 @@ async def update_employee_waiting_status(
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Update employee waiting status (faqat salon admin)"""
+    """Update employee waiting status (faqat xodim o'zi)"""
     try:
-        # faqat salon admin huquqi
-        if getattr(current_user, "role", None) != "admin" or not getattr(current_user, "salon_id", None):
+        # Faqat xodimga ruxsat
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
+            )
+
+        # Faqat o'zini o'zgartira oladi
+        if str(current_user.id) != str(employee_id):
             raise HTTPException(
                 status_code=403,
                 detail=get_translation(language, "errors.403")
@@ -896,13 +895,6 @@ async def update_employee_waiting_status(
                 detail=get_translation(language, "errors.404")
             )
         
-        # faqat o'z salonidagi xodimni o'zgartirish
-        if str(employee.salon_id) != str(current_user.salon_id):
-            raise HTTPException(
-                status_code=403,
-                detail=get_translation(language, "errors.403")
-            )
-        
         employee.is_waiting = status_data.is_waiting
         db.commit()
         
@@ -913,7 +905,7 @@ async def update_employee_waiting_status(
         )
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=500,

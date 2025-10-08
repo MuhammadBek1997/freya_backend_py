@@ -51,16 +51,7 @@ Oldindan shartlar
 ```
 {
   "salon_name": "Freya Test Salon",
-  "salon_phone": "+998901234567",
-  "salon_instagram": "freya_salon",
-  "salon_rating": 5,
-  "salon_types": [],
-  "location": {"latitude": 41.0, "longitude": 64.0},
-  "salon_comfort": [],
-  "is_private": false,
-  "description_uz": "Test salon", "description_ru": "Test", "description_en": "Test",
-  "address_uz": "Toshkent", "address_ru": "Tashkent", "address_en": "Tashkent",
-  "orientation_uz": "Markaz", "orientation_ru": "Center", "orientation_en": "Center"
+  "private_salon": false
 }
 ```
 - Javobdan `salon_id` ni oling: `<SALON_ID>`.

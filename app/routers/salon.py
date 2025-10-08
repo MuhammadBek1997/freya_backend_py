@@ -96,7 +96,7 @@ async def create_salon(
     try:
         # Get salon data
         salon_name = salon_data.salon_name
-        salon_phone = salon_data.salon_phone
+        salon_phone = getattr(salon_data, 'salon_phone', None)
         
         if not salon_name or salon_name.strip() == '':
             raise HTTPException(
@@ -105,12 +105,14 @@ async def create_salon(
             )
         
         # Set default values (also when provided lists are empty)
+        salon_types_input = getattr(salon_data, 'salon_types', None)
         salon_types = (
-            salon_data.salon_types if (salon_data.salon_types and len(salon_data.salon_types) > 0) else DEFAULT_SALON_TYPES
+            salon_types_input if (salon_types_input and len(salon_types_input) > 0) else DEFAULT_SALON_TYPES
         )
         # Location: handle cases where Location object is provided but empty
-        if salon_data.location and hasattr(salon_data.location, 'dict'):
-            loc_dict = salon_data.location.dict()
+        loc_value = getattr(salon_data, 'location', None)
+        if loc_value and hasattr(loc_value, 'dict'):
+            loc_dict = loc_value.dict()
             lat_val = loc_dict.get('latitude')
             lng_val = loc_dict.get('longitude')
             if lat_val is None or lng_val is None:
@@ -120,83 +122,100 @@ async def create_salon(
                 location_dict = {"lat": lat_val, "lng": lng_val}
         else:
             location_dict = DEFAULT_LOCATION
+        salon_comfort_input = getattr(salon_data, 'salon_comfort', None)
         salon_comfort = (
-            salon_data.salon_comfort if (salon_data.salon_comfort and len(salon_data.salon_comfort) > 0) else DEFAULT_SALON_COMFORT
+            salon_comfort_input if (salon_comfort_input and len(salon_comfort_input) > 0) else DEFAULT_SALON_COMFORT
         )
         
         # Convert Pydantic models to dict for JSON storage
         salon_types_dict = [st.dict() if hasattr(st, 'dict') else st for st in salon_types]
         salon_comfort_dict = [sc.dict() if hasattr(sc, 'dict') else sc for sc in salon_comfort]
-        # Auto-translate description to all languages
-        description_lang = await translation_service.detect_language(salon_data.salon_description)
-        if description_lang.get('success'):
-            detected_lang = description_lang['data']['language']
-        else:
-            detected_lang = 'uz'  # Default to Uzbek if detection fails
-        translates = await translation_service.translate_to_all_languages(
-            text=salon_data.salon_description or salon_data.description,
-            source_language=detected_lang
-        )
-        if translates.get('success'):
-            translations = translates['data']['translations']
-            description_uz = translations.get('uz', salon_data.salon_description)
-            description_ru = translations.get('ru', salon_data.salon_description)
-            description_en = translations.get('en', salon_data.salon_description)
-        else:
-            description_uz = salon_data.salon_description
-            description_ru = salon_data.salon_description
-            description_en = salon_data.salon_description
+        # Prepare optional text fields and safely apply translations only when provided
+        salon_instagram = getattr(salon_data, 'salon_instagram', None)
+        salon_rating_val = getattr(salon_data, 'salon_rating', None) or Decimal('0')
+        description_input = (getattr(salon_data, 'salon_description', None) or getattr(salon_data, 'description', None) or '')
+        address_input = (getattr(salon_data, 'address', None) or '')
+        orientation_input = (getattr(salon_data, 'orientation', None) or '')
 
-        address_lang = await translation_service.detect_language(salon_data.address)
-        if address_lang.get('success'):
-            detected_lang = address_lang['data']['language']
+        # Auto-translate description to all languages when provided
+        if description_input:
+            description_lang = await translation_service.detect_language(description_input)
+            detected_lang = description_lang['data']['language'] if description_lang.get('success') else 'uz'
+            translates = await translation_service.translate_to_all_languages(
+                text=description_input,
+                source_language=detected_lang
+            )
+            if translates.get('success'):
+                translations = translates['data']['translations']
+                description_uz = translations.get('uz', description_input)
+                description_ru = translations.get('ru', description_input)
+                description_en = translations.get('en', description_input)
+            else:
+                description_uz = description_input
+                description_ru = description_input
+                description_en = description_input
         else:
-            detected_lang = 'uz'  # Default to Uzbek if detection fails
-        translates = await translation_service.translate_to_all_languages(
-            text=salon_data.address or salon_data.address,
-            source_language=detected_lang
-        )
-        if translates.get('success'):
-            translations = translates['data']['translations']
-            address_uz = translations.get('uz', salon_data.address)
-            address_ru = translations.get('ru', salon_data.address)
-            address_en = translations.get('en', salon_data.address)
+            description_uz = None
+            description_ru = None
+            description_en = None
+
+        # Auto-translate address when provided
+        if address_input:
+            address_lang = await translation_service.detect_language(address_input)
+            detected_lang = address_lang['data']['language'] if address_lang.get('success') else 'uz'
+            translates = await translation_service.translate_to_all_languages(
+                text=address_input,
+                source_language=detected_lang
+            )
+            if translates.get('success'):
+                translations = translates['data']['translations']
+                address_uz = translations.get('uz', address_input)
+                address_ru = translations.get('ru', address_input)
+                address_en = translations.get('en', address_input)
+            else:
+                address_uz = address_input
+                address_ru = address_input
+                address_en = address_input
         else:
-            address_uz = salon_data.address
-            address_ru = salon_data.address
-            address_en = salon_data.address
-        orentation_lang = await translation_service.detect_language(salon_data.orientation)
-        if orentation_lang.get('success'):
-            detected_lang = orentation_lang['data']['language']
+            address_uz = None
+            address_ru = None
+            address_en = None
+
+        # Auto-translate orientation when provided
+        if orientation_input:
+            orentation_lang = await translation_service.detect_language(orientation_input)
+            detected_lang = orentation_lang['data']['language'] if orentation_lang.get('success') else 'uz'
+            translates = await translation_service.translate_to_all_languages(
+                text=orientation_input,
+                source_language=detected_lang
+            )
+            if translates.get('success'):
+                translations = translates['data']['translations']
+                orientation_uz = translations.get('uz', orientation_input)
+                orientation_ru = translations.get('ru', orientation_input)
+                orientation_en = translations.get('en', orientation_input)
+            else:
+                orientation_uz = orientation_input
+                orientation_ru = orientation_input
+                orientation_en = orientation_input
         else:
-            detected_lang = 'uz'  # Default to Uzbek if detection fails
-        translates = await translation_service.translate_to_all_languages(
-            text=salon_data.orientation or salon_data.orientation,
-            source_language=detected_lang
-        )
-        if translates.get('success'):
-            translations = translates['data']['translations']
-            orientation_uz = translations.get('uz', salon_data.orientation)
-            orientation_ru = translations.get('ru', salon_data.orientation)
-            orientation_en = translations.get('en', salon_data.orientation)
-        else:
-            orientation_uz = salon_data.orientation
-            orientation_ru = salon_data.orientation
-            orientation_en = salon_data.orientation
+            orientation_uz = None
+            orientation_ru = None
+            orientation_en = None
         # Create new salon
         new_salon = Salon(
             salon_name=salon_name,
             salon_phone=salon_phone,
-            salon_instagram=salon_data.salon_instagram,
-            salon_rating=salon_data.salon_rating or Decimal('0'),
+            salon_instagram=salon_instagram,
+            salon_rating=salon_rating_val,
             salon_types=salon_types_dict,
             private_salon=salon_data.private_salon or False,
             location=location_dict,
             salon_comfort=salon_comfort_dict,
-            salon_sale=salon_data.salon_sale,
-            logo=salon_data.logo,
+            salon_sale=getattr(salon_data, 'salon_sale', None),
+            logo=getattr(salon_data, 'logo', None),
             is_active=True,
-            is_private=salon_data.is_private or False,
+            is_private=getattr(salon_data, 'is_private', None) or False,
 
             description_uz=description_uz,
             description_ru=description_ru,
