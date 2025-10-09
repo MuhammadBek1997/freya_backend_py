@@ -45,6 +45,8 @@ class SalonDetailResponse(BaseModel):
     is_active: bool
     is_top: bool
     rating: Optional[float] = None
+    salon_types: List[dict] = []
+    salon_comfort: List[dict] = []
     photos: List[str] = []
     services: List[dict] = []
     employees: List[dict] = []
