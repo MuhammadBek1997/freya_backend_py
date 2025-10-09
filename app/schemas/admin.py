@@ -41,6 +41,7 @@ class SalonDetailResponse(BaseModel):
     address: str
     phone: str
     email: Optional[str] = None
+    logo: Optional[str] = None
     description: Optional[str] = None
     is_active: bool
     is_top: bool

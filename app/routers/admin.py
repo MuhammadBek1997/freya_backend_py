@@ -322,13 +322,14 @@ async def get_my_salon(
             address=salon.address_uz or salon.address_ru or salon.address_en or "",
             phone=salon.salon_phone or "",
             email="",
+            logo=salon.logo or "",
             salon_types=salon.salon_types or [],
             salon_comfort=salon.salon_comfort or [],
             description=(salon.description_uz or salon.description_ru or salon.description_en or ""),
             is_active=salon.is_active,
             is_top=salon.is_top,
             rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
-            photos=[],
+            photos=salon.photos or [],
             services=[
                 {
                     "id": str(service.id),
