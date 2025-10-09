@@ -428,6 +428,7 @@ async def get_employee_by_id_mobile(
         id=str(employee.id),
         name=full_name,
         avatar=employee.avatar_url,
+        phone=employee.phone,
         position=employee.profession,
         works=int(works),
         reviews_count=int(reviews_count),
