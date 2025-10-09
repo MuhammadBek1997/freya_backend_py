@@ -79,16 +79,16 @@ async def upload_photos(
             detail=get_translation(language, "errors.500")
         )
 
-# @router.get("/{filename}")
-# async def get_photo(filename: str):
-#     """Fayl nomi orqali rasmni ochish."""
-#     photos_dir = os.path.join(os.getcwd(), "photos")
-#     file_path = os.path.join(photos_dir, filename)
+@router.get("/{filename}")
+async def get_photo(filename: str):
+    """Fayl nomi orqali rasmni ochish."""
+    photos_dir = os.path.join(os.getcwd(), "photos")
+    file_path = os.path.join(photos_dir, filename)
     
-#     if not os.path.isfile(file_path):
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND, 
-#             detail="Rasm topilmadi"
-#         )
+    if not os.path.isfile(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Rasm topilmadi"
+        )
     
-#     return FileResponse(file_path)
+    return FileResponse(file_path)
