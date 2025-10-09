@@ -245,6 +245,12 @@ class MobileSalonItem(BaseModel):
     class Config:
         from_attributes = True
 
+# Mobile-specific salon list response with pagination
+class MobileSalonListResponse(BaseModel):
+    success: bool
+    data: List[MobileSalonItem]
+    pagination: dict
+
 # Mobile-specific detailed address schema
 class MobileAddressInfo(BaseModel):
     name: Optional[str] = None

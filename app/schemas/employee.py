@@ -187,6 +187,7 @@ class MobileEmployeeDetailResponse(BaseModel):
     id: str
     name: str
     avatar: Optional[str] = None
+    phone: Optional[str] = None
     position: Optional[str] = None
     works: int = 0
     reviews_count: int = 0

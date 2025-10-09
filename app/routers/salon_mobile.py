@@ -8,7 +8,7 @@ import uuid
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
-from app.schemas.salon import MobileSalonItem, MobileSalonDetailResponse, MobileAddressInfo
+from app.schemas.salon import MobileSalonItem, MobileSalonDetailResponse, MobileAddressInfo, MobileSalonListResponse
 from app.models.employee import Employee, EmployeeComment
 from app.models.schedule import Schedule
 from app.models.appointment import Appointment
@@ -351,7 +351,7 @@ def _build_mobile_detail(
     )
 
 
-@router.get("/", response_model=List[MobileSalonItem])
+@router.get("/", response_model=MobileSalonListResponse)
 async def get_all_salons_mobile(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -383,8 +383,22 @@ async def get_all_salons_mobile(
             is_private_value = is_private.lower() == 'true'
             query = query.filter(Salon.private_salon == is_private_value)
 
+        # Count total for pagination
+        total = query.count()
+
         salons = query.order_by(Salon.created_at.desc()).offset(offset).limit(limit).all()
-        return [_build_mobile_item(s, language, db, userId) for s in salons]
+        items = [_build_mobile_item(s, language, db, userId) for s in salons]
+
+        return MobileSalonListResponse(
+            success=True,
+            data=items,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            },
+        )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
