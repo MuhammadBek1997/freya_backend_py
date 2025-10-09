@@ -27,6 +27,7 @@ from app.routers.salon_mobile import router as mobile_router
 from app.routers.city import router as city_router
 from app.routers.mobile_employees import router as mobile_employees_router
 from app.routers.mobile_schedules import router as mobile_schedules_router
+from app.routers.comments import router as comments_router
 
 
 
@@ -150,6 +151,7 @@ app.include_router(mobile_employees_router, prefix="/api")
 app.include_router(mobile_schedules_router, prefix="/api")
 app.include_router(messages_router, prefix="/api")
 app.include_router(city_router, prefix="/api")
+app.include_router(comments_router, prefix="/api")
 
 
 # Static files

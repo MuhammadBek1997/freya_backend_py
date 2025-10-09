@@ -2,6 +2,7 @@
 from .admin import Admin
 from .user import User
 from .salon import Salon
+from .salon_comment import SalonComment
 from .employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
 from .schedule import Schedule
 from .message import Message
@@ -28,6 +29,7 @@ __all__ = [
     "Admin",
     "User", 
     "Salon",
+    "SalonComment",
     "Employee",
     "EmployeeComment",
     "EmployeePost",

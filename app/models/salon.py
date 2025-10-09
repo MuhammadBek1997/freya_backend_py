@@ -42,3 +42,4 @@ class Salon(BaseModel):
     translations = relationship("SalonTranslation", back_populates="salon", cascade="all, delete-orphan")
     favourited_by_users = relationship("UserFavouriteSalon", back_populates="salon")
     schedule_books = relationship("ScheduleBook", back_populates="salon")
+    comments = relationship("SalonComment", back_populates="salon", cascade="all, delete-orphan")
