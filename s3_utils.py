@@ -17,11 +17,21 @@ s3_client = boto3.client(
     region_name=AWS_REGION
 )
 
+# def upload_file_to_s3(file_obj, filename: str, folder: str = ""):
+#     """Faylni S3 bucketga yuklaydi va URL qaytaradi."""
+#     try:
+#         key = f"{folder}/{filename}" if folder else filename
+#         s3_client.upload_fileobj(file_obj, S3_BUCKET, key, ExtraArgs={"ACL": "public-read"})
+#         file_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{key}"
+#         return file_url
+#     except NoCredentialsError:
+#         raise Exception("AWS Malumotlari topilmadi. .env faylni tekshiring.")
+
 def upload_file_to_s3(file_obj, filename: str, folder: str = ""):
     """Faylni S3 bucketga yuklaydi va URL qaytaradi."""
     try:
         key = f"{folder}/{filename}" if folder else filename
-        s3_client.upload_fileobj(file_obj, S3_BUCKET, key, ExtraArgs={"ACL": "public-read"})
+        s3_client.upload_fileobj(file_obj, S3_BUCKET, key)
         file_url = f"https://{S3_BUCKET}.s3.{AWS_REGION}.amazonaws.com/{key}"
         return file_url
     except NoCredentialsError:

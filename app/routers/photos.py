@@ -9,7 +9,8 @@ from app.i18nMini import get_translation
 from app.middleware.auth import get_current_user
 from app.models.photo import Photo
 from app.schemas.photo import PhotoUploadResponse
-from s3_utils import upload_file_to_s3
+# from s3_utils import upload_file_to_s3  # eski S3 yuklash kodi
+from imgbb_utils import upload_file_to_imgbb
 router = APIRouter(prefix="/photos", tags=["Photos"])
 
 
@@ -42,7 +43,12 @@ async def upload_photos(
             ext = ".jpg" if file.content_type == "image/jpeg" else ".png"
         safe_name = f"{uuid.uuid4().hex}{ext}"
 
-        file_url = upload_file_to_s3(file.file, safe_name, folder="photos")
+        # Eski S3 yuklash
+        # file_url = upload_file_to_s3(file.file, safe_name, folder="photos")
+
+        # ImgBB ga yuklash
+        contents = await file.read()
+        file_url = upload_file_to_imgbb(contents, safe_name)
 
         # DB yozuvini saqlash
         photo = Photo(
@@ -60,7 +66,8 @@ async def upload_photos(
         raise
     except Exception as e:
         db.rollback()
-        print(f"S3 upload error: {e}")
+        # print(f"S3 upload error: {e}")
+        print(f"ImgBB upload error: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")
