@@ -12,8 +12,9 @@ from app.schemas.salon import MobileSalonItem, MobileSalonDetailResponse, Mobile
 from app.models.employee import Employee, EmployeeComment
 from app.models.schedule import Schedule
 from app.models.appointment import Appointment
-from datetime import date, timedelta
+from datetime import datetime, date, timedelta
 from app.models.user_favourite_salon import UserFavouriteSalon
+from app.models.user import User
 
 router = APIRouter(prefix="/mobile/salons", tags=["Mobile Salons"])
 
@@ -355,8 +356,12 @@ def _build_mobile_detail(
 async def get_all_salons_mobile(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
-    search: Optional[str] = Query(None),
-    isTop: Optional[bool] = None,
+    salon_type: Optional[str] = Query(None, description="Salon turini"),
+    search: Optional[str] = Query(None, description="Salon nomi yoki search"),
+    is_favourite: Optional[bool] = False,
+    is_top: Optional[bool] = Query(None, description="Salonni eng yaxshi olish"),
+    is_new: Optional[bool] = Query(None, description="Salonni yangi olish"),
+    distance: Optional[float] = Query(None, ge=0.1, le=100, description="Salonlardan eng yaqinlikligini olish"),
     is_private: Optional[str] = Query(''),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
@@ -368,6 +373,7 @@ async def get_all_salons_mobile(
 
         query = db.query(Salon).filter(Salon.is_active == True)
 
+        # Search filter
         if search:
             query = query.filter(
                 or_(
@@ -376,12 +382,72 @@ async def get_all_salons_mobile(
                 )
             )
 
-        if isTop is not None:
-            query = query.filter(Salon.is_top == isTop)
+        # Salon type filter
+        if salon_type:
+            try:
+                query = query.filter(
+                    func.JSON_CONTAINS(
+                        Salon.salon_types,
+                        f'{{"type": "{salon_type}", "selected": true}}'
+                    )
+                )
+            except Exception:
+                # Fallback: filter in Python after fetching if DB doesn't support JSON_CONTAINS
+                pass
+
+        # Favourite filter
+        if is_favourite and userId:
+            fav_subq = (
+                db.query(UserFavouriteSalon.salon_id)
+                .filter(UserFavouriteSalon.user_id == userId)
+                .scalar_subquery()
+            )
+            query = query.filter(Salon.id.in_(fav_subq))
+
+        # Top filter
+        if is_top is not None:
+            query = query.filter(Salon.is_top == is_top)
+
+        # New filter (created within last 14 days)
+        if is_new:
+            try:
+                threshold = datetime.utcnow() - timedelta(days=14)
+                query = query.filter(Salon.created_at >= threshold)
+            except Exception:
+                pass
 
         if is_private != '':
             is_private_value = is_private.lower() == 'true'
             query = query.filter(Salon.private_salon == is_private_value)
+
+        # Distance filter relative to user's coordinates
+        if distance:
+            try:
+                user_lat = None
+                user_lng = None
+                if userId:
+                    u = db.query(User).filter(User.id == userId).first()
+                    if u and u.latitude is not None and u.longitude is not None:
+                        user_lat = float(u.latitude)
+                        user_lng = float(u.longitude)
+                if user_lat is not None and user_lng is not None:
+                    all_current = query.all()
+                    near_ids: List[int] = []
+                    for s in all_current:
+                        try:
+                            if s.location and 'lat' in s.location and 'lng' in s.location:
+                                s_lat = float(s.location['lat'])
+                                s_lng = float(s.location['lng'])
+                                d_km = calculate_distance(user_lat, user_lng, s_lat, s_lng)
+                                if d_km <= float(distance):
+                                    near_ids.append(s.id)
+                        except Exception:
+                            continue
+                    if near_ids:
+                        query = db.query(Salon).filter(Salon.id.in_(near_ids))
+                # If user coords missing, skip distance filter silently
+            except Exception:
+                pass
 
         # Count total for pagination
         total = query.count()
