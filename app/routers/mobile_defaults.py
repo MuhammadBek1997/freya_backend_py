@@ -42,6 +42,10 @@ async def filter_with_defaults_mobile(
         None,
         description="DEFAULT_SALON_COMFORT formatidagi JSON massiv (string sifatida)",
     ),
+    # Yangi filtrlar
+    top: Optional[bool] = Query(None, description="Top salonlarni ko'rsatish (is_top=True)"),
+    discount: Optional[bool] = Query(None, description="Chegirmali salonlarni ko'rsatish (salon_sale mavjud)"),
+    recommended: Optional[bool] = Query(None, description="Tavsiya etilgan salonlarni ko'rsatish (yuqori rating)"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -161,6 +165,18 @@ async def filter_with_defaults_mobile(
             salons = [s for s in salons if _amenity_flag(s, canonical, aliases=aliases)]
 
         # Eski boolean comfort flaglar bilan alohida filtrlash ham olib tashlandi
+
+        # Top salonlar filtri
+        if top is True:
+            salons = [s for s in salons if s.is_top is True]
+
+        # Chegirmali salonlar filtri
+        if discount is True:
+            salons = [s for s in salons if s.salon_sale is not None and len(s.salon_sale) > 0]
+
+        # Tavsiya etilgan salonlar filtri (yuqori rating)
+        if recommended is True:
+            salons = [s for s in salons if s.salon_rating is not None and s.salon_rating >= 4.0]
 
         total = len(salons)
         offset = (page - 1) * limit
