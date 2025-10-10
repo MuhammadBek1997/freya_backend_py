@@ -542,6 +542,11 @@ async def get_nearby_salons_mobile(
     latitude: float = Query(...),
     longitude: float = Query(...),
     radius: float = Query(10.0, ge=0.1, le=100),
+    salon_type: Optional[str] = Query(None, description="Salon turini"),
+    search: Optional[str] = Query(None, description="Salon nomi yoki search"),
+    is_favourite: Optional[bool] = False,
+    is_top: Optional[bool] = Query(None, description="Salonni eng yaxshi olish"),
+    is_new: Optional[bool] = Query(None, description="Salonni yangi olish"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     is_private: Optional[str] = Query(''),
@@ -579,6 +584,43 @@ async def get_nearby_salons_mobile(
             except Exception:
                 continue
 
+        # Additional filters
+        if search:
+            nearby = [s for s in nearby if (
+                (s.salon_name and search.lower() in s.salon_name.lower()) or
+                (s.salon_description and search.lower() in s.salon_description.lower())
+            )]
+
+        if salon_type:
+            filtered_nearby: List[Salon] = []
+            for s in nearby:
+                try:
+                    st = s.salon_types or []
+                    if any(t.get("type") == salon_type and t.get("selected") for t in st):
+                        filtered_nearby.append(s)
+                except Exception:
+                    continue
+            nearby = filtered_nearby
+
+        if is_favourite and userId:
+            fav_ids = (
+                db.query(UserFavouriteSalon.salon_id)
+                .filter(UserFavouriteSalon.user_id == userId)
+                .all()
+            )
+            fav_set = {sid for (sid,) in fav_ids}
+            nearby = [s for s in nearby if s.id in fav_set]
+
+        if is_top is not None:
+            nearby = [s for s in nearby if s.is_top == is_top]
+
+        if is_new:
+            try:
+                threshold = datetime.utcnow() - timedelta(days=14)
+                nearby = [s for s in nearby if getattr(s, "created_at", None) and s.created_at >= threshold]
+            except Exception:
+                pass
+
         offset = (page - 1) * limit
         salons = nearby[offset: offset + limit]
         return [_build_mobile_item(s, language, db, userId) for s in salons]
@@ -596,9 +638,15 @@ async def filter_salons_mobile(
     only_women: bool = None,
     only_female: bool = None,
     types: Optional[str] = Query(None, description="Comma-separated salon types"),
+    salon_type: Optional[str] = Query(None, description="Salon turini"),
+    search: Optional[str] = Query(None, description="Salon nomi yoki search"),
+    is_favourite: Optional[bool] = False,
+    is_top: Optional[bool] = Query(None, description="Salonni eng yaxshi olish"),
+    is_new: Optional[bool] = Query(None, description="Salonni yangi olish"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
+    distance: Optional[float] = Query(None, ge=0.1, le=100, description="Salonlardan eng yaqinlikligini olish"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -613,6 +661,9 @@ async def filter_salons_mobile(
         return_values = query.all()
         # Filter by distance
         if latitude or longitude:
+            # If distance provided, override radius for consistency with web filters
+            if distance is not None:
+                radius = float(distance)
             if not (-90 <= latitude <= 90):
                 print("Latitude out of range")
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
@@ -631,11 +682,81 @@ async def filter_salons_mobile(
                             nearby.append(salon)
                 except Exception:
                     continue
+
+            # Apply additional filters before pagination and mapping
+            if search:
+                nearby = [s for s in nearby if (
+                    (s.salon_name and search.lower() in s.salon_name.lower()) or
+                    (s.salon_description and search.lower() in s.salon_description.lower())
+                )]
+
+            if salon_type:
+                filtered_nearby: List[Salon] = []
+                for s in nearby:
+                    try:
+                        st = s.salon_types or []
+                        if any(t.get("type") == salon_type and t.get("selected") for t in st):
+                            filtered_nearby.append(s)
+                    except Exception:
+                        continue
+                nearby = filtered_nearby
+
+            if is_favourite and userId:
+                fav_ids = (
+                    db.query(UserFavouriteSalon.salon_id)
+                    .filter(UserFavouriteSalon.user_id == userId)
+                    .all()
+                )
+                fav_set = {sid for (sid,) in fav_ids}
+                nearby = [s for s in nearby if s.id in fav_set]
+
+            if is_top is not None:
+                nearby = [s for s in nearby if s.is_top == is_top]
+
+            if is_new:
+                try:
+                    threshold = datetime.utcnow() - timedelta(days=14)
+                    nearby = [s for s in nearby if getattr(s, "created_at", None) and s.created_at >= threshold]
+                except Exception:
+                    pass
             offset = (page - 1) * limit
             salons = nearby[offset: offset + limit]
             nearby = [_build_mobile_item(s, language, db, userId) for s in salons]
 
             return_values = nearby
+        else:
+            # Apply filters on full list when no coordinates provided
+            if search:
+                return_values = [s for s in return_values if (
+                    (s.salon_name and search.lower() in s.salon_name.lower()) or
+                    (s.salon_description and search.lower() in s.salon_description.lower())
+                )]
+            if salon_type:
+                filtered: List[Salon] = []
+                for s in return_values:
+                    try:
+                        st = s.salon_types or []
+                        if any(t.get("type") == salon_type and t.get("selected") for t in st):
+                            filtered.append(s)
+                    except Exception:
+                        continue
+                return_values = filtered
+            if is_favourite and userId:
+                fav_ids = (
+                    db.query(UserFavouriteSalon.salon_id)
+                    .filter(UserFavouriteSalon.user_id == userId)
+                    .all()
+                )
+                fav_set = {sid for (sid,) in fav_ids}
+                return_values = [s for s in return_values if s.id in fav_set]
+            if is_top is not None:
+                return_values = [s for s in return_values if s.is_top == is_top]
+            if is_new:
+                try:
+                    threshold = datetime.utcnow() - timedelta(days=14)
+                    return_values = [s for s in return_values if getattr(s, "created_at", None) and s.created_at >= threshold]
+                except Exception:
+                    pass
         if types:
             selected_types = [t.strip().lower() for t in types.split(",") if t.strip()]
             filtered = []
