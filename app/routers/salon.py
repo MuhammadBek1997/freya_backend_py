@@ -459,17 +459,54 @@ async def get_all_active_salons(
     limit: int = Query(10, ge=1, le=100),
     language: Union[str, None] = Header(None, alias="X-User-language"),
     curent_user: User = Depends(get_current_user),
+    salon_type: Optional[str] = Query(None, description="Salon turini"),
+    search: Optional[str] = Query(None, description="Salon nomi yoki search"),
+    is_favourite: Optional[bool] = False,
+    is_top: Optional[bool] = Query(None, description="Salonni eng yaxshi olish"),
+    is_new: Optional[bool] = Query(None, description="Salonni yangi olish"),
+    distance: Optional[float] = Query(None, ge=0.1, le=100, description="Salonlardan eng yaqinlikligini olish"),
 ):
     offset = (page - 1) * limit
     total = db.query(func.count(Salon.id)).filter(Salon.is_active == True).count()
-    salons = (
-        db.query(Salon)
-        .filter(Salon.is_active == True)
-        .order_by(desc(Salon.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    salons_query = db.query(Salon).filter(Salon.is_active == True)
+    if salon_type:
+        salons_query = salons_query.filter(
+            func.JSON_CONTAINS(
+                Salon.salon_types, f'{{"type": "{salon_type}", "selected": true}}'
+            )
+        )
+    if search:
+        salons_query = salons_query.filter(
+            or_(
+                Salon.salon_name.ilike(f"%{search}%"),
+            )
+        )
+    if is_favourite is not None:
+        user_id = str(curent_user.id)
+        salons_query = salons_query.filter(
+            Salon.id.in_(
+                db.query(UserFavouriteSalon.salon_id)
+                .filter(UserFavouriteSalon.user_id == user_id)
+                .scalar_subquery()
+            )
+        )
+    if is_top is not None:
+        salons_query = salons_query.filter(Salon.is_top == is_top)
+    if distance:
+        salons = salons_query.all()
+        result = []
+        for salon in salons:
+            if salon.location and "lat" in salon.location and "lng" in salon.location:
+                salon_lat = float(salon.location["lat"])
+                salon_lng = float(salon.location["lng"])
+
+                distance = calculate_distance(curent_user.latitude, curent_user.longitude, salon_lat, salon_lng)
+
+                if distance <= distance:
+                    result.append(salon)
+        salons_query = db.query(Salon).filter(Salon.id.in_(s.id for s in result))
+    salons = salons_query.order_by(desc(Salon.created_at)).offset(offset).limit(limit).all()
+
     result = []
     for salon in salons:
         is_favorite = False
@@ -486,19 +523,7 @@ async def get_all_active_salons(
                 .scalar()
                 is not None
             )
-            rating = (
-                db.query(func.avg(cast(SalonRatings.rating, Float)))
-                .filter(
-                    SalonRatings.salon_id == salon.id,
-                    SalonRatings.rating.op("REGEXP")("^[0-9]+(\\.[0-9]+)?$"),
-                )
-                .scalar()
-            )
-            rated_users_count = (
-                db.query(func.count(SalonRatings.id))
-                .filter(SalonRatings.salon_id == salon.id)
-                .scalar()
-            )
+            print(f"is_favorite: {is_favorite}")
         result.append(
             {
                 "id": str(salon.id),
@@ -520,8 +545,19 @@ async def get_all_active_salons(
                 ),
                 "location": salon.location or {},
                 "photos": salon.photos or [],
-                "rating": rating,
-                "rated_users": rated_users_count,
+                "rating": (
+                    db.query(func.avg(cast(SalonRatings.rating, Float)))
+                    .filter(
+                        SalonRatings.salon_id == salon.id,
+                        SalonRatings.rating.op("REGEXP")("^[0-9]+(\\.[0-9]+)?$"),
+                    )
+                    .scalar()
+                ),
+                "rated_users": (
+                    db.query(func.count(SalonRatings.id))
+                    .filter(SalonRatings.salon_id == salon.id)
+                    .scalar()
+                ),
                 "sale": salon.salon_sale,
                 "description": {
                     "uz": salon.description_uz,
