@@ -25,14 +25,16 @@ def _weekday_short(d: date) -> str:
     return names[d.weekday()]
 
 
-def _build_time_slots(start: Optional[time], end: Optional[time], slot_minutes: int = 30) -> List[str]:
+def _build_time_slots(
+    start: Optional[time], end: Optional[time], slot_minutes: int = 30
+) -> List[str]:
     if not start or not end:
         return []
     dt = datetime.combine(date.today(), start)
     et = datetime.combine(date.today(), end)
     slots: List[str] = []
     while dt <= et:
-        slots.append(dt.strftime("%H:%M"))
+        slots.append({"time": dt.strftime("%H:%M"), "empty_slot": 0})
         dt += timedelta(minutes=slot_minutes)
     return slots
 
@@ -55,16 +57,12 @@ def _build_time_slots(start: Optional[time], end: Optional[time], slot_minutes: 
                                     "directions": [
                                         "Umumiy massaj",
                                         "Sportiv massaj",
-                                        "Manual terapiya"
+                                        "Manual terapiya",
                                     ],
-                                    "times": [
-                                        "7:00-8:00",
-                                        "8:00-9:00",
-                                        "9:00-10:00"
-                                    ],
-                                    "employees": ["Anna", "Sara", "Luybov"]
-                                }
-                            }
+                                    "times": ["7:00-8:00", "8:00-9:00", "9:00-10:00"],
+                                    "employees": ["Anna", "Sara", "Luybov"],
+                                },
+                            },
                         },
                         "ru": {
                             "summary": "Russian example",
@@ -74,16 +72,12 @@ def _build_time_slots(start: Optional[time], end: Optional[time], slot_minutes: 
                                     "directions": [
                                         "Общий массаж",
                                         "Спортивный массаж",
-                                        "Мануальная терапия"
+                                        "Мануальная терапия",
                                     ],
-                                    "times": [
-                                        "7:00-8:00",
-                                        "8:00-9:00",
-                                        "9:00-10:00"
-                                    ],
-                                    "employees": ["Анна", "Сара", "Любовь"]
-                                }
-                            }
+                                    "times": ["7:00-8:00", "8:00-9:00", "9:00-10:00"],
+                                    "employees": ["Анна", "Сара", "Любовь"],
+                                },
+                            },
                         },
                         "en": {
                             "summary": "English example",
@@ -93,22 +87,18 @@ def _build_time_slots(start: Optional[time], end: Optional[time], slot_minutes: 
                                     "directions": [
                                         "General massage",
                                         "Sports massage",
-                                        "Manual therapy"
+                                        "Manual therapy",
                                     ],
-                                    "times": [
-                                        "7:00-8:00",
-                                        "8:00-9:00",
-                                        "9:00-10:00"
-                                    ],
-                                    "employees": ["Anna", "Sara", "Lyubov"]
-                                }
-                            }
-                        }
+                                    "times": ["7:00-8:00", "8:00-9:00", "9:00-10:00"],
+                                    "employees": ["Anna", "Sara", "Lyubov"],
+                                },
+                            },
+                        },
                     }
                 }
             }
         }
-    }
+    },
 )
 async def get_mobile_schedule_filters(
     salon_id: str,
@@ -119,7 +109,10 @@ async def get_mobile_schedule_filters(
 
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
 
     schedules: List[Schedule] = (
         db.query(Schedule)
@@ -144,11 +137,17 @@ async def get_mobile_schedule_filters(
     employee_ids = list(sorted(set(employee_ids)))
     employees = []
     if employee_ids:
-        employees = [e.full_name for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all() if e.full_name]
+        employees = [
+            e.full_name
+            for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
+            if e.full_name
+        ]
 
     return MobileScheduleFiltersResponse(
         success=True,
-        data=MobileScheduleFilters(directions=directions, times=times, employees=employees),
+        data=MobileScheduleFilters(
+            directions=directions, times=times, employees=employees
+        ),
     )
 
 
@@ -159,74 +158,50 @@ async def get_mobile_schedule_filters(
     description="X-User-language (uz|ru|en) headeri bo'yicha ko'p tilli misollar",
     responses={
         200: {
+            "description": "Success",
             "content": {
                 "application/json": {
-                    "examples": {
-                        "uz": {
-                            "summary": "Uzbek example",
-                            "value": {
-                                "success": True,
-                                "data": [
+                    "example": {
+                        "success": True,
+                        "data": [
+                            {
+                                "id": "1",
+                                "salon_id": "1",
+                                "name": "Service 1",
+                                "title": "Title 1",
+                                "price": 100.0,
+                                "date": "2022-10-10",
+                                "day": "Monday",
+                                "employees": [
                                     {
-                                        "id": "sch_123",
-                                        "salon_id": "sal_001",
-                                        "name": "Umumiy massaj TOTAL 90 min",
-                                        "title": "Shaxsiy",
-                                        "price": 345000,
-                                        "date": "2025-10-08",
-                                        "day": "wed",
-                                        "employees": ["Anna", "Sara", "Luybov"],
-                                        "times": ["11:10", "12:50", "15:40"]
+                                        "id": "1",
+                                        "name": "Anna",
+                                        "reviewsCount": 10,
+                                        "rate": 5.0,
+                                        "workType": "Hairstylist",
+                                        "avatar": "https://example.com/anna.jpg"
                                     }
                                 ],
-                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
-                            }
-                        },
-                        "ru": {
-                            "summary": "Russian example",
-                            "value": {
-                                "success": True,
-                                "data": [
+                                "times": [
                                     {
-                                        "id": "sch_123",
-                                        "salon_id": "sal_001",
-                                        "name": "Общий массаж TOTAL 90 мин",
-                                        "title": "Персонально",
-                                        "price": 345000,
-                                        "date": "2025-10-08",
-                                        "day": "wed",
-                                        "employees": ["Анна", "Сара", "Любовь"],
-                                        "times": ["11:10", "12:50", "15:40"]
+                                        "time": "08:00-09:00",
+                                        "empty_slot": False
                                     }
                                 ],
-                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
+                                "onlyCard": False
                             }
-                        },
-                        "en": {
-                            "summary": "English example",
-                            "value": {
-                                "success": True,
-                                "data": [
-                                    {
-                                        "id": "sch_123",
-                                        "salon_id": "sal_001",
-                                        "name": "General massage TOTAL 90 min",
-                                        "title": "Personal",
-                                        "price": 345000,
-                                        "date": "2025-10-08",
-                                        "day": "wed",
-                                        "employees": ["Anna", "Sara", "Lyubov"],
-                                        "times": ["11:10", "12:50", "15:40"]
-                                    }
-                                ],
-                                "pagination": {"page": 1, "limit": 10, "total": 37, "pages": 4}
-                            }
+                        ],
+                        "pagination": {
+                            "page": 1,
+                            "limit": 10,
+                            "total": 100,
+                            "pages": 10
                         }
                     }
                 }
             }
         }
-    }
+    },
 )
 async def get_mobile_schedules_by_salon(
     salon_id: str,
@@ -245,12 +220,17 @@ async def get_mobile_schedules_by_salon(
 
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
 
     offset = (page - 1) * limit
 
     query = db.query(Schedule).filter(Schedule.salon_id == salon_id)
-    count_query = db.query(func.count(Schedule.id)).filter(Schedule.salon_id == salon_id)
+    count_query = db.query(func.count(Schedule.id)).filter(
+        Schedule.salon_id == salon_id
+    )
 
     if date_filter:
         query = query.filter(Schedule.date == date_filter)
@@ -269,34 +249,49 @@ async def get_mobile_schedules_by_salon(
         st = time(hour=start_hour)
         et = time(hour=end_hour)
         query = query.filter(and_(Schedule.start_time <= et, Schedule.end_time >= st))
-        count_query = count_query.filter(and_(Schedule.start_time <= et, Schedule.end_time >= st))
+        count_query = count_query.filter(
+            and_(Schedule.start_time <= et, Schedule.end_time >= st)
+        )
 
     total = count_query.scalar() or 0
     schedules: List[Schedule] = (
-        query.order_by(Schedule.date.asc(), Schedule.start_time.asc()).offset(offset).limit(limit).all()
+        query.order_by(Schedule.date.asc(), Schedule.start_time.asc())
+        .offset(offset)
+        .limit(limit)
+        .all()
     )
 
     # Prepare employee id -> name cache
     emp_cache: dict = {}
-    def get_emp_name(eid: str) -> Optional[str]:
+
+    def get_emp(eid: str) -> Optional[str]:
         if not eid:
             return None
         if eid in emp_cache:
             return emp_cache[eid]
         emp = db.query(Employee).filter(Employee.id == eid).first()
-        name = emp.full_name if emp and emp.full_name else None
-        if name:
-            emp_cache[eid] = name
-        return name
+        return {
+            "id": str(eid),
+            "name": emp.name if emp and emp.name else "",
+            "avatar": emp.avatar_url,  # Placeholder, replace with actual avatar URL if available
+            "workType": emp.profession if emp and emp.profession else "",
+            "rate": emp.rating if emp and emp.rating else 0.0,
+            "reviewsCount": 0,
+        }
+        # name = emp.name if emp and emp.name else None
+        # if name:
+        #     emp_cache[eid] = name
+        # return name
 
     items: List[MobileScheduleServiceItem] = []
     for s in schedules:
         employees: List[str] = []
         if s.employee_list:
             for eid in s.employee_list:
-                n = get_emp_name(str(eid))
-                if n:
-                    employees.append(n)
+                employees.append(get_emp(str(eid)))
+                # n = get_emp_name(str(eid))
+                # if n:
+                #     employees.append(n)
 
         slots = _build_time_slots(s.start_time, s.end_time, slot_minutes)
 
@@ -311,6 +306,7 @@ async def get_mobile_schedules_by_salon(
                 day=_weekday_short(s.date) if s.date else None,
                 employees=employees,
                 times=slots,
+                onlyCard=False
             )
         )
 

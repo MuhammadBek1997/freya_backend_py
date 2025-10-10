@@ -1,6 +1,18 @@
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 
+
+class MobileEmployeeItem(BaseModel):
+    id: str
+    name: Optional[str] = None
+    reviewsCount: Optional[int] = 0
+    rate: Optional[Union[float, int]] = 0.0
+    workType: Optional[str] = None
+    avatar: Optional[str] = None
+
+class TimeslotItem(BaseModel):
+    time: str
+    empty_slot: bool
 
 class MobileScheduleServiceItem(BaseModel):
     id: str
@@ -10,8 +22,10 @@ class MobileScheduleServiceItem(BaseModel):
     price: float
     date: Optional[str] = None
     day: Optional[str] = None
-    employees: List[str] = []
-    times: List[str] = []
+    employees: List[MobileEmployeeItem] = []
+    times: List[TimeslotItem] = []
+    onlyCard: bool = False
+
 
 
 class MobileScheduleListResponse(BaseModel):
