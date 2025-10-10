@@ -37,3 +37,4 @@ class User(BaseModel):
     appointments = relationship("Appointment", back_populates="user")
     favourite_salons = relationship("UserFavouriteSalon", back_populates="user")
     payments = relationship("Payment", back_populates="user")
+    salon_ratings = relationship("SalonRatings", back_populates="user")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, Integer, DECIMAL, JSON
+from sqlalchemy import Column, ForeignKey, String, Boolean, Text, Integer, DECIMAL, JSON
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -43,3 +43,14 @@ class Salon(BaseModel):
     favourited_by_users = relationship("UserFavouriteSalon", back_populates="salon")
     schedule_books = relationship("ScheduleBook", back_populates="salon")
     comments = relationship("SalonComment", back_populates="salon", cascade="all, delete-orphan")
+    ratings = relationship("SalonRatings", back_populates="salon")
+
+class SalonRatings(BaseModel):
+    __tablename__ = "salon_ratings"
+    
+    salon_id = Column(String(36), ForeignKey("salons.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    rating = Column(Text, nullable=False)
+
+    salon = relationship("Salon", back_populates="ratings")
+    user = relationship("User", back_populates="salon_ratings")
