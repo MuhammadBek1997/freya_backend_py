@@ -24,6 +24,7 @@ from app.routers.schedules_router import router as schedule_router
 from app.middleware.cors_proxy import CorsProxyMiddleware
 from app.middleware.language import LanguageMiddleware
 from app.routers.salon_mobile import router as mobile_router
+from app.routers.mobile_defaults import router as mobile_defaults_router
 from app.routers.city import router as city_router
 from app.routers.mobile_employees import router as mobile_employees_router
 from app.routers.mobile_schedules import router as mobile_schedules_router
@@ -147,6 +148,7 @@ app.include_router(schedule_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
 app.include_router(photos_router, prefix="/api")
 app.include_router(mobile_router, prefix="/api")
+app.include_router(mobile_defaults_router, prefix="/api")
 app.include_router(mobile_employees_router, prefix="/api")
 app.include_router(mobile_schedules_router, prefix="/api")
 app.include_router(messages_router, prefix="/api")
