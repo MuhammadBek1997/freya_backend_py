@@ -221,7 +221,7 @@ class PaymentCardUpdate(BaseModel):
 # Response schemas
 class UserResponse(BaseModel):
     id: str
-    username: Optional[str] = None
+    # username: Optional[str] = None
     email: Optional[str] = None
     phone: str
     full_name: Optional[str] = None
