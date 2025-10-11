@@ -179,27 +179,22 @@ async def get_mobile_schedule_filters(
                                         "reviewsCount": 10,
                                         "rate": 5.0,
                                         "workType": "Hairstylist",
-                                        "avatar": "https://example.com/anna.jpg"
+                                        "avatar": "https://example.com/anna.jpg",
                                     }
                                 ],
-                                "times": [
-                                    {
-                                        "time": "08:00-09:00",
-                                        "empty_slot": False
-                                    }
-                                ],
-                                "onlyCard": False
+                                "times": [{"time": "08:00-09:00", "empty_slot": False}],
+                                "onlyCard": False,
                             }
                         ],
                         "pagination": {
                             "page": 1,
                             "limit": 10,
                             "total": 100,
-                            "pages": 10
-                        }
+                            "pages": 10,
+                        },
                     }
                 }
-            }
+            },
         }
     },
 )
@@ -306,7 +301,7 @@ async def get_mobile_schedules_by_salon(
                 day=_weekday_short(s.date) if s.date else None,
                 employees=employees,
                 times=slots,
-                onlyCard=False
+                onlyCard=False,
             )
         )
 
@@ -320,3 +315,65 @@ async def get_mobile_schedules_by_salon(
             "pages": (total + limit - 1) // limit if limit else 1,
         },
     )
+
+
+# @router.get(
+#     "/day/{day}/employee/{employee_id}",
+#     response_model=MobileScheduleServiceItem,
+#     summary="Mobil: Kun va xodim bo'yicha jadval",
+#     description="X-User-language (uz|ru|en) headeri bo'yicha ko'p tilli misollar",
+# )
+# async def get_mobile_schedule_by_day_and_employee(
+#     day: str,
+#     employee_id: str,
+#     db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """Mobil UI uchun employee va kunlik kuni ro'yxati, filtrlash va vaqt slotlari bilan"""
+#     if not employee:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail=get_translation(language, "errors.404"),
+#         )
+#     day_date = datetime.strptime(day, "%Y-%m-%d").date()
+#     query = db.query(Schedule).filter(
+#         and_(
+#             Schedule.date == day_date,
+#             Schedule.employee_list.like(f"%{employee_id}%")
+#         )
+#     )
+#     schedule: Schedule = query.first()
+
+#     if not schedule:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND,
+#             detail=get_translation(language, "errors.404"),
+#         )
+
+#     slots = _build_time_slots(schedule.start_time, schedule.end_time, 30)
+#     employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    
+#     return MobileScheduleServiceItem(
+#         id=str(schedule.id),
+#         salon_id=str(schedule.salon_id),
+#         name=schedule.name,
+#         title=schedule.title,
+#         price=float(schedule.price) if schedule.price is not None else 0.0,
+#         date=str(schedule.date) if schedule.date else None,
+#         day=_weekday_short(schedule.date) if schedule.date else None,
+#         employees=[
+#             {
+#                 "id": employee_id,
+#                 "name": (
+#                     employee.name if employee and employee.name else "Unknown"
+#                 ),
+#                 "avatar": employee.avatar_url,  # Placeholder, replace with actual avatar URL if available
+#                 "workType": employee.profession,  # Placeholder, replace with actual work type if available
+#                 "rate": employee.rating,  # Placeholder, replace with actual rating if available
+#                 "reviewsCount": 0,
+#             }
+#         ],
+#         times=slots,
+#         onlyCard=False,
+#     )
+
