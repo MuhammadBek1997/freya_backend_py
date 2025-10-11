@@ -2,18 +2,35 @@ import math
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func
+from sqlalchemy import desc, func, and_
 from typing import List, Optional, Union
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.employee import Employee, EmployeeComment, EmployeePost
 from app.models.salon import Salon
+from app.models.schedule import Schedule
 from app.schemas.employee import MobileEmployeeListResponse, MobileEmployeeItem, MobileEmployeeDetailResponse
 from app.schemas.salon import MobileSalonItem
 from app.models.appointment import Appointment
 from app.models.user_favourite_salon import UserFavouriteSalon
+
+
+# Schema'lar kun bo'yicha xodimlar ish jadvali uchun
+class EmployeeScheduleItem(BaseModel):
+    employee_id: str
+    employee_name: str
+    service_name: str
+    service_type: Optional[str] = None
+    is_private: bool
+    time: str  # "09:00-18:00" formatida
+
+class DailyEmployeeScheduleResponse(BaseModel):
+    success: bool
+    date: str  # "2024-01-15" formatida
+    data: List[EmployeeScheduleItem]
+    pagination: dict
 
 
 router = APIRouter(prefix="/mobile/employees", tags=["Mobile Employees"])
@@ -514,3 +531,84 @@ async def get_employee_posts(
             status_code=500,
             detail=get_translation(language, "errors.500")
         )
+
+
+@router.get("/schedules/{date}", response_model=DailyEmployeeScheduleResponse)
+async def get_employee_schedules_by_date(
+    date: str,  # "2024-01-15" formatida
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Berilgan kun bo'yicha barcha xodimlarning ish jadvalini qaytaradi"""
+    try:
+        # Date'ni parse qilish
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail=get_translation(language, "errors.400") or "Invalid date format. Use YYYY-MM-DD"
+            )
+
+        # O'sha kun uchun barcha schedule'larni olish
+        schedules = db.query(Schedule).filter(
+            and_(
+                Schedule.date == target_date,
+                Schedule.is_active == True
+            )
+        ).all()
+
+        # Har bir schedule uchun employee ma'lumotlarini olish
+        employee_schedules = []
+        for schedule in schedules:
+            if schedule.employee_list:
+                for employee_id in schedule.employee_list:
+                    # Employee ma'lumotlarini olish
+                    employee = db.query(Employee).filter(
+                        and_(
+                            Employee.id == employee_id,
+                            Employee.is_active == True
+                        )
+                    ).first()
+                    
+                    if employee:
+                        # Salon ma'lumotlarini olish (is_private uchun)
+                        salon = db.query(Salon).filter(Salon.id == schedule.salon_id).first()
+                        
+                        # Time formatini yaratish
+                        start_time = schedule.start_time.strftime("%H:%M") if schedule.start_time else "09:00"
+                        end_time = schedule.end_time.strftime("%H:%M") if schedule.end_time else "18:00"
+                        time_range = f"{start_time}-{end_time}"
+                        
+                        employee_schedules.append(EmployeeScheduleItem(
+                            employee_id=str(employee.id),
+                            employee_name=employee.name or "Unknown",
+                            service_name=schedule.name,
+                            service_type=employee.profession,
+                            is_private=salon.private_salon if salon else False,
+                            time=time_range
+                        ))
+
+        # Pagination
+        total = len(employee_schedules)
+        offset = (page - 1) * limit
+        paginated = employee_schedules[offset: offset + limit]
+
+        return DailyEmployeeScheduleResponse(
+            success=True,
+            date=date,
+            data=paginated,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))

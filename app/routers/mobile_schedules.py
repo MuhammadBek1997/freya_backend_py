@@ -3,18 +3,44 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import List, Optional, Union
 from datetime import date, datetime, time, timedelta
+from pydantic import BaseModel
+import uuid
 
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
 from app.models.schedule import Schedule
 from app.models.employee import Employee
+from app.models.appointment import Appointment
+from app.models.payment_card import PaymentCard
+from app.models.service import Service
 from app.schemas.schedule_mobile import (
     MobileScheduleListResponse,
     MobileScheduleServiceItem,
     MobileScheduleFiltersResponse,
     MobileScheduleFilters,
 )
+
+
+# Appointment yaratish uchun schema'lar
+class MobileAppointmentCreate(BaseModel):
+    salon_id: str
+    service_id: Optional[str] = None  # Service model'dan
+    schedule_id: str
+    employee_id: str
+    application_date: date
+    application_time: time
+    user_name: str
+    phone_number: str
+    only_card: bool = False
+    payment_card_id: Optional[str] = None  # only_card=True bo'lsa majburiy
+    notes: Optional[str] = None
+
+class MobileAppointmentResponse(BaseModel):
+    success: bool
+    message: str
+    appointment_id: Optional[str] = None
+    application_number: Optional[str] = None
 
 
 router = APIRouter(prefix="/mobile/schedules", tags=["Mobile Schedules"])
@@ -351,6 +377,172 @@ async def get_mobile_schedules_by_salon(
 #         )
 
 #     slots = _build_time_slots(schedule.start_time, schedule.end_time, 30)
+
+
+@router.post("/appointments", response_model=MobileAppointmentResponse)
+async def create_appointment(
+    appointment_data: MobileAppointmentCreate,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Yangi appointment yaratish - salon, servis, vaqt, employee va karta tekshirish bilan"""
+    try:
+        # 1. Salon mavjudligini tekshirish
+        salon = db.query(Salon).filter(
+            and_(
+                Salon.id == appointment_data.salon_id,
+                Salon.is_active == True
+            )
+        ).first()
+        
+        if not salon:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404") or "Salon topilmadi"
+            )
+
+        # 2. Schedule mavjudligini tekshirish
+        schedule = db.query(Schedule).filter(
+            and_(
+                Schedule.id == appointment_data.schedule_id,
+                Schedule.salon_id == appointment_data.salon_id,
+                Schedule.date == appointment_data.application_date,
+                Schedule.is_active == True
+            )
+        ).first()
+        
+        if not schedule:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404") or "Jadval topilmadi"
+            )
+
+        # 3. Employee mavjudligini va schedule'da borligini tekshirish
+        employee = db.query(Employee).filter(
+            and_(
+                Employee.id == appointment_data.employee_id,
+                Employee.salon_id == appointment_data.salon_id,
+                Employee.is_active == True
+            )
+        ).first()
+        
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404") or "Xodim topilmadi"
+            )
+        
+        # Employee schedule'da borligini tekshirish
+        if schedule.employee_list and appointment_data.employee_id not in schedule.employee_list:
+            raise HTTPException(
+                status_code=400,
+                detail=get_translation(language, "errors.400") or "Xodim bu jadvalda mavjud emas"
+            )
+
+        # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa)
+        service_name = schedule.name  # Default
+        service_price = float(schedule.price)
+        
+        if appointment_data.service_id:
+            service = db.query(Service).filter(
+                and_(
+                    Service.id == appointment_data.service_id,
+                    Service.salon_id == appointment_data.salon_id,
+                    Service.is_active == True
+                )
+            ).first()
+            
+            if service:
+                service_name = service.name
+                service_price = float(service.price)
+
+        # 5. Karta tekshirish (only_card=True bo'lsa)
+        if appointment_data.only_card:
+            if not appointment_data.payment_card_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Karta ID majburiy"
+                )
+            
+            payment_card = db.query(PaymentCard).filter(
+                and_(
+                    PaymentCard.id == appointment_data.payment_card_id,
+                    PaymentCard.is_active == True
+                )
+            ).first()
+            
+            if not payment_card:
+                raise HTTPException(
+                    status_code=404,
+                    detail=get_translation(language, "errors.404") or "To'lov kartasi topilmadi"
+                )
+
+        # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
+        if schedule.start_time and schedule.end_time:
+            if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas"
+                )
+
+        # 7. Bir xil vaqtda appointment borligini tekshirish
+        existing_appointment = db.query(Appointment).filter(
+            and_(
+                Appointment.schedule_id == appointment_data.schedule_id,
+                Appointment.employee_id == appointment_data.employee_id,
+                Appointment.application_date == appointment_data.application_date,
+                Appointment.application_time == appointment_data.application_time,
+                Appointment.is_cancelled == False
+            )
+        ).first()
+        
+        if existing_appointment:
+            raise HTTPException(
+                status_code=409,
+                detail=get_translation(language, "errors.409") or "Bu vaqtda allaqachon appointment mavjud"
+            )
+
+        # 8. Application number yaratish
+        application_number = f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+
+        # 9. Appointment yaratish
+        new_appointment = Appointment(
+            application_number=application_number,
+            user_name=appointment_data.user_name,
+            phone_number=appointment_data.phone_number,
+            application_date=appointment_data.application_date,
+            application_time=appointment_data.application_time,
+            schedule_id=appointment_data.schedule_id,
+            employee_id=appointment_data.employee_id,
+            service_name=service_name,
+            service_price=service_price,
+            status="pending",
+            notes=appointment_data.notes,
+            is_confirmed=False,
+            is_completed=False,
+            is_cancelled=False
+        )
+
+        db.add(new_appointment)
+        db.commit()
+        db.refresh(new_appointment)
+
+        return MobileAppointmentResponse(
+            success=True,
+            message=get_translation(language, "success.appointment_created") or "Appointment muvaffaqiyatli yaratildi",
+            appointment_id=str(new_appointment.id),
+            application_number=new_appointment.application_number
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error creating appointment: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=get_translation(language, "errors.500") or "Server xatosi"
+        )
 #     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     
 #     return MobileScheduleServiceItem(

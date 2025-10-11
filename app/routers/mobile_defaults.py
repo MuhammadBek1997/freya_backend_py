@@ -2,17 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import Optional, Union, List
-from datetime import datetime, timedelta
 import json
-
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
-from app.models.user_favourite_salon import UserFavouriteSalon
-from app.schemas.salon import MobileSalonItem, MobileSalonListResponse
+from app.schemas.salon import MobileSalonListResponse
 
 # Reuse helpers from mobile salon router to keep item shape consistent
 from app.routers.salon_mobile import _build_mobile_item, _amenity_flag, calculate_distance
+
+
 
 router = APIRouter(prefix="/mobile/defaults", tags=["Mobile Defaults"])
 
