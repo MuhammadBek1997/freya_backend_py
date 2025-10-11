@@ -29,6 +29,7 @@ from app.routers.city import router as city_router
 from app.routers.mobile_employees import router as mobile_employees_router
 from app.routers.mobile_schedules import router as mobile_schedules_router
 from app.routers.comments import router as comments_router
+from app.routers.mobile_noitf import router as mobile_notifications_router
 
 
 
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
     # Startup
     # Create database tables
     Base.metadata.create_all(bind=engine)
+    print("Database tables created")
     # Ensure default superadmin exists after tables are created
     try:
         from app import check_and_create_admin
@@ -154,6 +156,7 @@ app.include_router(mobile_schedules_router, prefix="/api")
 app.include_router(messages_router, prefix="/api")
 app.include_router(city_router, prefix="/api")
 app.include_router(comments_router, prefix="/api")
+app.include_router(mobile_notifications_router, prefix="/api")
 
 
 # Static files
