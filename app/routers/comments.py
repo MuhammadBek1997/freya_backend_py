@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
 from sqlalchemy.orm import Session
 from typing import Union, Optional, List
 
+from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
@@ -30,16 +31,17 @@ async def add_salon_comment(
     request: CommentCreate,
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user: User = Depends(get_current_user),
 ):
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
-
-    user = db.query(User).filter(User.id == request.user_id).first()
+    current_user_id = current_user.id
+    user = db.query(User).filter(User.id == current_user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
-    comment = SalonComment(salon_id=salon_id, user_id=request.user_id, text=request.text, rating=request.rating)
+    comment = SalonComment(salon_id=salon_id, user_id=current_user_id, text=request.text, rating=request.rating)
     db.add(comment)
     db.commit()
     db.refresh(comment)
@@ -118,16 +120,17 @@ async def add_employee_comment(
     request: CommentCreate,
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user: User = Depends(get_current_user),
 ):
     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     if not employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
-
-    user = db.query(User).filter(User.id == request.user_id).first()
+    current_user_id = current_user.id
+    user = db.query(User).filter(User.id == current_user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
-    comment = EmployeeComment(employee_id=employee_id, user_id=request.user_id, text=request.text, rating=request.rating)
+    comment = EmployeeComment(employee_id=employee_id, user_id=current_user_id, text=request.text, rating=request.rating)
     db.add(comment)
     db.commit()
     db.refresh(comment)
@@ -176,6 +179,7 @@ async def get_employee_comments(
             id=str(row.id),
             user_id=str(row.user_id),
             user_name=_user_display_name(user_map.get(row.user_id)),
+            owner_avatar_url=user_map.get(row.user_id).avatar_url if user_map.get(row.user_id) else None,
             text=row.text,
             rating=int(row.rating),
             created_at=row.created_at,
