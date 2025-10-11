@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from typing import Optional, Union, List
@@ -8,6 +9,7 @@ import uuid
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
+from app.models.salon_comment import SalonComment
 from app.schemas.salon import MobileSalonItem, MobileSalonDetailResponse, MobileAddressInfo, MobileSalonListResponse
 from app.models.employee import Employee, EmployeeComment
 from app.models.schedule import Schedule
@@ -60,6 +62,21 @@ DEFAULT_SALON_COMFORT = [
     {"name": "towel", "isActive": False},
     {"name": "kids", "isActive": False}
 ]
+
+
+class CommentItem(BaseModel):
+    id: str
+    userName: str
+    userAvatar: Optional[str]
+    user_id: Optional[str]
+    rating: float
+    comment: str
+    createdAt: Optional[str]
+
+class CommentListResponse(BaseModel):
+    success: bool
+    data: List[CommentItem]
+    pagination: dict
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points using Haversine formula"""
@@ -583,7 +600,58 @@ async def filter_salons_mobile(
             detail=get_translation(language, "errors.500")
         )
 
+@router.get("/comments/{salon_id}", response_model=CommentListResponse)
+async def get_salon_comments_mobile(
+    salon_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    userId: Optional[str] = Query(None),
+):
+    salon = db.query(Salon).filter(and_(Salon.id == salon_id, Salon.is_active == True)).first()
+    if not salon:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404")
+        )
 
+    offset = (page - 1) * limit
+    comments_query = db.query(SalonComment).filter(SalonComment.salon_id == salon_id)
+    total = comments_query.count()
+    comments = comments_query.order_by(SalonComment.created_at.desc()).offset(offset).limit(limit).all()
+
+    items: List[CommentItem] = []
+    for comment in comments:
+        user = db.query(User).filter(User.id == comment.user_id).first()
+        if not user:
+            continue
+
+        user_name = user.full_name if user.full_name else "Anonymous"
+        user_avatar = user.avatar_url if user.avatar_url else None
+        
+
+        items.append(CommentItem(
+            id=str(comment.id),
+            userName=user_name,
+            userAvatar=user_avatar,
+            user_id=str(comment.user_id),
+            rating=float(comment.rating) if comment.rating and str(comment.rating).isdigit() else 0.0,
+            comment=comment.text or "",
+            createdAt=str(comment.created_at) if comment.created_at else None,
+        ))
+
+    return CommentListResponse(
+        success=True,
+        data=items,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total": total
+        }
+    )
+    
+    
 
 
 @router.get("/{salon_id}", response_model=MobileSalonDetailResponse)
