@@ -1,12 +1,14 @@
+import math
 from fastapi import APIRouter, Depends, HTTPException, Header, status, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import desc, func
 from typing import List, Optional, Union
 from datetime import date, timedelta
 
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.models.employee import Employee, EmployeeComment
+from app.models.employee import Employee, EmployeeComment, EmployeePost
 from app.models.salon import Salon
 from app.schemas.employee import MobileEmployeeListResponse, MobileEmployeeItem, MobileEmployeeDetailResponse
 from app.schemas.salon import MobileSalonItem
@@ -446,3 +448,69 @@ async def get_employee_by_id_mobile(
             isFavorite=is_fav,
         ),
     )
+
+
+class EmployeePostListResponse(BaseModel):
+    success: bool
+    data: List[dict]
+    pagination: dict
+
+
+@router.get("/{employee_id}/posts", response_model=EmployeePostListResponse)
+async def get_employee_posts(
+    employee_id: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Get employee posts with pagination"""
+    try:
+        # Check if employee exists
+        employee = db.query(Employee).filter(Employee.id == employee_id).first()
+        if not employee:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404")
+            )
+        
+        offset = (page - 1) * limit
+        
+        # Get total count
+        total_query = db.query(func.count(EmployeePost.id)).filter(EmployeePost.employee_id == employee_id)
+        total = total_query.count() or 0
+        
+        # Get paginated results
+        posts_query = db.query(EmployeePost).filter(EmployeePost.employee_id == employee_id).order_by(desc(EmployeePost.created_at))
+        posts = posts_query.offset(offset).limit(limit).all()
+        
+        # Format response
+        formatted_posts = []
+        for post in posts:
+            post_dict = {
+                "id": str(post.id),
+                "employee_id": str(post.employee_id),
+                "title": post.title,
+                "description": post.description,
+                "is_active": post.is_active,
+                "created_at": post.created_at,
+                "updated_at": post.updated_at,
+            }
+            formatted_posts.append(post_dict)
+        
+        return EmployeePostListResponse(
+            success=True,
+            data=formatted_posts,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": math.ceil(total / limit),
+            },
+        )
+    except Exception as e:
+        print(f"Error fetching employee posts: {e}, traceback: {e.__traceback__.tb_lineno}")
+        return HTTPException(
+            status_code=500,
+            detail=get_translation(language, "errors.500")
+        )
