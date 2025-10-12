@@ -536,12 +536,13 @@ async def get_employee_posts(
 @router.get("/schedules/{date}", response_model=DailyEmployeeScheduleResponse)
 async def get_employee_schedules_by_date(
     date: str,  # "2024-01-15" formatida
+    employee_id: Optional[str] = Query(None, description="Muayyan xodim bo'yicha filtrlash uchun"),
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Berilgan kun bo'yicha barcha xodimlarning ish jadvalini qaytaradi"""
+    """Berilgan kun bo'yicha xodimlarning ish jadvalini qaytaradi. Employee_id berilsa, faqat o'sha xodim ma'lumotlarini qaytaradi."""
     try:
         # Date'ni parse qilish
         try:
@@ -564,11 +565,15 @@ async def get_employee_schedules_by_date(
         employee_schedules = []
         for schedule in schedules:
             if schedule.employee_list:
-                for employee_id in schedule.employee_list:
+                for emp_id in schedule.employee_list:
+                    # Agar employee_id parametri berilgan bo'lsa, faqat o'sha xodimni filtrlash
+                    if employee_id and str(emp_id) != employee_id:
+                        continue
+                    
                     # Employee ma'lumotlarini olish
                     employee = db.query(Employee).filter(
                         and_(
-                            Employee.id == employee_id,
+                            Employee.id == emp_id,
                             Employee.is_active == True
                         )
                     ).first()
