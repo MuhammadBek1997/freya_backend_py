@@ -144,6 +144,7 @@ async def add_employee_comment(
             text=comment.text,
             rating=int(comment.rating),
             created_at=comment.created_at,
+            avatar_url=user.avatar_url,
         ),
     }
 

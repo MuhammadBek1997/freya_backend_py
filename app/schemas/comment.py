@@ -6,7 +6,7 @@ from datetime import datetime
 class CommentCreate(BaseModel):
     # user_id: str = Field(..., description="Kommentariya yozayotgan foydalanuvchi IDsi")
     text: str = Field(..., min_length=1, description="Kommentariya matni")
-    rating: int = Field(..., ge=1, le=5, description="Baholash (1-5)")
+    rating: int = Field(..., ge=1, le=5, description="Baholash (0-5)")
 
 
 class CommentItem(BaseModel):
