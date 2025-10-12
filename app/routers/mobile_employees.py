@@ -501,11 +501,12 @@ async def get_employee_posts(
         posts_query = db.query(EmployeePost).filter(EmployeePost.employee_id == employee_id).order_by(desc(EmployeePost.created_at))
         posts = posts_query.offset(offset).limit(limit).all()
         
-        media_items = db.query(PostMedia).filter(PostMedia.post_id == post.id).all()
+        
 
         # Format response
         formatted_posts = []
         for post in posts:
+            media_items = db.query(PostMedia).filter(PostMedia.post_id == post.id).all()
             post_dict = {
                 "id": str(post.id),
                 "employee_id": str(post.employee_id),
