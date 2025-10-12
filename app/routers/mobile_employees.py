@@ -8,7 +8,7 @@ from datetime import date, timedelta, datetime
 
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.models.employee import Employee, EmployeeComment, EmployeePost
+from app.models.employee import Employee, EmployeeComment, EmployeePost,PostMedia
 from app.models.salon import Salon
 from app.models.schedule import Schedule
 from app.schemas.employee import MobileEmployeeListResponse, MobileEmployeeItem, MobileEmployeeDetailResponse
@@ -501,6 +501,8 @@ async def get_employee_posts(
         posts_query = db.query(EmployeePost).filter(EmployeePost.employee_id == employee_id).order_by(desc(EmployeePost.created_at))
         posts = posts_query.offset(offset).limit(limit).all()
         
+        media_items = db.query(PostMedia).filter(PostMedia.post_id == post.id).all()
+
         # Format response
         formatted_posts = []
         for post in posts:
@@ -510,6 +512,7 @@ async def get_employee_posts(
                 "title": post.title,
                 "description": post.description,
                 "is_active": post.is_active,
+                "media_files": [m.file_path for m in media_items],
                 "created_at": post.created_at,
                 "updated_at": post.updated_at,
             }
