@@ -498,7 +498,10 @@ async def get_employee_posts(
         total = total_query.count() or 0
         
         # Get paginated results
-        posts_query = db.query(EmployeePost).filter(EmployeePost.employee_id == employee_id).order_by(desc(EmployeePost.created_at))
+        # posts_query = db.query(EmployeePost).filter(EmployeePost.employee_id == employee_id).order_by(desc(EmployeePost.created_at))
+        posts_query = db.query(EmployeePost).filter(
+            and_(EmployeePost.employee_id == employee_id, EmployeePost.is_active == True)
+        ).order_by(desc(EmployeePost.created_at))
         posts = posts_query.offset(offset).limit(limit).all()
         
         
