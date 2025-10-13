@@ -168,6 +168,21 @@ class PasswordChangeRequest(BaseModel):
         return v
 
 
+class UserAvatarUpdate(BaseModel):
+    avatar_url: str
+
+    @validator('avatar_url')
+    def validate_avatar_url(cls, v):
+        if not v:
+            raise ValueError('avatar_url talab qilinadi')
+        v = v.strip()
+        if len(v) > 500:
+            raise ValueError('URL uzunligi 500 belgidan oshmasligi kerak')
+        if not (v.startswith('http://') or v.startswith('https://')):
+            raise ValueError("URL noto'g'ri formatda (http yoki https)")
+        return v
+
+
 class PaymentCardAdd(BaseModel):
     card_number: str
     card_holder_name: str

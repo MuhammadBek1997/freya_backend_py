@@ -208,7 +208,7 @@ async def get_mobile_schedule_filters(
                                         "avatar": "https://example.com/anna.jpg",
                                     }
                                 ],
-                                "times": [{"time": "08:00-09:00", "empty_slot": False}],
+                                "times": [{"time": "08:00-09:00", "empty_slot": 0}],
                                 "onlyCard": False,
                             }
                         ],

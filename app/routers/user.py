@@ -52,6 +52,7 @@ from app.schemas.user import (
     TokenResponse,
     UserCityResponse,
     UserCityUpdate,
+    UserAvatarUpdate
 )
 from app.schemas.employee import EmployeeResponse
 from app.auth.dependencies import get_current_user, get_current_user_optional
@@ -686,45 +687,35 @@ async def get_current_user_info(
 
 @router.post("/profile/image/upload", response_model=dict)
 async def upload_profile_image(
-    file: UploadFile = File(...),
+    payload: UserAvatarUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
-    Profil rasmini yuklash
+    Profil rasmini URL orqali yuklash (avatar_url). Faqat foydalanuvchi (user)lar uchun.
     """
-    # Validate file type
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_translation(language, "errors.400"),
-        )
+    try:
+        # Faqat userlar uchun ruxsat
+        if getattr(current_user, "role", None) != "user":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
 
-    # Create uploads directory if not exists
-    upload_dir = os.path.join(settings.upload_path, "avatars")
-    os.makedirs(upload_dir, exist_ok=True)
+        # Foydalanuvchi avatarini yangilash
+        current_user.avatar_url = payload.avatar_url.strip()
+        current_user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(current_user)
 
-    # Generate unique filename
-    file_extension = os.path.splitext(file.filename)[1]
-    filename = f"{current_user.id}_{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(upload_dir, filename)
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "avatar_url": current_user.avatar_url,
+        }
 
-    # Save file
-    with open(file_path, "wb") as buffer:
-        content = await file.read()
-        buffer.write(content)
-
-    # Update user avatar URL
-    current_user.avatar_url = f"/uploads/avatars/{filename}"
-    current_user.updated_at = datetime.utcnow()
-    db.commit()
-
-    return {
-        "success": True,
-        "message": get_translation(language, "success"),
-        "avatar_url": current_user.avatar_url,
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # @router.get("/profile/image")

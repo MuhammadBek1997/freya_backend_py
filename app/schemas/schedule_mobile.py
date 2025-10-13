@@ -12,7 +12,7 @@ class MobileEmployeeItem(BaseModel):
 
 class TimeslotItem(BaseModel):
     time: str
-    empty_slot: bool
+    empty_slot: int
 
 class MobileScheduleServiceItem(BaseModel):
     id: str
