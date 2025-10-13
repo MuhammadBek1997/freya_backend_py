@@ -757,16 +757,16 @@ async def delete_profile_image(
 
     # Delete file
 
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    UPLOAD_DIR = os.path.join(BASE_DIR, settings.upload_path, "avatars")
+    # BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # UPLOAD_DIR = os.path.join(BASE_DIR, settings.upload_path, "avatars")
 
-    filename = current_user.avatar_url.split("/")[-1]
-    file_path = (
-        os.path.join(UPLOAD_DIR, filename).replace("\\", "/").replace("/app/", "/")
-    )
-    print(f"Rasm fayli yo'li: {file_path}")
-    if os.path.exists(file_path):
-        os.remove(file_path)
+    # filename = current_user.avatar_url.split("/")[-1]
+    # file_path = (
+    #     os.path.join(UPLOAD_DIR, filename).replace("\\", "/").replace("/app/", "/")
+    # )
+    # print(f"Rasm fayli yo'li: {file_path}")
+    # if os.path.exists(file_path):
+    #     os.remove(file_path)
 
     # Update user
     current_user.avatar_url = None
