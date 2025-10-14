@@ -164,9 +164,9 @@ async def get_mobile_schedule_filters(
     employees = []
     if employee_ids:
         employees = [
-            e.full_name
+            e.name
             for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
-            if e.full_name
+            if e.name
         ]
 
     return MobileScheduleFiltersResponse(
