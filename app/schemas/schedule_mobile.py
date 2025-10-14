@@ -43,3 +43,17 @@ class MobileScheduleFilters(BaseModel):
 class MobileScheduleFiltersResponse(BaseModel):
     success: bool
     data: MobileScheduleFilters
+
+
+# Per-day filters (7 kunlik har kun uchun alohida ro'yxat)
+class MobileScheduleDailyFiltersItem(BaseModel):
+    date: str
+    day: str
+    directions: List[str] = []
+    times: List[str] = []
+    employees: List[str] = []
+
+
+class MobileScheduleDailyFiltersResponse(BaseModel):
+    success: bool
+    data: List[MobileScheduleDailyFiltersItem]

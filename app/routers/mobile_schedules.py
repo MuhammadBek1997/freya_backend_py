@@ -19,6 +19,8 @@ from app.schemas.schedule_mobile import (
     MobileScheduleServiceItem,
     MobileScheduleFiltersResponse,
     MobileScheduleFilters,
+    MobileScheduleDailyFiltersItem,
+    MobileScheduleDailyFiltersResponse,
 )
 
 
@@ -67,7 +69,7 @@ def _build_time_slots(
 
 @router.get(
     "/filters/{salon_id}",
-    response_model=MobileScheduleFiltersResponse,
+    response_model=MobileScheduleDailyFiltersResponse,
     summary="Mobil: Jadval filtrlari",
     description="X-User-language (uz|ru|en) headeri bo'yicha ko'p tilli misollar",
     responses={
@@ -128,10 +130,11 @@ def _build_time_slots(
 )
 async def get_mobile_schedule_filters(
     salon_id: str,
+    start_date: str = Query(..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Mobil UI uchun jadval filtrlari: yo'nalishlar, vaqt oraliqlari, xodimlar"""
+    """Mobil UI uchun 7 kunlik (har kun uchun) jadval filtrlari: yo'nalishlar, vaqt oraliqlari, xodimlar"""
 
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
@@ -140,40 +143,77 @@ async def get_mobile_schedule_filters(
             detail=get_translation(language, "errors.404"),
         )
 
-    schedules: List[Schedule] = (
-        db.query(Schedule)
-        .filter(Schedule.salon_id == salon_id)
-        .filter(Schedule.is_active == True)
-        .order_by(Schedule.date.desc())
-        .all()
-    )
+    # Boshlang'ich sanani tekshirish va 7 kunlik oraliqni hisoblash
+    try:
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid date format. Use YYYY-MM-DD",
+        )
+    end_dt = start_dt + timedelta(days=6)
 
-    directions: List[str] = sorted({s.name for s in schedules if s.name})
+    # 7 kunlik har kun uchun alohida ro'yxat tayyorlash
+    daily_items: List[MobileScheduleDailyFiltersItem] = []
+    day_iter = start_dt
+    while day_iter <= end_dt:
+        day_schedules: List[Schedule] = (
+            db.query(Schedule)
+            .filter(Schedule.salon_id == salon_id)
+            .filter(Schedule.is_active == True)
+            .filter(Schedule.date == day_iter)
+            .order_by(Schedule.start_time.asc())
+            .all()
+        )
 
-    # Vaqt oraliqlari (soatlik segmentlar)
-    start_hour = 7
-    end_hour = 22
-    times: List[str] = [f"{h}:00-{h+1}:00" for h in range(start_hour, end_hour)]
+        # Directions
+        day_directions: List[str] = sorted({s.name for s in day_schedules if s.name})
 
-    # Xodimlar
-    employee_ids: List[str] = []
-    for s in schedules:
-        if s.employee_list:
-            employee_ids.extend([str(eid) for eid in s.employee_list])
-    employee_ids = list(sorted(set(employee_ids)))
-    employees = []
-    if employee_ids:
-        employees = [
-            e.name
-            for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
-            if e.name
-        ]
+        # Times
+        times_set = set()
+        for s in day_schedules:
+            if getattr(s, "start_time", None) and getattr(s, "end_time", None):
+                slots = _build_time_slots(s.start_time, s.end_time, 60)
+                for sl in slots:
+                    t = sl.get("time") if isinstance(sl, dict) else None
+                    if t:
+                        try:
+                            sh, sm = map(int, t.split(":"))
+                            end_h = sh + 1
+                            times_set.add(f"{sh:02d}:{sm:02d}-{end_h:02d}:{sm:02d}")
+                        except Exception:
+                            times_set.add(t)
+        day_times: List[str] = sorted(list(times_set))
 
-    return MobileScheduleFiltersResponse(
+        # Employees
+        employee_ids: List[str] = []
+        for s in day_schedules:
+            if s.employee_list:
+                employee_ids.extend([str(eid) for eid in s.employee_list])
+        employee_ids = list(sorted(set(employee_ids)))
+        day_employees: List[str] = []
+        if employee_ids:
+            day_employees = [
+                (getattr(e, "full_name", None) or getattr(e, "name", None))
+                for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
+                if (getattr(e, "full_name", None) or getattr(e, "name", None))
+            ]
+
+        daily_items.append(
+            MobileScheduleDailyFiltersItem(
+                date=str(day_iter),
+                day=_weekday_short(day_iter),
+                directions=day_directions,
+                times=day_times,
+                employees=day_employees,
+            )
+        )
+
+        day_iter += timedelta(days=1)
+
+    return MobileScheduleDailyFiltersResponse(
         success=True,
-        data=MobileScheduleFilters(
-            directions=directions, times=times, employees=employees
-        ),
+        data=daily_items,
     )
 
 
