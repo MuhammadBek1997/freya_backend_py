@@ -21,6 +21,7 @@ from app.schemas.schedule_mobile import (
     MobileScheduleFilters,
     MobileScheduleDailyFiltersItem,
     MobileScheduleDailyFiltersResponse,
+    DailyEmployeeItem,
 )
 
 
@@ -48,9 +49,7 @@ class MobileAppointmentResponse(BaseModel):
 router = APIRouter(prefix="/mobile/schedules", tags=["Mobile Schedules"])
 
 
-def _weekday_short(d: date) -> str:
-    names = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    return names[d.weekday()]
+
 
 
 def _build_time_slots(
@@ -170,20 +169,7 @@ async def get_mobile_schedule_filters(
         day_directions: List[str] = sorted({s.name for s in day_schedules if s.name})
 
         # Times
-        times_set = set()
-        for s in day_schedules:
-            if getattr(s, "start_time", None) and getattr(s, "end_time", None):
-                slots = _build_time_slots(s.start_time, s.end_time, 60)
-                for sl in slots:
-                    t = sl.get("time") if isinstance(sl, dict) else None
-                    if t:
-                        try:
-                            sh, sm = map(int, t.split(":"))
-                            end_h = sh + 1
-                            times_set.add(f"{sh:02d}:{sm:02d}-{end_h:02d}:{sm:02d}")
-                        except Exception:
-                            times_set.add(t)
-        day_times: List[str] = sorted(list(times_set))
+        
 
         # Employees
         employee_ids: List[str] = []
@@ -191,20 +177,17 @@ async def get_mobile_schedule_filters(
             if s.employee_list:
                 employee_ids.extend([str(eid) for eid in s.employee_list])
         employee_ids = list(sorted(set(employee_ids)))
-        day_employees: List[str] = []
+        day_employees: List[DailyEmployeeItem] = []
         if employee_ids:
-            day_employees = [
-                (getattr(e, "full_name", None) or getattr(e, "name", None))
-                for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all()
-                if (getattr(e, "full_name", None) or getattr(e, "name", None))
-            ]
+            for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all():
+                emp_name = getattr(e, "full_name", None) or getattr(e, "name", None)
+                day_employees.append(DailyEmployeeItem(id=str(e.id), name=emp_name))
 
         daily_items.append(
             MobileScheduleDailyFiltersItem(
                 date=str(day_iter),
-                day=_weekday_short(day_iter),
+                avialable=(len(day_schedules) > 0),
                 directions=day_directions,
-                times=day_times,
                 employees=day_employees,
             )
         )
