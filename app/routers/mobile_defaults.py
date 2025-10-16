@@ -9,13 +9,23 @@ from app.models.salon import Salon
 from app.schemas.salon import MobileSalonListResponse
 
 # Reuse helpers from mobile salon router to keep item shape consistent
-from app.routers.salon_mobile import _build_mobile_item, _amenity_flag, calculate_distance
+from app.routers.salon_mobile import build_mobile_item, calculate_distance
 
 
 
 router = APIRouter(prefix="/mobile/defaults", tags=["Mobile Defaults"])
 
-
+def _amenity_flag(salon: Salon, key: str, aliases: List[str] = []) -> bool:
+    comforts = getattr(salon, "salon_comfort", None) or []
+    try:
+        for c in comforts:
+            name = (c.get("name") or "").lower()
+            is_active = bool(c.get("isActive"))
+            if name == key.lower() or name in [a.lower() for a in aliases]:
+                return is_active
+    except Exception:
+        pass
+    return False
 @router.get("/filter", response_model=MobileSalonListResponse)
 async def filter_with_defaults_mobile(
     # DEFAULT_SALON_TYPES yuborishning 3 usulini qo'llab-quvvatlaymiz
@@ -180,7 +190,7 @@ async def filter_with_defaults_mobile(
         total = len(salons)
         offset = (page - 1) * limit
         paginated = salons[offset: offset + limit]
-        items = [_build_mobile_item(s, language, db, userId) for s in paginated]
+        items = [build_mobile_item(s, language, db, userId) for s in paginated]
 
         return MobileSalonListResponse(
             success=True,
