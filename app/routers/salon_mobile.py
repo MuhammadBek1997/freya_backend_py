@@ -474,6 +474,12 @@ def paginate_results(items: List, page: int, limit: int) -> List:
     offset = (page - 1) * limit
     return items[offset: offset + limit]
 
+
+def paginate_results(items: List, page: int, limit: int) -> List:
+    """Apply pagination to a list of items."""
+    offset = (page - 1) * limit
+    return items[offset: offset + limit]
+
 @router.get("/", response_model=MobileSalonListResponse)
 async def get_all_salons_mobile(
     page: int = Query(1, ge=1),
@@ -679,23 +685,30 @@ async def filter_salons_mobile(
         # Apply distance filter if coordinates provided
         if latitude is not None and longitude is not None:
             salons = filter_by_distance(salons, latitude, longitude, radius)
-            paginated_salons = paginate_results(salons, page, limit)
-            return [
-                _build_mobile_item(salon, language, db, userId)
-                for salon in paginated_salons
-            ]
+            pagination_data = paginate_results(salons, page, limit)
+            
+            return {
+                "data": [
+                    _build_mobile_item(salon, language, db, userId)
+                    for salon in pagination_data["items"]
+                ],
+                "pagination": pagination_data["pagination"]
+            }
         
         # Apply female-only filter (in-memory)
         if only_women or only_female:
             salons = filter_by_female_only(salons)
         
         # Apply pagination
-        paginated_salons = paginate_results(salons, page, limit)
+        pagination_data = paginate_results(salons, page, limit)
         
-        return [
-            _build_mobile_item(salon, language, db, userId)
-            for salon in paginated_salons
-        ]
+        return {
+            "data": [
+                _build_mobile_item(salon, language, db, userId)
+                for salon in pagination_data["items"]
+            ],
+            "pagination": pagination_data["pagination"]
+        }
         
     except HTTPException:
         raise
