@@ -535,6 +535,8 @@ async def get_nearby_salons_mobile(
 async def filter_salons_mobile(
     only_women: bool = None,
     only_female: bool = None,
+    types: Optional[str] = Query(None, description="Comma-separated salon types"),
+    comforts: Optional[str] = Query(None, description="Comma-separated comforts"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -585,9 +587,29 @@ async def filter_salons_mobile(
                 if (only_women and is_women) or (only_female and is_female):
                     filtered.append(salon)
             return_values = filtered
+        types_to_filter = [t.strip() for t in types.split(",")]
+        type_conditions = []
+        for salon_type in types_to_filter:
+            type_conditions.append(
+                func.JSON_CONTAINS(
+                    Salon.salon_types, f'{{"type": "{salon_type}", "selected": true}}'
+                )
+            )
+        if type_conditions:
+            query = query.filter(or_(*type_conditions))
+        
+        comforts_to_filter = [c.strip() for c in comforts.split(",")]
+        comfort_conditions = []
+        for comfort in comforts_to_filter:
+            comfort_conditions.append(
+                func.JSON_CONTAINS(
+                    Salon.salon_comfort, f'{{"name": "{comfort}", "isActive": true}}'
+                )
+            )
+        if comfort_conditions:
+            query = query.filter(or_(*comfort_conditions))
         if not return_values:
             return_values = []
-        
         return return_values
 
 
