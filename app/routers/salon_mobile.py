@@ -630,7 +630,10 @@ async def filter_salons(
         query = apply_comforts_filter(query, comforts)
         query = apply_discount_filter(query, isDiscount)
         
-        salons = query.all()
+        # Paginate
+        total = query.count()
+        offset = (page - 1) * limit
+        salons = query.offset(offset).limit(limit).all()
         
         # Apply in-memory filters
         if only_women or only_female:
@@ -639,9 +642,12 @@ async def filter_salons(
         if latitude is not None and longitude is not None:
             salons = filter_by_distance(salons, latitude, longitude, radius)
         
-        # Paginate and build response
-        paginated = paginate(salons, page, limit)
-        return [build_mobile_item(s, language, db, userId) for s in paginated]
+        # Build response
+        return {
+            "success": True,
+            "data": [build_mobile_item(s, language, db, userId) for s in salons],
+            "pagination": build_pagination_metadata(total, page, limit),
+        }
         
     except HTTPException:
         raise
