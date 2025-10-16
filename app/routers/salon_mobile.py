@@ -369,6 +369,111 @@ def _build_mobile_detail(
     )
 
 
+def validate_coordinates(latitude: Optional[float], longitude: Optional[float], language: str):
+    """Validate latitude and longitude values."""
+    if latitude is not None and not (-90 <= latitude <= 90):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "errors.400")
+        )
+    if longitude is not None and not (-180 <= longitude <= 180):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "errors.400")
+        )
+
+
+def filter_by_distance(
+    salons: List[Salon],
+    latitude: float,
+    longitude: float,
+    radius: float
+) -> List[Salon]:
+    """Filter salons by distance from given coordinates."""
+    nearby = []
+    for salon in salons:
+        try:
+            if not salon.location or 'lat' not in salon.location or 'lng' not in salon.location:
+                continue
+            
+            salon_lat = float(salon.location['lat'])
+            salon_lng = float(salon.location['lng'])
+            distance = calculate_distance(latitude, longitude, salon_lat, salon_lng)
+            
+            if distance <= radius:
+                nearby.append(salon)
+        except (ValueError, TypeError, KeyError):
+            continue
+    
+    return nearby
+
+
+def filter_by_female_only(salons: List[Salon]) -> List[Salon]:
+    """Filter salons that have 'onlyFemale' comfort option active."""
+    filtered = []
+    for salon in salons:
+        comforts = salon.salon_comfort or []
+        has_female_only = any(
+            c.get("name") == "onlyFemale" and c.get("isActive")
+            for c in comforts
+        )
+        if has_female_only:
+            filtered.append(salon)
+    return filtered
+
+
+def apply_types_filter(query, types: Optional[str]):
+    """Apply salon types filter to query."""
+    if not types:
+        return query
+    
+    types_to_filter = [t.strip() for t in types.split(",") if t.strip()]
+    if not types_to_filter:
+        return query
+    
+    type_conditions = [
+        func.JSON_CONTAINS(
+            Salon.salon_types,
+            f'{{"type": "{salon_type}", "selected": true}}'
+        )
+        for salon_type in types_to_filter
+    ]
+    
+    return query.filter(or_(*type_conditions))
+
+
+def apply_comforts_filter(query, comforts: Optional[str]):
+    """Apply comforts filter to query."""
+    if not comforts:
+        return query
+    
+    comforts_to_filter = [c.strip() for c in comforts.split(",") if c.strip()]
+    if not comforts_to_filter:
+        return query
+    
+    comfort_conditions = [
+        func.JSON_CONTAINS(
+            Salon.salon_comfort,
+            f'{{"name": "{comfort}", "isActive": true}}'
+        )
+        for comfort in comforts_to_filter
+    ]
+    
+    return query.filter(or_(*comfort_conditions))
+
+
+def apply_discount_filter(query, isDiscount: Optional[bool]):
+    """Apply discount filter to query."""
+    if isDiscount:
+        return query.filter(Salon.salon_sale.has_key("discount"))
+    return query
+
+
+def paginate_results(items: List, page: int, limit: int) -> List:
+    """Apply pagination to a list of items."""
+    offset = (page - 1) * limit
+    return items[offset: offset + limit]
+
 @router.get("/", response_model=MobileSalonListResponse)
 async def get_all_salons_mobile(
     page: int = Query(1, ge=1),
@@ -533,8 +638,9 @@ async def get_nearby_salons_mobile(
 
 @router.get("/filter")
 async def filter_salons_mobile(
-    only_women: bool = None,
-    only_female: bool = None,
+    only_women: Optional[bool] = None,
+    only_female: Optional[bool] = None,
+    isDiscount: Optional[bool] = None,
     types: Optional[str] = Query(None, description="Comma-separated salon types"),
     comforts: Optional[str] = Query(None, description="Comma-separated comforts"),
     latitude: Optional[float] = Query(None),
@@ -543,76 +649,54 @@ async def filter_salons_mobile(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
+    language: Optional[str] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
 ):
+    """
+    Filter salons based on various criteria including location, types, comforts, and discounts.
+    """
     try:
-        query = db.query(Salon).filter(and_(Salon.is_active == True, Salon.location.isnot(None)))
-
-
+        # Validate coordinates if provided
+        if latitude is not None or longitude is not None:
+            validate_coordinates(latitude, longitude, language)
         
-        return_values = query.all()
-        # Filter by distance
-        if latitude or longitude:
-            if not (-90 <= latitude <= 90):
-                print("Latitude out of range")
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
-            if not (-180 <= longitude <= 180):
-                print("Longitude out of range2")
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
-
-            nearby: List[Salon] = []
-            for salon in return_values:
-                try:
-                    if salon.location and 'lat' in salon.location and 'lng' in salon.location:
-                        salon_lat = float(salon.location['lat'])
-                        salon_lng = float(salon.location['lng'])
-                        distance = calculate_distance(latitude, longitude, salon_lat, salon_lng)
-                        if distance <= radius:
-                            nearby.append(salon)
-                except Exception:
-                    continue
-
-            offset = (page - 1) * limit
-            salons = nearby[offset: offset + limit]
-            nearby = [_build_mobile_item(s, language, db, userId) for s in salons]
-
-            return_values = nearby
+        # Build base query
+        query = db.query(Salon).filter(
+            and_(
+                Salon.is_active == True,
+                Salon.location.isnot(None)
+            )
+        )
+        
+        # Apply database-level filters
+        query = apply_types_filter(query, types)
+        query = apply_comforts_filter(query, comforts)
+        query = apply_discount_filter(query, isDiscount)
+        
+        # Execute query
+        salons = query.all()
+        
+        # Apply distance filter if coordinates provided
+        if latitude is not None and longitude is not None:
+            salons = filter_by_distance(salons, latitude, longitude, radius)
+            paginated_salons = paginate_results(salons, page, limit)
+            return [
+                _build_mobile_item(salon, language, db, userId)
+                for salon in paginated_salons
+            ]
+        
+        # Apply female-only filter (in-memory)
         if only_women or only_female:
-            filtered = []
-            for salon in return_values:
-                comforts = salon.salon_comfort or []
-                is_women = any(c["name"] == "onlyFemale" and c["isActive"] for c in comforts)
-                is_female = any(c["name"] == "onlyFemale" and c["isActive"] for c in comforts)
-                if (only_women and is_women) or (only_female and is_female):
-                    filtered.append(salon)
-            return_values = filtered
-        types_to_filter = [t.strip() for t in types.split(",")]
-        type_conditions = []
-        for salon_type in types_to_filter:
-            type_conditions.append(
-                func.JSON_CONTAINS(
-                    Salon.salon_types, f'{{"type": "{salon_type}", "selected": true}}'
-                )
-            )
-        if type_conditions:
-            query = query.filter(or_(*type_conditions))
+            salons = filter_by_female_only(salons)
         
-        comforts_to_filter = [c.strip() for c in comforts.split(",")]
-        comfort_conditions = []
-        for comfort in comforts_to_filter:
-            comfort_conditions.append(
-                func.JSON_CONTAINS(
-                    Salon.salon_comfort, f'{{"name": "{comfort}", "isActive": true}}'
-                )
-            )
-        if comfort_conditions:
-            query = query.filter(or_(*comfort_conditions))
-        if not return_values:
-            return_values = []
-        return return_values
-
-
+        # Apply pagination
+        paginated_salons = paginate_results(salons, page, limit)
+        
+        return [
+            _build_mobile_item(salon, language, db, userId)
+            for salon in paginated_salons
+        ]
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -621,7 +705,6 @@ async def filter_salons_mobile(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")
         )
-
 @router.get("/comments/{salon_id}", response_model=CommentListResponse)
 async def get_salon_comments_mobile(
     salon_id: str,
