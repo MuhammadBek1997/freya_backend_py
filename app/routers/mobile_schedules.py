@@ -65,6 +65,24 @@ def _build_time_slots(
         dt += timedelta(minutes=slot_minutes)
     return slots
 
+# Helper: return weekday name (e.g., Monday) from a date
+def _weekday_short(d: date) -> Optional[str]:
+    if not d:
+        return None
+    weekdays = [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday",
+    ]
+    try:
+        return weekdays[d.weekday()]
+    except Exception:
+        return None
+
 
 @router.get(
     "/filters/{salon_id}",
@@ -308,24 +326,29 @@ async def get_mobile_schedules_by_salon(
     # Prepare employee id -> name cache
     emp_cache: dict = {}
 
-    def get_emp(eid: str) -> Optional[str]:
+    def get_emp(eid: str) -> dict:
         if not eid:
-            return None
+            return {
+                "id": "",
+                "name": None,
+                "avatar": None,
+                "workType": None,
+                "rate": 0.0,
+                "reviewsCount": 0,
+            }
         if eid in emp_cache:
             return emp_cache[eid]
         emp = db.query(Employee).filter(Employee.id == eid).first()
-        return {
+        employee_item = {
             "id": str(eid),
-            "name": emp.name if emp and emp.name else "",
-            "avatar": emp.avatar_url,  # Placeholder, replace with actual avatar URL if available
-            "workType": emp.profession if emp and emp.profession else "",
-            "rate": emp.rating if emp and emp.rating else 0.0,
+            "name": (emp.name if emp and getattr(emp, "name", None) else None),
+            "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
+            "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
+            "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
             "reviewsCount": 0,
         }
-        # name = emp.name if emp and emp.name else None
-        # if name:
-        #     emp_cache[eid] = name
-        # return name
+        emp_cache[eid] = employee_item
+        return employee_item
 
     items: List[MobileScheduleServiceItem] = []
     for s in schedules:
