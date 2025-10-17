@@ -22,6 +22,9 @@ from app.schemas.schedule_mobile import (
     MobileScheduleDailyFiltersItem,
     MobileScheduleDailyFiltersResponse,
     DailyEmployeeItem,
+    MobileEmployeeWeeklyResponse,
+    MobileEmployeeWeeklyDayItem,
+    MobileEmployeeDayServicesItem,
 )
 
 
@@ -589,6 +592,156 @@ async def create_appointment(
             status_code=500,
             detail=get_translation(language, "errors.500") or "Server xatosi"
         )
+#     employee = db.query(Employee).filter(Employee.id == employee_id).first()
+    
+#     return MobileScheduleServiceItem(
+#         id=str(schedule.id),
+#         salon_id=str(schedule.salon_id),
+#         name=schedule.name,
+#         title=schedule.title,
+#         price=float(schedule.price) if schedule.price is not None else 0.0,
+#         date=str(schedule.date) if schedule.date else None,
+#         day=_weekday_short(schedule.date) if schedule.date else None,
+#         employees=[
+#             {
+#                 "id": employee_id,
+#                 "name": (
+#                     employee.name if employee and employee.name else "Unknown"
+#                 ),
+#                 "avatar": employee.avatar_url,  # Placeholder, replace with actual avatar URL if available
+#                 "workType": employee.profession,  # Placeholder, replace with actual work type if available
+#                 "rate": employee.rating,  # Placeholder, replace with actual rating if available
+#                 "reviewsCount": 0,
+#             }
+#         ],
+#         times=slots,
+#         onlyCard=False,
+#     )
+
+
+@router.get(
+    "/employee/{employee_id}",
+    response_model=MobileEmployeeWeeklyResponse,
+    summary="Mobil: Xodim bo'yicha 1 haftalik jadval",
+    description="X-User-language (uz|ru|en) headeri bo'yicha ko'p tilli misollar",
+)
+async def get_mobile_schedules_by_employee(
+    employee_id: str,
+    start_date: str = Query(..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(7, ge=1, le=7),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    try:
+        start_dt = date.fromisoformat(start_date)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid start_date format. Use YYYY-MM-DD")
+
+    total_days = 7
+    end_dt = start_dt + timedelta(days=total_days - 1)
+
+    schedules = (
+        db.query(Schedule)
+        .filter(
+            Schedule.date >= start_dt,
+            Schedule.date <= end_dt,
+            Schedule.is_active == True,
+        )
+        .order_by(Schedule.date.asc(), Schedule.start_time.asc())
+        .all()
+    )
+
+    services_by_date = {}
+    def _has_employee(emp_list, eid: str) -> bool:
+        if not emp_list:
+            return False
+        try:
+            if isinstance(emp_list, list):
+                return any(str(x) == str(eid) for x in emp_list)
+            if isinstance(emp_list, str):
+                return str(eid) in emp_list
+        except Exception:
+            return False
+        return False
+
+    for s in schedules:
+        if not _has_employee(s.employee_list, employee_id):
+            continue
+        day_key = s.date
+        if not day_key:
+            continue
+        if day_key not in services_by_date:
+            services_by_date[day_key] = []
+        services_by_date[day_key].append(
+            {
+                "id": str(s.id),
+                "salon_id": str(s.salon_id),
+                "name": s.name,
+                "title": s.title,
+                "price": float(s.price) if s.price is not None else 0.0,
+                "day": _weekday_short(s.date) if s.date else None,
+                "start_time": (s.start_time.strftime("%H:%M") if s.start_time else None),
+                "end_time": (s.end_time.strftime("%H:%M") if s.end_time else None),
+            }
+        )
+
+    emp_cache = {}
+    def get_emp(eid: str) -> dict:
+        if not eid:
+            return {
+                "id": "",
+                "name": None,
+                "avatar": None,
+                "workType": None,
+                "rate": 0.0,
+                "reviewsCount": 0,
+            }
+        if eid in emp_cache:
+            return emp_cache[eid]
+        emp = db.query(Employee).filter(Employee.id == eid).first()
+        employee_item = {
+            "id": str(eid),
+            "name": (emp.name if emp and getattr(emp, "name", None) else None),
+            "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
+            "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
+            "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
+            "reviewsCount": 0,
+        }
+        emp_cache[eid] = employee_item
+        return employee_item
+
+    target_employee = get_emp(employee_id)
+
+    all_days = []
+    for i in range(total_days):
+        d = start_dt + timedelta(days=i)
+        day_services = services_by_date.get(d, [])
+        all_days.append(
+            {
+                "date": d.isoformat(),
+                "avialable": bool(day_services),
+                "services": day_services,
+            }
+        )
+
+    total = len(all_days)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paged_days = all_days[start_idx:end_idx]
+    pages = (total + limit - 1) // limit if limit else 0
+
+    return MobileEmployeeWeeklyResponse(
+        success=True,
+        data=paged_days,
+        employee=target_employee,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": pages,
+        },
+    )
 #     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     
 #     return MobileScheduleServiceItem(

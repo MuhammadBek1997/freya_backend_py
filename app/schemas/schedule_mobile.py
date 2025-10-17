@@ -59,7 +59,30 @@ class DailyEmployeeItem(BaseModel):
     id: str
     name: Optional[str] = None
 
+class MobileEmployeeDayServicesItem(BaseModel):
+    id: str
+    salon_id: str
+    name: str
+    title: Optional[str] = None
+    price: float = 0.0
+    day: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+
 
 class MobileScheduleDailyFiltersResponse(BaseModel):
     success: bool
     data: List[MobileScheduleDailyFiltersItem]
+
+
+class MobileEmployeeWeeklyDayItem(BaseModel):
+    date: str
+    avialable: bool = False
+    services: List[MobileEmployeeDayServicesItem] = []
+
+
+class MobileEmployeeWeeklyResponse(BaseModel):
+    success: bool
+    data: List[MobileEmployeeWeeklyDayItem]
+    employee: MobileEmployeeItem
+    pagination: Optional[dict] = None
