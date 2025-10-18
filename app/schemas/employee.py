@@ -175,6 +175,8 @@ class MobileEmployeeItem(BaseModel):
     workType: Optional[str] = None
     rate: Optional[float] = 0.0
     reviewsCount: int = 0
+    works: int = 0
+    perWeek: int = 0
 
 # Mobile-specific employee list response with pagination
 class MobileEmployeeListResponse(BaseModel):

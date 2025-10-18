@@ -9,6 +9,8 @@ class MobileEmployeeItem(BaseModel):
     rate: Optional[Union[float, int]] = 0.0
     workType: Optional[str] = None
     avatar: Optional[str] = None
+    works: Optional[int] = 0
+    perWeek: Optional[int] = 0
 
 class TimeslotItem(BaseModel):
     time: str

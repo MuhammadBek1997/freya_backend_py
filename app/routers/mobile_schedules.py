@@ -10,7 +10,7 @@ from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
 from app.models.schedule import Schedule
-from app.models.employee import Employee
+from app.models.employee import Employee, EmployeeComment
 from app.models.appointment import Appointment
 from app.models.payment_card import PaymentCard
 from app.models.service import Service
@@ -338,17 +338,39 @@ async def get_mobile_schedules_by_salon(
                 "workType": None,
                 "rate": 0.0,
                 "reviewsCount": 0,
+                "works": 0,
+                "perWeek": 0,
             }
         if eid in emp_cache:
             return emp_cache[eid]
         emp = db.query(Employee).filter(Employee.id == eid).first()
+        # Reviews count
+        try:
+            reviews_cnt = db.query(func.count(EmployeeComment.id)).filter(EmployeeComment.employee_id == eid).scalar() or 0
+        except Exception:
+            reviews_cnt = 0
+        # Total works (appointments done)
+        try:
+            works_total = db.query(func.count(Appointment.id)).filter(
+                and_(Appointment.employee_id == eid, Appointment.status == 'done')
+            ).scalar() or 0
+        except Exception:
+            works_total = 0
+        # Weekly works (appointments done in the selected week)
+        try:
+            works_week = 0
+        except Exception:
+            works_week = 0
+
         employee_item = {
             "id": str(eid),
             "name": (emp.name if emp and getattr(emp, "name", None) else None),
             "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
             "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
             "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
-            "reviewsCount": 0,
+            "reviewsCount": int(reviews_cnt),
+            "works": int(works_total),
+            "perWeek": int(works_week),
         }
         emp_cache[eid] = employee_item
         return employee_item
@@ -700,13 +722,36 @@ async def get_mobile_schedules_by_employee(
         if eid in emp_cache:
             return emp_cache[eid]
         emp = db.query(Employee).filter(Employee.id == eid).first()
+        try:
+            reviews_cnt = db.query(func.count(EmployeeComment.id)).filter(EmployeeComment.employee_id == eid).scalar() or 0
+        except Exception:
+            reviews_cnt = 0
+        try:
+            works_total = db.query(func.count(Appointment.id)).filter(
+                and_(Appointment.employee_id == eid, Appointment.status == 'done')
+            ).scalar() or 0
+        except Exception:
+            works_total = 0
+        try:
+            works_week = db.query(func.count(Appointment.id)).filter(
+                and_(
+                    Appointment.employee_id == eid,
+                    Appointment.status == 'done',
+                    Appointment.application_date >= start_dt,
+                    Appointment.application_date <= end_dt,
+                )
+            ).scalar() or 0
+        except Exception:
+            works_week = 0
         employee_item = {
             "id": str(eid),
             "name": (emp.name if emp and getattr(emp, "name", None) else None),
             "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
             "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
             "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
-            "reviewsCount": 0,
+            "reviewsCount": int(reviews_cnt),
+            "works": int(works_total),
+            "perWeek": int(works_week),
         }
         emp_cache[eid] = employee_item
         return employee_item
