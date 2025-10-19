@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import List, Optional, Union
 from datetime import date, datetime, time, timedelta
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 import uuid
 
 from app.database import get_db
@@ -34,19 +34,89 @@ class MobileAppointmentCreate(BaseModel):
     service_id: Optional[str] = None  # Service model'dan
     schedule_id: str
     employee_id: str
-    application_date: date
-    application_time: time
-    user_name: str
-    phone_number: str
+    application_date: Optional[date] = Field(default=None, alias="date")
+    application_time: time = Field(alias="time")
+    user_name: Optional[str] = None
+    phone_number: Optional[str] = None
     only_card: bool = False
     payment_card_id: Optional[str] = None  # only_card=True bo'lsa majburiy
     notes: Optional[str] = None
+
+    # Swagger example (Pydantic v2)
+    model_config = ConfigDict(populate_by_name=True, json_schema_extra={
+        "example": {
+            "salon_id": "4302cd19-0f0e-4182-afaa-8dd152d0ed8d",
+            "service_id": None,
+            "schedule_id": "e78d69da-833d-4a1d-83e2-648b671b3085",
+            "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+            "date": "2025-10-07",
+            "time": "11:52",
+            "user_name": "Booknow Tester",
+            "phone_number": "+998901234567",
+            "only_card": False,
+            "payment_card_id": None,
+            "notes": "booknow test"
+        }
+    })
+
+class MobileBookedAppointmentItem(BaseModel):
+    id: str
+    application_number: str
+    application_date: str
+    application_time: str
+    employee_id: Optional[str] = None
+    service_name: str
+    status: str
+    is_confirmed: bool = False
+    is_completed: bool = False
+    is_cancelled: bool = False
+
+    # Swagger example for an item
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+            "application_number": "APP-20251019-F76742BB",
+            "application_date": "2025-10-07",
+            "application_time": "11:52",
+            "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+            "service_name": "22",
+            "status": "pending",
+            "is_confirmed": False,
+            "is_completed": False,
+            "is_cancelled": False
+        }
+    })
 
 class MobileAppointmentResponse(BaseModel):
     success: bool
     message: str
     appointment_id: Optional[str] = None
     application_number: Optional[str] = None
+    bookedAppointments: Optional[List[MobileBookedAppointmentItem]] = []
+
+    # Swagger example for response
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "success": True,
+            "message": "Appointment muvaffaqiyatli yaratildi",
+            "appointment_id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+            "application_number": "APP-20251019-F76742BB",
+            "bookedAppointments": [
+                {
+                    "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+                    "application_number": "APP-20251019-F76742BB",
+                    "application_date": "2025-10-07",
+                    "application_time": "11:52",
+                    "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+                    "service_name": "22",
+                    "status": "pending",
+                    "is_confirmed": False,
+                    "is_completed": False,
+                    "is_cancelled": False
+                }
+            ]
+        }
+    })
 
 
 router = APIRouter(prefix="/mobile/schedules", tags=["Mobile Schedules"])
@@ -488,6 +558,9 @@ async def create_appointment(
                 detail=get_translation(language, "errors.404") or "Jadval topilmadi"
             )
 
+        # Sana: agar body'da berilmasa schedule.date dan olamiz
+        resolved_date = appointment_data.application_date or schedule.date
+
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
         employee = db.query(Employee).filter(
             and_(
@@ -561,7 +634,7 @@ async def create_appointment(
             and_(
                 Appointment.schedule_id == appointment_data.schedule_id,
                 Appointment.employee_id == appointment_data.employee_id,
-                Appointment.application_date == appointment_data.application_date,
+                Appointment.application_date == resolved_date,
                 Appointment.application_time == appointment_data.application_time,
                 Appointment.is_cancelled == False
             )
@@ -579,9 +652,9 @@ async def create_appointment(
         # 9. Appointment yaratish
         new_appointment = Appointment(
             application_number=application_number,
-            user_name=appointment_data.user_name,
-            phone_number=appointment_data.phone_number,
-            application_date=appointment_data.application_date,
+            user_name=appointment_data.user_name or "",
+            phone_number=appointment_data.phone_number or "",
+            application_date=resolved_date,
             application_time=appointment_data.application_time,
             schedule_id=appointment_data.schedule_id,
             employee_id=appointment_data.employee_id,
@@ -598,11 +671,37 @@ async def create_appointment(
         db.commit()
         db.refresh(new_appointment)
 
+        booked_q = []
+        if appointment_data.phone_number:
+            booked_q = db.query(Appointment).filter(
+                and_(
+                    Appointment.phone_number == appointment_data.phone_number,
+                    Appointment.is_cancelled == False,
+                )
+            ).order_by(Appointment.application_date.desc(), Appointment.application_time.desc()).limit(10).all()
+
+        booked_items = [
+            MobileBookedAppointmentItem(
+                id=str(a.id),
+                application_number=a.application_number,
+                application_date=a.application_date.isoformat() if a.application_date else None,
+                application_time=(a.application_time.strftime("%H:%M") if a.application_time else None),
+                employee_id=(str(a.employee_id) if a.employee_id else None),
+                service_name=a.service_name,
+                status=a.status or "pending",
+                is_confirmed=bool(a.is_confirmed),
+                is_completed=bool(a.is_completed),
+                is_cancelled=bool(a.is_cancelled),
+            )
+            for a in booked_q
+        ]
+
         return MobileAppointmentResponse(
             success=True,
             message=get_translation(language, "success.appointment_created") or "Appointment muvaffaqiyatli yaratildi",
             appointment_id=str(new_appointment.id),
-            application_number=new_appointment.application_number
+            application_number=new_appointment.application_number,
+            bookedAppointments=booked_items,
         )
 
     except HTTPException:
