@@ -107,9 +107,9 @@ class MobileBookedAppointmentItem(BaseModel):
 class MobileAppointmentResponse(BaseModel):
     success: bool
     message: str
-    appointment_id: Optional[str] = None
-    application_number: Optional[str] = None
-    bookedAppointments: Optional[List[MobileBookedAppointmentItem]] = []
+    # appointment_id: Optional[str] = None
+    # application_number: Optional[str] = None
+    # bookedAppointments: Optional[List[MobileBookedAppointmentItem]] = []
 
     # Swagger example for response
     model_config = ConfigDict(
@@ -757,9 +757,9 @@ async def create_appointment(
             success=True,
             message=get_translation(language, "success.appointment_created")
             or "Appointment muvaffaqiyatli yaratildi",
-            appointment_id=str(new_appointment.id),
-            application_number=new_appointment.application_number,
-            bookedAppointments=booked_items,
+            # appointment_id=str(new_appointment.id),
+            # application_number=new_appointment.application_number,
+            # bookedAppointments=booked_items,
         )
 
     except HTTPException:
