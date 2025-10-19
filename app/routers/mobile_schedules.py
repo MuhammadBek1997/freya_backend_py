@@ -33,7 +33,7 @@ from app.schemas.schedule_mobile import (
 # Appointment yaratish uchun schema'lar
 class MobileAppointmentCreate(BaseModel):
     salon_id: str
-    service_id: Optional[str] = None  # Service model'dan
+    schedule_id: Optional[str] = None  # Service model'dan
     # schedule_id: str
     employee_id: str
     # application_date: Optional[date] = Field(default=None, alias="date")
@@ -568,24 +568,27 @@ async def create_appointment(
             )
 
         # 2. Schedule mavjudligini tekshirish
-        # schedule = db.query(Schedule).filter(
-        #     and_(
-        #         Schedule.id == appointment_data.schedule_id,
-        #         Schedule.salon_id == appointment_data.salon_id,
-        #         Schedule.date == appointment_data.application_date,
-        #         Schedule.is_active == True
-        #     )
-        # ).first()
+        schedule = (
+            db.query(Schedule)
+            .filter(
+                and_(
+                    Schedule.id == appointment_data.schedule_id,
+                    Schedule.salon_id == appointment_data.salon_id,
+                    Schedule.is_active == True,
+                )
+            )
+            .first()
+        )
 
-        # if not schedule:
-        #     raise HTTPException(
-        #         status_code=404,
-        #         detail=get_translation(language, "errors.404") or "Jadval topilmadi"
-        #     )
+        if not schedule:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404") or "Jadval topilmadi",
+            )
 
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
         employee = (
-            db.query(employee)
+            db.query(Employee)
             .filter(
                 and_(
                     Employee.id == appointment_data.employee_id,
@@ -603,25 +606,8 @@ async def create_appointment(
             )
 
         # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa)
-        # service_name = schedule.name  # Default
-        # service_price = float(schedule.price)
-
-        if appointment_data.service_id:
-            service = (
-                db.query(Service)
-                .filter(
-                    and_(
-                        Service.id == appointment_data.service_id,
-                        Service.salon_id == appointment_data.salon_id,
-                        Service.is_active == True,
-                    )
-                )
-                .first()
-            )
-
-            if service:
-                service_name = service.name
-                service_price = float(service.price)
+        service_name = schedule.name
+        service_price = float(schedule.price)
 
         # 5. Karta tekshirish (only_card=True bo'lsa)
         if appointment_data.only_card:
@@ -651,12 +637,12 @@ async def create_appointment(
                 )
 
         # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
-        # if schedule.start_time and schedule.end_time:
-        #     if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
-        #         raise HTTPException(
-        #             status_code=400,
-        #             detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas"
-        #         )
+        if schedule.start_time and schedule.end_time:
+            if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas",
+                )
 
         # 7. Bir xil vaqtda appointment borligini tekshirish
         existing_appointment = (
@@ -689,8 +675,8 @@ async def create_appointment(
             application_number=application_number,
             user_name=current_user.full_name or "",
             phone_number=current_user.phone or "",
-            application_date=appointment_data.application_time.date(),
-            application_time=appointment_data.application_time.time(),
+            application_date=schedule.date,
+            application_time=appointment_data.application_time,
             employee_id=appointment_data.employee_id,
             service_name=service_name,
             service_price=service_price,
@@ -710,7 +696,7 @@ async def create_appointment(
                 db.query(Appointment)
                 .filter(
                     and_(
-                        Appointment.phone_number == current_user and current_user.phone,
+                        Appointment.phone_number == current_user.phone,
                         Appointment.is_cancelled == False,
                     )
                 )
