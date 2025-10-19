@@ -45,21 +45,21 @@ class MobileAppointmentCreate(BaseModel):
     # notes: Optional[str] = None
 
     # Swagger example (Pydantic v2)
-    model_config = ConfigDict(populate_by_name=True, json_schema_extra={
-        "example": {
-            "salon_id": "4302cd19-0f0e-4182-afaa-8dd152d0ed8d",
-            "service_id": None,
-            # "schedule_id": "e78d69da-833d-4a1d-83e2-648b671b3085",
-            "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
-            # "date": "2025-10-07",
-            "application_time": "11:52",
-            # "user_name": "Booknow Tester",
-            # "phone_number": "+998901234567",
-            "only_card": False,
-            "payment_card_id": None,
-            # "notes": "booknow test"
-        }
-    })
+    # model_config = ConfigDict(populate_by_name=True, json_schema_extra={
+    #     "example": {
+    #         "salon_id": "4302cd19-0f0e-4182-afaa-8dd152d0ed8d",
+    #         "service_id": None,
+    #         # "schedule_id": "e78d69da-833d-4a1d-83e2-648b671b3085",
+    #         "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+    #         # "date": "2025-10-07",
+    #         "application_time": "11:52",
+    #         # "user_name": "Booknow Tester",
+    #         # "phone_number": "+998901234567",
+    #         "only_card": False,
+    #         "payment_card_id": None,
+    #         # "notes": "booknow test"
+    #     }
+    # })
 
 class MobileBookedAppointmentItem(BaseModel):
     id: str
