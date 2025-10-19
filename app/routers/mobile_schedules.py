@@ -61,6 +61,7 @@ class MobileAppointmentCreate(BaseModel):
     #     }
     # })
 
+
 class MobileBookedAppointmentItem(BaseModel):
     id: str
     application_number: str
@@ -74,20 +75,23 @@ class MobileBookedAppointmentItem(BaseModel):
     is_cancelled: bool = False
 
     # Swagger example for an item
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
-            "application_number": "APP-20251019-F76742BB",
-            "application_date": "2025-10-07",
-            "application_time": "11:52",
-            "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
-            "service_name": "22",
-            "status": "pending",
-            "is_confirmed": False,
-            "is_completed": False,
-            "is_cancelled": False
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+                "application_number": "APP-20251019-F76742BB",
+                "application_date": "2025-10-07",
+                "application_time": "11:52",
+                "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+                "service_name": "22",
+                "status": "pending",
+                "is_confirmed": False,
+                "is_completed": False,
+                "is_cancelled": False,
+            }
         }
-    })
+    )
+
 
 class MobileAppointmentResponse(BaseModel):
     success: bool
@@ -97,34 +101,33 @@ class MobileAppointmentResponse(BaseModel):
     bookedAppointments: Optional[List[MobileBookedAppointmentItem]] = []
 
     # Swagger example for response
-    model_config = ConfigDict(json_schema_extra={
-        "example": {
-            "success": True,
-            "message": "Appointment muvaffaqiyatli yaratildi",
-            "appointment_id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
-            "application_number": "APP-20251019-F76742BB",
-            "bookedAppointments": [
-                {
-                    "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
-                    "application_number": "APP-20251019-F76742BB",
-                    "application_date": "2025-10-07",
-                    "application_time": "11:52",
-                    "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
-                    "service_name": "22",
-                    "status": "pending",
-                    "is_confirmed": False,
-                    "is_completed": False,
-                    "is_cancelled": False
-                }
-            ]
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "success": True,
+                "message": "Appointment muvaffaqiyatli yaratildi",
+                "appointment_id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+                "application_number": "APP-20251019-F76742BB",
+                "bookedAppointments": [
+                    {
+                        "id": "d1afd36a-62bb-4706-810b-b7743b5808ab",
+                        "application_number": "APP-20251019-F76742BB",
+                        "application_date": "2025-10-07",
+                        "application_time": "11:52",
+                        "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
+                        "service_name": "22",
+                        "status": "pending",
+                        "is_confirmed": False,
+                        "is_completed": False,
+                        "is_cancelled": False,
+                    }
+                ],
+            }
         }
-    })
+    )
 
 
 router = APIRouter(prefix="/mobile/schedules", tags=["Mobile Schedules"])
-
-
-
 
 
 def _build_time_slots(
@@ -140,7 +143,7 @@ def _build_time_slots(
         dt += timedelta(minutes=slot_minutes)
     return slots
 
-# Helper: return weekday name (e.g., Monday) from a date
+
 def _weekday_short(d: date) -> Optional[str]:
     if not d:
         return None
@@ -222,7 +225,10 @@ def _weekday_short(d: date) -> Optional[str]:
 )
 async def get_mobile_schedule_filters(
     salon_id: str,
-    start_date: str = Query(..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"),
+    start_date: str = Query(
+        ...,
+        description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)",
+    ),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
@@ -262,7 +268,6 @@ async def get_mobile_schedule_filters(
         day_directions: List[str] = sorted({s.name for s in day_schedules if s.name})
 
         # Times
-        
 
         # Employees
         employee_ids: List[str] = []
@@ -418,14 +423,24 @@ async def get_mobile_schedules_by_salon(
         emp = db.query(Employee).filter(Employee.id == eid).first()
         # Reviews count
         try:
-            reviews_cnt = db.query(func.count(EmployeeComment.id)).filter(EmployeeComment.employee_id == eid).scalar() or 0
+            reviews_cnt = (
+                db.query(func.count(EmployeeComment.id))
+                .filter(EmployeeComment.employee_id == eid)
+                .scalar()
+                or 0
+            )
         except Exception:
             reviews_cnt = 0
         # Total works (appointments done)
         try:
-            works_total = db.query(func.count(Appointment.id)).filter(
-                and_(Appointment.employee_id == eid, Appointment.status == 'done')
-            ).scalar() or 0
+            works_total = (
+                db.query(func.count(Appointment.id))
+                .filter(
+                    and_(Appointment.employee_id == eid, Appointment.status == "done")
+                )
+                .scalar()
+                or 0
+            )
         except Exception:
             works_total = 0
         # Weekly works (appointments done in the selected week)
@@ -437,9 +452,17 @@ async def get_mobile_schedules_by_salon(
         employee_item = {
             "id": str(eid),
             "name": (emp.name if emp and getattr(emp, "name", None) else None),
-            "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
-            "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
-            "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
+            "avatar": (
+                emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None
+            ),
+            "workType": (
+                emp.profession if emp and getattr(emp, "profession", None) else None
+            ),
+            "rate": (
+                float(emp.rating)
+                if emp and getattr(emp, "rating", None) is not None
+                else 0.0
+            ),
             "reviewsCount": int(reviews_cnt),
             "works": int(works_total),
             "perWeek": int(works_week),
@@ -486,41 +509,39 @@ async def get_mobile_schedules_by_salon(
     )
 
 
-# @router.get(
-#     "/day/{day}/employee/{employee_id}",
-#     response_model=MobileScheduleServiceItem,
-#     summary="Mobil: Kun va xodim bo'yicha jadval",
-#     description="X-User-language (uz|ru|en) headeri bo'yicha ko'p tilli misollar",
-# )
-# async def get_mobile_schedule_by_day_and_employee(
-#     day: str,
-#     employee_id: str,
-#     db: Session = Depends(get_db),
-#     language: Union[str, None] = Header(None, alias="X-User-language"),
-# ):
-#     """Mobil UI uchun employee va kunlik kuni ro'yxati, filtrlash va vaqt slotlari bilan"""
-#     if not employee:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail=get_translation(language, "errors.404"),
-#         )
-#     day_date = datetime.strptime(day, "%Y-%m-%d").date()
-#     query = db.query(Schedule).filter(
-#         and_(
-#             Schedule.date == day_date,
-#             Schedule.employee_list.like(f"%{employee_id}%")
-#         )
-#     )
-#     schedule: Schedule = query.first()
+@router.get("/user/{user_id}/appointments")
+async def get_appointments_by_user_id(
+    user_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Get appointments by user_id"""
+    offset = (page - 1) * limit
 
-#     if not schedule:
-#         raise HTTPException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail=get_translation(language, "errors.404"),
-#         )
+    query = db.query(Appointment).filter(Appointment.user_id == user_id)
+    count_query = db.query(func.count(Appointment.id)).filter(Appointment.user_id == user_id)
 
-#     slots = _build_time_slots(schedule.start_time, schedule.end_time, 30)
+    if status:
+        query = query.filter(Appointment.status == status)
+        count_query = count_query.filter(Appointment.status == status)
 
+    total = count_query.scalar() or 0
+    appointments = query.order_by(Appointment.application_date.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": appointments,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if limit else 1,
+        },
+    }
 
 @router.post("/appointments", response_model=MobileAppointmentResponse)
 async def create_appointment(
@@ -532,17 +553,18 @@ async def create_appointment(
     """Yangi appointment yaratish - salon, servis, vaqt, employee va karta tekshirish bilan"""
     try:
         # 1. Salon mavjudligini tekshirish
-        salon = db.query(Salon).filter(
-            and_(
-                Salon.id == appointment_data.salon_id,
-                Salon.is_active == True
+        salon = (
+            db.query(Salon)
+            .filter(
+                and_(Salon.id == appointment_data.salon_id, Salon.is_active == True)
             )
-        ).first()
-        
+            .first()
+        )
+
         if not salon:
             raise HTTPException(
                 status_code=404,
-                detail=get_translation(language, "errors.404") or "Salon topilmadi"
+                detail=get_translation(language, "errors.404") or "Salon topilmadi",
             )
 
         # 2. Schedule mavjudligini tekshirish
@@ -554,7 +576,7 @@ async def create_appointment(
         #         Schedule.is_active == True
         #     )
         # ).first()
-        
+
         # if not schedule:
         #     raise HTTPException(
         #         status_code=404,
@@ -562,33 +584,41 @@ async def create_appointment(
         #     )
 
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
-        employee = db.query(employee).filter(
-            and_(
-                Employee.id == appointment_data.employee_id,
-                Employee.salon_id == appointment_data.salon_id,
-                Employee.is_active == True
+        employee = (
+            db.query(employee)
+            .filter(
+                and_(
+                    Employee.id == appointment_data.employee_id,
+                    Employee.salon_id == appointment_data.salon_id,
+                    Employee.is_active == True,
+                )
             )
-        ).first()
-        
+            .first()
+        )
+
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail=get_translation(language, "errors.404") or "Xodim topilmadi"
+                detail=get_translation(language, "errors.404") or "Xodim topilmadi",
             )
 
         # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa)
         # service_name = schedule.name  # Default
         # service_price = float(schedule.price)
-        
+
         if appointment_data.service_id:
-            service = db.query(Service).filter(
-                and_(
-                    Service.id == appointment_data.service_id,
-                    Service.salon_id == appointment_data.salon_id,
-                    Service.is_active == True
+            service = (
+                db.query(Service)
+                .filter(
+                    and_(
+                        Service.id == appointment_data.service_id,
+                        Service.salon_id == appointment_data.salon_id,
+                        Service.is_active == True,
+                    )
                 )
-            ).first()
-            
+                .first()
+            )
+
             if service:
                 service_name = service.name
                 service_price = float(service.price)
@@ -598,20 +628,26 @@ async def create_appointment(
             if not appointment_data.payment_card_id:
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400") or "Karta ID majburiy"
+                    detail=get_translation(language, "errors.400")
+                    or "Karta ID majburiy",
                 )
-            
-            payment_card = db.query(PaymentCard).filter(
-                and_(
-                    PaymentCard.id == appointment_data.payment_card_id,
-                    PaymentCard.is_active == True
+
+            payment_card = (
+                db.query(PaymentCard)
+                .filter(
+                    and_(
+                        PaymentCard.id == appointment_data.payment_card_id,
+                        PaymentCard.is_active == True,
+                    )
                 )
-            ).first()
-            
+                .first()
+            )
+
             if not payment_card:
                 raise HTTPException(
                     status_code=404,
-                    detail=get_translation(language, "errors.404") or "To'lov kartasi topilmadi"
+                    detail=get_translation(language, "errors.404")
+                    or "To'lov kartasi topilmadi",
                 )
 
         # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
@@ -623,23 +659,30 @@ async def create_appointment(
         #         )
 
         # 7. Bir xil vaqtda appointment borligini tekshirish
-        existing_appointment = db.query(Appointment).filter(
-            and_(
-                Appointment.employee_id == appointment_data.employee_id,
-                Appointment.application_date == appointment_data.application_date,
-                Appointment.application_time == appointment_data.application_time,
-                Appointment.is_cancelled == False
+        existing_appointment = (
+            db.query(Appointment)
+            .filter(
+                and_(
+                    Appointment.employee_id == appointment_data.employee_id,
+                    Appointment.application_date == appointment_data.application_date,
+                    Appointment.application_time == appointment_data.application_time,
+                    Appointment.is_cancelled == False,
+                )
             )
-        ).first()
-        
+            .first()
+        )
+
         if existing_appointment:
             raise HTTPException(
                 status_code=409,
-                detail=get_translation(language, "errors.409") or "Bu vaqtda allaqachon appointment mavjud"
+                detail=get_translation(language, "errors.409")
+                or "Bu vaqtda allaqachon appointment mavjud",
             )
 
         # 8. Application number yaratish
-        application_number = f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        application_number = (
+            f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
+        )
 
         # 9. Appointment yaratish
         new_appointment = Appointment(
@@ -654,7 +697,7 @@ async def create_appointment(
             status="pending",
             is_confirmed=False,
             is_completed=False,
-            is_cancelled=False
+            is_cancelled=False,
         )
 
         db.add(new_appointment)
@@ -663,19 +706,32 @@ async def create_appointment(
 
         booked_q = []
         if current_user and current_user.phone:
-            booked_q = db.query(Appointment).filter(
-                and_(
-                    Appointment.phone_number == current_user and current_user.phone,
-                    Appointment.is_cancelled == False,
+            booked_q = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.phone_number == current_user and current_user.phone,
+                        Appointment.is_cancelled == False,
+                    )
                 )
-            ).order_by(Appointment.application_date.desc(), Appointment.application_time.desc()).limit(10).all()
+                .order_by(
+                    Appointment.application_date.desc(),
+                    Appointment.application_time.desc(),
+                )
+                .limit(10)
+                .all()
+            )
 
         booked_items = [
             MobileBookedAppointmentItem(
                 id=str(a.id),
                 application_number=a.application_number,
-                application_date=a.application_date.isoformat() if a.application_date else None,
-                application_time=(a.application_time.strftime("%H:%M") if a.application_time else None),
+                application_date=(
+                    a.application_date.isoformat() if a.application_date else None
+                ),
+                application_time=(
+                    a.application_time.strftime("%H:%M") if a.application_time else None
+                ),
                 employee_id=(str(a.employee_id) if a.employee_id else None),
                 service_name=a.service_name,
                 status=a.status or "pending",
@@ -688,7 +744,8 @@ async def create_appointment(
 
         return MobileAppointmentResponse(
             success=True,
-            message=get_translation(language, "success.appointment_created") or "Appointment muvaffaqiyatli yaratildi",
+            message=get_translation(language, "success.appointment_created")
+            or "Appointment muvaffaqiyatli yaratildi",
             appointment_id=str(new_appointment.id),
             application_number=new_appointment.application_number,
             bookedAppointments=booked_items,
@@ -701,32 +758,8 @@ async def create_appointment(
         print(f"Error creating appointment: {e}")
         raise HTTPException(
             status_code=500,
-            detail=get_translation(language, "errors.500") or "Server xatosi"
+            detail=get_translation(language, "errors.500") or "Server xatosi",
         )
-    
-#     return MobileScheduleServiceItem(
-#         id=str(schedule.id),
-#         salon_id=str(schedule.salon_id),
-#         name=schedule.name,
-#         title=schedule.title,
-#         price=float(schedule.price) if schedule.price is not None else 0.0,
-#         date=str(schedule.date) if schedule.date else None,
-#         day=_weekday_short(schedule.date) if schedule.date else None,
-#         employees=[
-#             {
-#                 "id": employee_id,
-#                 "name": (
-#                     employee.name if employee and employee.name else "Unknown"
-#                 ),
-#                 "avatar": employee.avatar_url,  # Placeholder, replace with actual avatar URL if available
-#                 "workType": employee.profession,  # Placeholder, replace with actual work type if available
-#                 "rate": employee.rating,  # Placeholder, replace with actual rating if available
-#                 "reviewsCount": 0,
-#             }
-#         ],
-#         times=slots,
-#         onlyCard=False,
-#     )
 
 
 @router.get(
@@ -737,7 +770,10 @@ async def create_appointment(
 )
 async def get_mobile_schedules_by_employee(
     employee_id: str,
-    start_date: str = Query(..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"),
+    start_date: str = Query(
+        ...,
+        description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)",
+    ),
     page: int = Query(1, ge=1),
     limit: int = Query(7, ge=1, le=7),
     db: Session = Depends(get_db),
@@ -746,7 +782,10 @@ async def get_mobile_schedules_by_employee(
     try:
         start_dt = date.fromisoformat(start_date)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid start_date format. Use YYYY-MM-DD")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid start_date format. Use YYYY-MM-DD",
+        )
 
     total_days = 7
     end_dt = start_dt + timedelta(days=total_days - 1)
@@ -763,6 +802,7 @@ async def get_mobile_schedules_by_employee(
     )
 
     services_by_date = {}
+
     def _has_employee(emp_list, eid: str) -> bool:
         if not emp_list:
             return False
@@ -791,12 +831,15 @@ async def get_mobile_schedules_by_employee(
                 "title": s.title,
                 "price": float(s.price) if s.price is not None else 0.0,
                 "day": _weekday_short(s.date) if s.date else None,
-                "start_time": (s.start_time.strftime("%H:%M") if s.start_time else None),
+                "start_time": (
+                    s.start_time.strftime("%H:%M") if s.start_time else None
+                ),
                 "end_time": (s.end_time.strftime("%H:%M") if s.end_time else None),
             }
         )
 
     emp_cache = {}
+
     def get_emp(eid: str) -> dict:
         if not eid:
             return {
@@ -811,32 +854,55 @@ async def get_mobile_schedules_by_employee(
             return emp_cache[eid]
         emp = db.query(Employee).filter(Employee.id == eid).first()
         try:
-            reviews_cnt = db.query(func.count(EmployeeComment.id)).filter(EmployeeComment.employee_id == eid).scalar() or 0
+            reviews_cnt = (
+                db.query(func.count(EmployeeComment.id))
+                .filter(EmployeeComment.employee_id == eid)
+                .scalar()
+                or 0
+            )
         except Exception:
             reviews_cnt = 0
         try:
-            works_total = db.query(func.count(Appointment.id)).filter(
-                and_(Appointment.employee_id == eid, Appointment.status == 'done')
-            ).scalar() or 0
+            works_total = (
+                db.query(func.count(Appointment.id))
+                .filter(
+                    and_(Appointment.employee_id == eid, Appointment.status == "done")
+                )
+                .scalar()
+                or 0
+            )
         except Exception:
             works_total = 0
         try:
-            works_week = db.query(func.count(Appointment.id)).filter(
-                and_(
-                    Appointment.employee_id == eid,
-                    Appointment.status == 'done',
-                    Appointment.application_date >= start_dt,
-                    Appointment.application_date <= end_dt,
+            works_week = (
+                db.query(func.count(Appointment.id))
+                .filter(
+                    and_(
+                        Appointment.employee_id == eid,
+                        Appointment.status == "done",
+                        Appointment.application_date >= start_dt,
+                        Appointment.application_date <= end_dt,
+                    )
                 )
-            ).scalar() or 0
+                .scalar()
+                or 0
+            )
         except Exception:
             works_week = 0
         employee_item = {
             "id": str(eid),
             "name": (emp.name if emp and getattr(emp, "name", None) else None),
-            "avatar": (emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None),
-            "workType": (emp.profession if emp and getattr(emp, "profession", None) else None),
-            "rate": (float(emp.rating) if emp and getattr(emp, "rating", None) is not None else 0.0),
+            "avatar": (
+                emp.avatar_url if emp and getattr(emp, "avatar_url", None) else None
+            ),
+            "workType": (
+                emp.profession if emp and getattr(emp, "profession", None) else None
+            ),
+            "rate": (
+                float(emp.rating)
+                if emp and getattr(emp, "rating", None) is not None
+                else 0.0
+            ),
             "reviewsCount": int(reviews_cnt),
             "works": int(works_total),
             "perWeek": int(works_week),
@@ -875,29 +941,3 @@ async def get_mobile_schedules_by_employee(
             "pages": pages,
         },
     )
-#     employee = db.query(Employee).filter(Employee.id == employee_id).first()
-    
-#     return MobileScheduleServiceItem(
-#         id=str(schedule.id),
-#         salon_id=str(schedule.salon_id),
-#         name=schedule.name,
-#         title=schedule.title,
-#         price=float(schedule.price) if schedule.price is not None else 0.0,
-#         date=str(schedule.date) if schedule.date else None,
-#         day=_weekday_short(schedule.date) if schedule.date else None,
-#         employees=[
-#             {
-#                 "id": employee_id,
-#                 "name": (
-#                     employee.name if employee and employee.name else "Unknown"
-#                 ),
-#                 "avatar": employee.avatar_url,  # Placeholder, replace with actual avatar URL if available
-#                 "workType": employee.profession,  # Placeholder, replace with actual work type if available
-#                 "rate": employee.rating,  # Placeholder, replace with actual rating if available
-#                 "reviewsCount": 0,
-#             }
-#         ],
-#         times=slots,
-#         onlyCard=False,
-#     )
-
