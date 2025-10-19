@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import List, Optional, Union
 from datetime import date, datetime, time, timedelta
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import uuid
 
 from app.auth.dependencies import get_current_user, get_current_user_optional
@@ -36,8 +36,19 @@ class MobileAppointmentCreate(BaseModel):
     schedule_id: Optional[str] = None  # Service model'dan
     # schedule_id: str
     employee_id: str
-    # application_date: Optional[date] = Field(default=None, alias="date")
+    application_date: Optional[date] = Field(None, alias="date")
     application_time: time = Field(alias="time")
+
+    @field_validator("application_time", mode="before")
+    def _validate_hhmm_time(cls, v):
+        if isinstance(v, str):
+            # Faqat HH:MM formatiga ruxsat
+            import re
+            if not re.fullmatch(r"\d{2}:\d{2}", v):
+                raise ValueError("time HH:MM formatida bo'lishi kerak")
+            from datetime import datetime as _dt
+            return _dt.strptime(v, "%H:%M").time()
+        return v
     # user_name: Optional[str] = None
     # phone_number: Optional[str] = None
     only_card: bool = False
@@ -585,6 +596,20 @@ async def create_appointment(
                 status_code=404,
                 detail=get_translation(language, "errors.404") or "Jadval topilmadi",
             )
+        # resolved_date: kiritilmasa schedule.date olinadi
+        resolved_date = appointment_data.application_date or schedule.date
+        if resolved_date is None:
+            raise HTTPException(
+                status_code=400,
+                detail=get_translation(language, "errors.400") or "Sana kiritilmagan va jadvalda sana mavjud emas",
+            )
+        # Tanlangan vaqt majburiy
+        selected_time = appointment_data.application_time
+        if selected_time is None:
+            raise HTTPException(
+                status_code=400,
+                detail=get_translation(language, "errors.400") or "Vaqt kiritilmagan va jadvalda boshlanish vaqti mavjud emas",
+            )
 
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
         employee = (
@@ -638,7 +663,7 @@ async def create_appointment(
 
         # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
         if schedule.start_time and schedule.end_time:
-            if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
+            if not (schedule.start_time <= selected_time <= schedule.end_time):
                 raise HTTPException(
                     status_code=400,
                     detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas",
@@ -650,8 +675,8 @@ async def create_appointment(
             .filter(
                 and_(
                     Appointment.employee_id == appointment_data.employee_id,
-                    Appointment.application_date == appointment_data.application_date,
-                    Appointment.application_time == appointment_data.application_time,
+                    Appointment.application_date == resolved_date,
+                    Appointment.application_time == selected_time,
                     Appointment.is_cancelled == False,
                 )
             )
@@ -673,10 +698,10 @@ async def create_appointment(
         # 9. Appointment yaratish
         new_appointment = Appointment(
             application_number=application_number,
-            user_name=current_user.full_name or "",
-            phone_number=current_user.phone or "",
-            application_date=schedule.date,
-            application_time=appointment_data.application_time,
+            user_name=(current_user.full_name if current_user and current_user.full_name else ""),
+            phone_number=(current_user.phone if current_user and current_user.phone else ""),
+            application_date=resolved_date,
+            application_time=selected_time,
             employee_id=appointment_data.employee_id,
             service_name=service_name,
             service_price=service_price,
