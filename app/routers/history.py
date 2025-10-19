@@ -10,7 +10,7 @@ from app.database import get_db
 from app.auth.dependencies import get_current_user_only
 from app.models import Appointment, User
 
-router = APIRouter(prefix="/history", tags=["History"])
+router = APIRouter(prefix="/history", tags=["History"]) 
 
 
 class StoryAppointmentItem(BaseModel):
@@ -44,6 +44,13 @@ class StoryAppointmentItem(BaseModel):
     is_cancelled: bool
 
 
+class PaginationMeta(BaseModel):
+    page: int
+    limit: int
+    total: int
+    pages: int
+
+
 class StoryAppointmentsResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
@@ -64,6 +71,12 @@ class StoryAppointmentsResponse(BaseModel):
                         "is_cancelled": False,
                     }
                 ],
+                "pagination": {
+                    "page": 1,
+                    "limit": 10,
+                    "total": 1,
+                    "pages": 1
+                }
             }
         }
     )
@@ -71,6 +84,7 @@ class StoryAppointmentsResponse(BaseModel):
     success: bool = True
     count: int
     data: List[StoryAppointmentItem]
+    pagination: PaginationMeta
 
 
 def _user_filter(current_user: User):
@@ -117,7 +131,8 @@ def _text_filter(q: str):
 def my_upcoming(
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=10, le=100),
+    page: int = Query(default=1, ge=1),
 ):
     """
     1-api: Foydalanuvchi bron qilgan xizmatlar, eskirmagan (hali ko‘rsatilmagan).
@@ -126,6 +141,19 @@ def my_upcoming(
     - Vaqti kelmagan yoki bugungi, ammo kelajakdagi vaqt
     """
     now_dt = datetime.now()
+    offset = (page - 1) * limit
+
+    total = (
+        db.query(func.count(Appointment.id))
+        .filter(
+            _user_filter(current_user),
+            _upcoming_filter(now_dt),
+            Appointment.is_cancelled == False,
+            Appointment.is_completed == False,
+        )
+        .scalar()
+    )
+
     items = (
         db.query(Appointment)
         .filter(
@@ -135,24 +163,48 @@ def my_upcoming(
             Appointment.is_completed == False,
         )
         .order_by(Appointment.application_date.asc(), Appointment.application_time.asc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
     data = [StoryAppointmentItem.model_validate(i) for i in items]
-    return StoryAppointmentsResponse(success=True, count=len(data), data=data)
+    return StoryAppointmentsResponse(
+        success=True,
+        count=len(data),
+        data=data,
+        pagination=PaginationMeta(
+            page=page,
+            limit=limit,
+            total=total,
+            pages=(total + limit - 1) // limit if limit else 1,
+        ),
+    )
 
 
 @router.get("/my/expired", response_model=StoryAppointmentsResponse)
 def my_expired(
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=10, le=100),
+    page: int = Query(default=1, ge=1),
 ):
     """
     2-api: Faqat eskirgan (o‘tib ketgan) bron qilingan xizmatlar.
     - is_cancelled = False (bron bekor qilingan bo‘lsa, aktiv hisoblanmaydi)
     """
     now_dt = datetime.now()
+    offset = (page - 1) * limit
+
+    total = (
+        db.query(func.count(Appointment.id))
+        .filter(
+            _user_filter(current_user),
+            _expired_filter(now_dt),
+            Appointment.is_cancelled == False,
+        )
+        .scalar()
+    )
+
     items = (
         db.query(Appointment)
         .filter(
@@ -161,11 +213,22 @@ def my_expired(
             Appointment.is_cancelled == False,
         )
         .order_by(Appointment.application_date.desc(), Appointment.application_time.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
     data = [StoryAppointmentItem.model_validate(i) for i in items]
-    return StoryAppointmentsResponse(success=True, count=len(data), data=data)
+    return StoryAppointmentsResponse(
+        success=True,
+        count=len(data),
+        data=data,
+        pagination=PaginationMeta(
+            page=page,
+            limit=limit,
+            total=total,
+            pages=(total + limit - 1) // limit if limit else 1,
+        ),
+    )
 
 
 @router.get("/my/search/expired", response_model=StoryAppointmentsResponse)
@@ -173,12 +236,26 @@ def my_search_expired(
     q: str = Query(..., min_length=1),
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=10, le=100),
+    page: int = Query(default=1, ge=1),
 ):
     """
     3-api: Matn bo‘yicha (nomi shu matndan boshlanadi yoki matn mavjud) eskirgan bronlarni qaytaradi.
     """
     now_dt = datetime.now()
+    offset = (page - 1) * limit
+
+    total = (
+        db.query(func.count(Appointment.id))
+        .filter(
+            _user_filter(current_user),
+            _expired_filter(now_dt),
+            Appointment.is_cancelled == False,
+            _text_filter(q),
+        )
+        .scalar()
+    )
+
     items = (
         db.query(Appointment)
         .filter(
@@ -188,11 +265,22 @@ def my_search_expired(
             _text_filter(q),
         )
         .order_by(Appointment.application_date.desc(), Appointment.application_time.desc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
     data = [StoryAppointmentItem.model_validate(i) for i in items]
-    return StoryAppointmentsResponse(success=True, count=len(data), data=data)
+    return StoryAppointmentsResponse(
+        success=True,
+        count=len(data),
+        data=data,
+        pagination=PaginationMeta(
+            page=page,
+            limit=limit,
+            total=total,
+            pages=(total + limit - 1) // limit if limit else 1,
+        ),
+    )
 
 
 @router.get("/my/search/upcoming", response_model=StoryAppointmentsResponse)
@@ -200,7 +288,8 @@ def my_search_upcoming(
     q: str = Query(..., min_length=1),
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=10, le=100),
+    page: int = Query(default=1, ge=1),
 ):
     """
     4-api: 3-api’dagi matn filtri bilan faqat aktiv, eskirmagan bronlarni qaytaradi.
@@ -209,6 +298,20 @@ def my_search_upcoming(
     - vaqt kelmagan yoki bugun kelajakdagi
     """
     now_dt = datetime.now()
+    offset = (page - 1) * limit
+
+    total = (
+        db.query(func.count(Appointment.id))
+        .filter(
+            _user_filter(current_user),
+            _upcoming_filter(now_dt),
+            Appointment.is_cancelled == False,
+            Appointment.is_completed == False,
+            _text_filter(q),
+        )
+        .scalar()
+    )
+
     items = (
         db.query(Appointment)
         .filter(
@@ -219,8 +322,66 @@ def my_search_upcoming(
             _text_filter(q),
         )
         .order_by(Appointment.application_date.asc(), Appointment.application_time.asc())
+        .offset(offset)
         .limit(limit)
         .all()
     )
     data = [StoryAppointmentItem.model_validate(i) for i in items]
-    return StoryAppointmentsResponse(success=True, count=len(data), data=data)
+    return StoryAppointmentsResponse(
+        success=True,
+        count=len(data),
+        data=data,
+        pagination=PaginationMeta(
+            page=page,
+            limit=limit,
+            total=total,
+            pages=(total + limit - 1) // limit if limit else 1,
+        ),
+    )
+
+
+class UserBookingStatsResponse(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "user_id": "user id",
+                "all_booked": 6,
+                "cancel_booked": 2,
+                "active_book": 4
+            }
+        }
+    )
+
+    user_id: str
+    all_booked: int
+    cancel_booked: int
+    active_book: int
+
+
+@router.get("/my/stats", response_model=UserBookingStatsResponse)
+def my_booking_stats(
+    current_user: User = Depends(get_current_user_only),
+    db: Session = Depends(get_db),
+):
+    total = db.query(Appointment).filter(_user_filter(current_user)).count()
+    cancelled = (
+        db.query(Appointment)
+        .filter(_user_filter(current_user), Appointment.is_cancelled == True)
+        .count()
+    )
+    active = (
+        db.query(Appointment)
+        .filter(
+            _user_filter(current_user),
+            Appointment.is_cancelled == False,
+            Appointment.is_completed == False,
+        )
+        .count()
+    )
+
+    return UserBookingStatsResponse(
+        user_id=str(current_user.id),
+        all_booked=total,
+        cancel_booked=cancelled,
+        active_book=active,
+    )
