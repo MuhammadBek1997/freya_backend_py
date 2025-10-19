@@ -22,7 +22,7 @@ class Schedule(BaseModel):
     
     # Relationships
     salon = relationship("Salon", back_populates="schedules")
-    appointments = relationship("Appointment", back_populates="schedule")
+    # appointments = relationship("Appointment", back_populates="schedule")
 
 class ScheduleBook(BaseModel):
     __tablename__ = "schedule_books"

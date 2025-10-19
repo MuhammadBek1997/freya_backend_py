@@ -6,6 +6,7 @@ from datetime import date, datetime, time, timedelta
 from pydantic import BaseModel, ConfigDict, Field
 import uuid
 
+from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
@@ -14,6 +15,7 @@ from app.models.employee import Employee, EmployeeComment
 from app.models.appointment import Appointment
 from app.models.payment_card import PaymentCard
 from app.models.service import Service
+from app.models.user import User
 from app.schemas.schedule_mobile import (
     MobileScheduleListResponse,
     MobileScheduleServiceItem,
@@ -32,30 +34,30 @@ from app.schemas.schedule_mobile import (
 class MobileAppointmentCreate(BaseModel):
     salon_id: str
     service_id: Optional[str] = None  # Service model'dan
-    schedule_id: str
+    # schedule_id: str
     employee_id: str
-    application_date: Optional[date] = Field(default=None, alias="date")
-    application_time: time = Field(alias="time")
-    user_name: Optional[str] = None
-    phone_number: Optional[str] = None
+    # application_date: Optional[date] = Field(default=None, alias="date")
+    application_time: datetime = Field(alias="time")
+    # user_name: Optional[str] = None
+    # phone_number: Optional[str] = None
     only_card: bool = False
     payment_card_id: Optional[str] = None  # only_card=True bo'lsa majburiy
-    notes: Optional[str] = None
+    # notes: Optional[str] = None
 
     # Swagger example (Pydantic v2)
     model_config = ConfigDict(populate_by_name=True, json_schema_extra={
         "example": {
             "salon_id": "4302cd19-0f0e-4182-afaa-8dd152d0ed8d",
             "service_id": None,
-            "schedule_id": "e78d69da-833d-4a1d-83e2-648b671b3085",
+            # "schedule_id": "e78d69da-833d-4a1d-83e2-648b671b3085",
             "employee_id": "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb",
-            "date": "2025-10-07",
-            "time": "11:52",
-            "user_name": "Booknow Tester",
-            "phone_number": "+998901234567",
+            # "date": "2025-10-07",
+            "application_time": "11:52",
+            # "user_name": "Booknow Tester",
+            # "phone_number": "+998901234567",
             "only_card": False,
             "payment_card_id": None,
-            "notes": "booknow test"
+            # "notes": "booknow test"
         }
     })
 
@@ -525,6 +527,7 @@ async def create_appointment(
     appointment_data: MobileAppointmentCreate,
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Yangi appointment yaratish - salon, servis, vaqt, employee va karta tekshirish bilan"""
     try:
@@ -543,26 +546,23 @@ async def create_appointment(
             )
 
         # 2. Schedule mavjudligini tekshirish
-        schedule = db.query(Schedule).filter(
-            and_(
-                Schedule.id == appointment_data.schedule_id,
-                Schedule.salon_id == appointment_data.salon_id,
-                Schedule.date == appointment_data.application_date,
-                Schedule.is_active == True
-            )
-        ).first()
+        # schedule = db.query(Schedule).filter(
+        #     and_(
+        #         Schedule.id == appointment_data.schedule_id,
+        #         Schedule.salon_id == appointment_data.salon_id,
+        #         Schedule.date == appointment_data.application_date,
+        #         Schedule.is_active == True
+        #     )
+        # ).first()
         
-        if not schedule:
-            raise HTTPException(
-                status_code=404,
-                detail=get_translation(language, "errors.404") or "Jadval topilmadi"
-            )
-
-        # Sana: agar body'da berilmasa schedule.date dan olamiz
-        resolved_date = appointment_data.application_date or schedule.date
+        # if not schedule:
+        #     raise HTTPException(
+        #         status_code=404,
+        #         detail=get_translation(language, "errors.404") or "Jadval topilmadi"
+        #     )
 
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
-        employee = db.query(Employee).filter(
+        employee = db.query(employee).filter(
             and_(
                 Employee.id == appointment_data.employee_id,
                 Employee.salon_id == appointment_data.salon_id,
@@ -575,17 +575,10 @@ async def create_appointment(
                 status_code=404,
                 detail=get_translation(language, "errors.404") or "Xodim topilmadi"
             )
-        
-        # Employee schedule'da borligini tekshirish
-        if schedule.employee_list and appointment_data.employee_id not in schedule.employee_list:
-            raise HTTPException(
-                status_code=400,
-                detail=get_translation(language, "errors.400") or "Xodim bu jadvalda mavjud emas"
-            )
 
         # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa)
-        service_name = schedule.name  # Default
-        service_price = float(schedule.price)
+        # service_name = schedule.name  # Default
+        # service_price = float(schedule.price)
         
         if appointment_data.service_id:
             service = db.query(Service).filter(
@@ -622,19 +615,18 @@ async def create_appointment(
                 )
 
         # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
-        if schedule.start_time and schedule.end_time:
-            if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
-                raise HTTPException(
-                    status_code=400,
-                    detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas"
-                )
+        # if schedule.start_time and schedule.end_time:
+        #     if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
+        #         raise HTTPException(
+        #             status_code=400,
+        #             detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas"
+        #         )
 
         # 7. Bir xil vaqtda appointment borligini tekshirish
         existing_appointment = db.query(Appointment).filter(
             and_(
-                Appointment.schedule_id == appointment_data.schedule_id,
                 Appointment.employee_id == appointment_data.employee_id,
-                Appointment.application_date == resolved_date,
+                Appointment.application_date == appointment_data.application_date,
                 Appointment.application_time == appointment_data.application_time,
                 Appointment.is_cancelled == False
             )
@@ -652,16 +644,14 @@ async def create_appointment(
         # 9. Appointment yaratish
         new_appointment = Appointment(
             application_number=application_number,
-            user_name=appointment_data.user_name or "",
-            phone_number=appointment_data.phone_number or "",
-            application_date=resolved_date,
-            application_time=appointment_data.application_time,
-            schedule_id=appointment_data.schedule_id,
+            user_name=current_user.full_name or "",
+            phone_number=current_user.phone or "",
+            application_date=appointment_data.application_time.date(),
+            application_time=appointment_data.application_time.time(),
             employee_id=appointment_data.employee_id,
             service_name=service_name,
             service_price=service_price,
             status="pending",
-            notes=appointment_data.notes,
             is_confirmed=False,
             is_completed=False,
             is_cancelled=False
@@ -672,10 +662,10 @@ async def create_appointment(
         db.refresh(new_appointment)
 
         booked_q = []
-        if appointment_data.phone_number:
+        if current_user and current_user.phone:
             booked_q = db.query(Appointment).filter(
                 and_(
-                    Appointment.phone_number == appointment_data.phone_number,
+                    Appointment.phone_number == current_user and current_user.phone,
                     Appointment.is_cancelled == False,
                 )
             ).order_by(Appointment.application_date.desc(), Appointment.application_time.desc()).limit(10).all()
@@ -713,7 +703,6 @@ async def create_appointment(
             status_code=500,
             detail=get_translation(language, "errors.500") or "Server xatosi"
         )
-#     employee = db.query(Employee).filter(Employee.id == employee_id).first()
     
 #     return MobileScheduleServiceItem(
 #         id=str(schedule.id),

@@ -11,7 +11,7 @@ class Appointment(BaseModel):
     phone_number = Column(String(20), nullable=False)
     application_date = Column(Date, nullable=False)
     application_time = Column(Time, nullable=False)
-    schedule_id = Column(String(36), ForeignKey("schedules.id"), nullable=False)
+    # schedule_id = Column(String(36), ForeignKey("schedules.id"), nullable=False)
     employee_id = Column(String(36), ForeignKey("employees.id"), nullable=True)
     service_name = Column(String(255), nullable=False)
     service_price = Column(Numeric(10, 2), nullable=False)
@@ -24,5 +24,5 @@ class Appointment(BaseModel):
     
     # Relationships
     user = relationship("User", back_populates="appointments")
-    schedule = relationship("Schedule", back_populates="appointments")
+    # schedule = relationship("Schedule", back_populates="appointments")
     employee = relationship("Employee", back_populates="appointments")
