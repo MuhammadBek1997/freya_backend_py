@@ -37,7 +37,7 @@ class MobileAppointmentCreate(BaseModel):
     # schedule_id: str
     employee_id: str
     # application_date: Optional[date] = Field(default=None, alias="date")
-    application_time: datetime = Field(alias="time")
+    application_time: time = Field(alias="time")
     # user_name: Optional[str] = None
     # phone_number: Optional[str] = None
     only_card: bool = False
