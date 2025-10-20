@@ -616,7 +616,7 @@ async def filter_salons(
     language: Optional[str] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
 ):
-    """Filter salons by multiple criteria."""
+    """Filter salons by multiple criteria. """
     try:
         if latitude is not None or longitude is not None:
             validate_coordinates(latitude, longitude, language)
