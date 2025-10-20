@@ -602,6 +602,8 @@ async def filter_salons(
     isRecommended: Optional[bool] = None,
     only_women: Optional[bool] = None,
     only_female: Optional[bool] = None,
+    isAir: Optional[bool] = Query(None),
+    forChildren: Optional[bool] = Query(None),
     isDiscount: Optional[bool] = None,
     types: Optional[str] = Query(None, description="Comma-separated salon types"),
     comforts: Optional[str] = Query(None, description="Comma-separated comforts"),
@@ -626,7 +628,16 @@ async def filter_salons(
         is_recommended = isRecommended if isRecommended is not None else True
         if is_recommended:
             query = query.order_by(Salon.salon_rating.desc(), Salon.created_at.desc())
-        query = apply_types_filter(query, types)
+
+        # Extend types with isAir/forChildren flags
+        existing_types_list = [t.strip() for t in types.split(",") if t.strip()] if types else []
+        if isAir:
+            existing_types_list.append("hair_services")
+        if forChildren:
+            existing_types_list.append("for_children")
+        effective_types = ",".join(existing_types_list) if existing_types_list else None
+
+        query = apply_types_filter(query, effective_types)
         query = apply_comforts_filter(query, comforts)
         query = apply_discount_filter(query, isDiscount)
         
