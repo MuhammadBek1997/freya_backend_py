@@ -287,6 +287,7 @@ async def send_message(
             "receiver_id": new_message.receiver_id,
             "message_text": new_message.message_text,
             "created_at": new_message.created_at,
+            "file_url": new_message.file_url,
         },
     }
 
