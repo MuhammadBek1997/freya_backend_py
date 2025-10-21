@@ -952,3 +952,217 @@ async def get_mobile_schedules_by_employee(
             "pages": pages,
         },
     )
+
+
+# Simple daily summary schema for employee
+class SimpleEmployeeItem(BaseModel):
+    id: str
+    name: Optional[str] = None
+
+class SimpleEmployeeDailySummary(BaseModel):
+    date: str
+    avialable: bool
+    directions: List[str] = []
+    employees: List[SimpleEmployeeItem] = []
+
+
+@router.get(
+    "/employee/{employee_id}/summary",
+    response_model=SimpleEmployeeDailySummary,
+    summary="Mobil: Xodim bo'yicha kunlik soddalashtirilgan xulosa",
+    description="Berilgan sana bo'yicha xodim uchun soddalashtirilgan ma'lumot: date, avialable, directions, employees",
+)
+async def get_employee_daily_summary(
+    employee_id: str,
+    date: str = Query(..., description="YYYY-MM-DD formatida sana"),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Return minimal daily summary for an employee: {date, avialable, directions, employees}"""
+    # Parse date
+    try:
+        target_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "errors.400") or "Invalid date format. Use YYYY-MM-DD",
+        )
+
+    # Fetch schedules for target date that include the employee
+    schedules = (
+        db.query(Schedule)
+        .filter(
+            and_(
+                Schedule.date == target_date,
+                Schedule.is_active == True,
+            )
+        )
+        .order_by(Schedule.start_time.asc())
+        .all()
+    )
+
+    def _has_employee(emp_list, eid: str) -> bool:
+        if not emp_list:
+            return False
+        try:
+            if isinstance(emp_list, list):
+                return any(str(x) == str(eid) for x in emp_list)
+            if isinstance(emp_list, str):
+                return str(eid) in emp_list
+        except Exception:
+            return False
+        return False
+
+    matched = [s for s in schedules if _has_employee(s.employee_list, employee_id)]
+    avialable = bool(matched)
+
+    # Directions: unique schedule names for matched schedules
+    directions: List[str] = []
+    try:
+        names = [s.name for s in matched if getattr(s, "name", None)]
+        directions = sorted(list(set(names)))
+    except Exception:
+        directions = []
+
+    # Employees: unique employees across matched schedules (id, name)
+    employee_ids: List[str] = []
+    try:
+        for s in matched:
+            if s.employee_list:
+                try:
+                    employee_ids.extend([str(eid) for eid in s.employee_list])
+                except Exception:
+                    pass
+        employee_ids = sorted(list(set(employee_ids)))
+    except Exception:
+        employee_ids = []
+
+    employees: List[SimpleEmployeeItem] = []
+    if employee_ids:
+        for e in db.query(Employee).filter(Employee.id.in_(employee_ids)).all():
+            emp_name = getattr(e, "full_name", None) or getattr(e, "name", None)
+            employees.append(SimpleEmployeeItem(id=str(e.id), name=emp_name))
+
+    return SimpleEmployeeDailySummary(
+        date=target_date.isoformat(),
+        avialable=avialable,
+        directions=directions,
+        employees=employees,
+    )
+
+
+class SimpleEmployeeWeeklySummaryResponse(BaseModel):
+    success: bool
+    data: List[SimpleEmployeeDailySummary]
+    pagination: dict
+
+
+@router.get(
+    "/employee/{employee_id}/summary/week",
+    response_model=SimpleEmployeeWeeklySummaryResponse,
+    summary="Mobil: Xodim bo'yicha haftalik soddalashtirilgan xulosa",
+    description="Start_date bo'yicha 7 kunlik soddalashtirilgan ma'lumotlar: har kun uchun date, avialable, directions, employees",
+)
+async def get_employee_weekly_summary(
+    employee_id: str,
+    start_date: str = Query(..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(7, ge=1, le=7),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Return 7 kunlik minimal xulosa ro'yxati: [{date, avialable, directions, employees}, ...]"""
+    try:
+        start_dt = date.fromisoformat(start_date)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=get_translation(language, "errors.400") or "Invalid start_date format. Use YYYY-MM-DD",
+        )
+
+    total_days = 7
+    end_dt = start_dt + timedelta(days=total_days - 1)
+
+    schedules = (
+        db.query(Schedule)
+        .filter(
+            and_(
+                Schedule.date >= start_dt,
+                Schedule.date <= end_dt,
+                Schedule.is_active == True,
+            )
+        )
+        .order_by(Schedule.date.asc(), Schedule.start_time.asc())
+        .all()
+    )
+
+    def _has_employee(emp_list, eid: str) -> bool:
+        if not emp_list:
+            return False
+        try:
+            if isinstance(emp_list, list):
+                return any(str(x) == str(eid) for x in emp_list)
+            if isinstance(emp_list, str):
+                return str(eid) in emp_list
+        except Exception:
+            return False
+        return False
+
+    daily_items: List[SimpleEmployeeDailySummary] = []
+    for i in range(total_days):
+        day_dt = start_dt + timedelta(days=i)
+        day_scheds = [s for s in schedules if s.date == day_dt]
+        matched = [s for s in day_scheds if _has_employee(s.employee_list, employee_id)]
+        av = bool(matched)
+
+        # Directions
+        try:
+            names = [s.name for s in matched if getattr(s, "name", None)]
+            dirs = sorted(list(set(names)))
+        except Exception:
+            dirs = []
+
+        # Employees
+        emp_ids: List[str] = []
+        try:
+            for s in matched:
+                if s.employee_list:
+                    try:
+                        emp_ids.extend([str(eid) for eid in s.employee_list])
+                    except Exception:
+                        pass
+            emp_ids = sorted(list(set(emp_ids)))
+        except Exception:
+            emp_ids = []
+
+        emp_items: List[SimpleEmployeeItem] = []
+        if emp_ids:
+            for e in db.query(Employee).filter(Employee.id.in_(emp_ids)).all():
+                emp_name = getattr(e, "full_name", None) or getattr(e, "name", None)
+                emp_items.append(SimpleEmployeeItem(id=str(e.id), name=emp_name))
+
+        daily_items.append(
+            SimpleEmployeeDailySummary(
+                date=day_dt.isoformat(),
+                avialable=av,
+                directions=dirs,
+                employees=emp_items,
+            )
+        )
+
+    total = len(daily_items)
+    start_idx = (page - 1) * limit
+    end_idx = start_idx + limit
+    paged_days = daily_items[start_idx:end_idx]
+    pages = (total + limit - 1) // limit if limit else 0
+
+    return SimpleEmployeeWeeklySummaryResponse(
+        success=True,
+        data=paged_days,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": pages,
+        },
+    )
