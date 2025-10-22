@@ -818,10 +818,10 @@ async def bulk_update_employee_waiting_status(
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Bulk update employees waiting status (faqat xodim o'zi)"""
+    """Bulk update employees waiting status (xodim yoki salon admin)"""
     try:
-        # Faqat xodimga ruxsat
-        if getattr(current_user, "role", None) != "employee":
+        # Xodim yoki salon admin ruxsat
+        if getattr(current_user, "role", None) not in ["employee", "admin"]:
             raise HTTPException(
                 status_code=403,
                 detail=get_translation(language, "errors.403")
@@ -833,7 +833,41 @@ async def bulk_update_employee_waiting_status(
                 detail=get_translation(language, "errors.400")
             )
 
-        # Faqat o'z ID sini o'zgartirishga ruxsat
+        # Admin bo'lsa: o'z salonidagi employee_ids ro'yxatini yangilaydi
+        if getattr(current_user, "role", None) == "admin":
+            if not getattr(current_user, "salon_id", None):
+                raise HTTPException(
+                    status_code=403,
+                    detail=get_translation(language, "errors.403")
+                )
+            employees = db.query(Employee).filter(
+                and_(
+                    Employee.id.in_(status_data.employee_ids),
+                    Employee.salon_id == current_user.salon_id,
+                )
+            ).all()
+
+            if not employees:
+                raise HTTPException(
+                    status_code=404,
+                    detail=get_translation(language, "errors.404")
+                )
+
+            for emp in employees:
+                emp.is_waiting = status_data.is_waiting
+            db.commit()
+
+            return SuccessResponse(
+                success=True,
+                message=get_translation(language, "success"),
+                data={
+                    "updated_count": len(employees),
+                    "employee_ids": [str(emp.id) for emp in employees],
+                    "is_waiting": status_data.is_waiting,
+                },
+            )
+
+        # Xodim bo'lsa: faqat o'z ID sini o'zgartirishi mumkin
         if str(current_user.id) not in [str(eid) for eid in status_data.employee_ids]:
             raise HTTPException(
                 status_code=403,
@@ -872,16 +906,37 @@ async def update_employee_waiting_status(
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Update employee waiting status (faqat xodim o'zi)"""
+    """Update employee waiting status (xodim yoki salon admin)"""
     try:
-        # Faqat xodimga ruxsat
-        if getattr(current_user, "role", None) != "employee":
+        # Xodim yoki salon admin ruxsat
+        if getattr(current_user, "role", None) not in ["employee", "admin"]:
             raise HTTPException(
                 status_code=403,
                 detail=get_translation(language, "errors.403")
             )
 
-        # Faqat o'zini o'zgartira oladi
+        # Admin bo'lsa: o'z salonidagi xodimni yangilaydi
+        if getattr(current_user, "role", None) == "admin":
+            emp = db.query(Employee).filter(Employee.id == employee_id).first()
+            if not emp:
+                raise HTTPException(
+                    status_code=404,
+                    detail=get_translation(language, "errors.404")
+                )
+            if str(emp.salon_id) != str(getattr(current_user, "salon_id", None)):
+                raise HTTPException(
+                    status_code=403,
+                    detail=get_translation(language, "errors.403")
+                )
+            emp.is_waiting = status_data.is_waiting
+            db.commit()
+            return SuccessResponse(
+                success=True,
+                message=get_translation(language, "success"),
+                data={"id": str(employee_id), "is_waiting": status_data.is_waiting}
+            )
+
+        # Xodim bo'lsa: faqat o'zini o'zgartira oladi
         if str(current_user.id) != str(employee_id):
             raise HTTPException(
                 status_code=403,
