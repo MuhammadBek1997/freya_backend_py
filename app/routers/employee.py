@@ -818,10 +818,10 @@ async def bulk_update_employee_waiting_status(
     current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Bulk update employees waiting status (adminlar uchun)"""
+    """Bulk update employees waiting status (faqat xodim o'zi)"""
     try:
-        # Faqat admin/superadmin/private_admin uchun ruxsat
-        if getattr(current_user, "role", None) not in ["admin", "superadmin", "private_admin"]:
+        # Faqat xodimga ruxsat
+        if getattr(current_user, "role", None) != "employee":
             raise HTTPException(
                 status_code=403,
                 detail=get_translation(language, "errors.403")
@@ -833,31 +833,27 @@ async def bulk_update_employee_waiting_status(
                 detail=get_translation(language, "errors.400")
             )
 
-        # Admin o'z salonidagi xodimlarni yangilashi mumkin (agar salon_id mavjud bo'lsa)
-        query = db.query(Employee).filter(Employee.id.in_(status_data.employee_ids))
-        if getattr(current_user, "salon_id", None):
-            query = query.filter(Employee.salon_id == current_user.salon_id)
+        # Faqat o'z ID sini o'zgartirishga ruxsat
+        if str(current_user.id) not in [str(eid) for eid in status_data.employee_ids]:
+            raise HTTPException(
+                status_code=403,
+                detail=get_translation(language, "errors.403")
+            )
 
-        employees = query.all()
-        if not employees:
+        employee = db.query(Employee).filter(Employee.id == current_user.id).first()
+        if not employee:
             raise HTTPException(
                 status_code=404,
                 detail=get_translation(language, "errors.404")
             )
 
-        for emp in employees:
-            emp.is_waiting = status_data.is_waiting
-
+        employee.is_waiting = status_data.is_waiting
         db.commit()
 
         return SuccessResponse(
             success=True,
             message=get_translation(language, "success"),
-            data={
-                "updated_count": len(employees),
-                "employee_ids": [str(emp.id) for emp in employees],
-                "is_waiting": status_data.is_waiting,
-            },
+            data={"updated_count": 1, "employee_id": str(current_user.id), "is_waiting": status_data.is_waiting}
         )
     except HTTPException:
         raise
