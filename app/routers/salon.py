@@ -365,7 +365,10 @@ async def get_all_salons(
         # If isDiscount is false, filter salons that do not have a discount
         if isDiscount is not None:
             if isDiscount:
-                query = query.where(Salon.salon_sale.has_key("discount"))
+                query = query.filter(
+                    Salon.salon_sale.isnot(None),
+                    func.JSON_CONTAINS_PATH(Salon.salon_sale, 'one', '$.amount')
+                )
         # Private salon filter
         if is_private != "":
             is_private_value = is_private.lower() == "true"

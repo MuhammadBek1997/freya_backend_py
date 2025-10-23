@@ -319,7 +319,11 @@ def apply_comforts_filter(query, comforts: Optional[str]):
 def apply_discount_filter(query, is_discount: Optional[bool]):
     """Apply discount filter to SQLAlchemy query."""
     if is_discount:
-        return query.filter(Salon.salon_sale.has_key("discount"))
+        # Filter salons where the JSON field `salon_sale` contains the key `amount`
+        return query.filter(
+            Salon.salon_sale.isnot(None),
+            func.JSON_CONTAINS_PATH(Salon.salon_sale, 'one', '$.amount')
+        )
     return query
 
 
