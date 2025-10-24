@@ -1,5 +1,7 @@
 import hashlib
 import httpx
+import json
+import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from sqlalchemy.orm import Session
@@ -44,7 +46,7 @@ class ClickService:
         query_string = "&".join([f"{key}={params[key]}" for key in params.keys()])
         return f"{self.base_url}/payments/create?{query_string}"
 
-    async def create_employee_post_payment(self, employee_id: int, post_count: int = 4, db: Session = None) -> Dict[str, Any]:
+    async def create_employee_post_payment(self, employee_id: str, post_count: int = 4, db: Session = None) -> Dict[str, Any]:
         """Employee post uchun to'lov"""
         try:
             if db is None:
@@ -84,7 +86,7 @@ class ClickService:
             print(f"Employee post payment error: {error}")
             return {"success": False, "error": str(error)}
 
-    async def create_user_premium_payment(self, user_id: int, duration: int = 30, db: Session = None) -> Dict[str, Any]:
+    async def create_user_premium_payment(self, user_id: str, duration: int = 30, db: Session = None) -> Dict[str, Any]:
         """User premium uchun to'lov"""
         try:
             if db is None:
@@ -125,7 +127,7 @@ class ClickService:
             print(f"User premium payment error: {error}")
             return {"success": False, "error": str(error)}
 
-    async def create_salon_top_payment(self, salon_id: int, admin_id: int, duration: int = 7, db: Session = None) -> Dict[str, Any]:
+    async def create_salon_top_payment(self, salon_id: str, admin_id: str, duration: int = 7, db: Session = None) -> Dict[str, Any]:
         """Salon top uchun to'lov"""
         try:
             if db is None:
@@ -196,6 +198,20 @@ class ClickService:
             if not payment:
                 raise Exception("Payment not found")
 
+            # Idempotency: allaqachon yakunlangan bo'lsa qaytish
+            if payment.status == "completed":
+                return {"success": True, "payment": payment}
+
+            # Duplicate click_trans_id tekshirish
+            if click_trans_id:
+                duplicate = (
+                    db.query(Payment)
+                    .filter(Payment.click_trans_id == click_trans_id, Payment.transaction_id != transaction_id)
+                    .first()
+                )
+                if duplicate:
+                    raise Exception("Duplicate click_trans_id")
+
             payment.status = "completed"
             payment.click_trans_id = click_trans_id
             payment.updated_at = datetime.utcnow()
@@ -254,6 +270,222 @@ class ClickService:
         )
         db.add(salon_top_history)
         db.commit()
+
+    def _generate_auth_header(self) -> str:
+        """Click API uchun Auth header yaratish"""
+        timestamp = str(int(time.time()))
+        digest = hashlib.sha1((timestamp + self.secret_key).encode()).hexdigest()
+        return f"{self.merchant_user_id}:{digest}:{timestamp}"
+
+    async def create_card_token(self, card_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Karta tokenini yaratish"""
+        try:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Auth": self._generate_auth_header()
+            }
+
+            payload = {
+                "service_id": self.service_id,
+                "card_number": card_data["card_number"],
+                "expire_date": f"{card_data['expiry_month']:02d}{card_data['expiry_year']}",
+                "temporary": card_data.get("temporary", True)
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/merchant/card_token/request",
+                    headers=headers,
+                    json=payload,
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "success": True,
+                        "card_token": result.get("card_token"),
+                        "phone_number": result.get("phone_number"),
+                        "temporary": result.get("temporary", True),
+                        "error_code": result.get("error_code", 0),
+                        "error_note": result.get("error_note")
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error_code": response.status_code,
+                        "error_note": f"HTTP Error: {response.status_code}"
+                    }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error_code": -1,
+                "error_note": f"Token yaratishda xatolik: {str(e)}"
+            }
+
+    async def verify_card_token(self, card_token: str, sms_code: str) -> Dict[str, Any]:
+        """Karta tokenini tasdiqlash (SMS kod bilan)"""
+        try:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Auth": self._generate_auth_header()
+            }
+
+            payload = {
+                "service_id": self.service_id,
+                "card_token": card_token,
+                "sms_code": sms_code
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/merchant/card_token/verify",
+                    headers=headers,
+                    json=payload,
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "success": True,
+                        "verified": result.get("error_code", 0) == 0,
+                        "error_code": result.get("error_code", 0),
+                        "error_note": result.get("error_note")
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "error_code": response.status_code,
+                        "error_note": f"HTTP Error: {response.status_code}"
+                    }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error_code": -1,
+                "error_note": f"Token tasdiqlashda xatolik: {str(e)}"
+            }
+
+    async def create_direct_card_payment(self, payment_data: Dict[str, Any], db: Session = None) -> Dict[str, Any]:
+        """To'g'ridan-to'g'ri karta bilan to'lov"""
+        try:
+            if db is None:
+                db = next(get_db())
+
+            # To'lov yaratish
+            transaction_id = f"direct_{int(datetime.now().timestamp())}"
+            
+            payment = Payment(
+                transaction_id=transaction_id,
+                amount=payment_data["amount"],
+                payment_type=payment_data["payment_type"],
+                status="pending",
+                user_id=payment_data.get("user_id"),
+                employee_id=payment_data.get("employee_id"),
+                salon_id=payment_data.get("salon_id"),
+                description=f"Direct card payment - {payment_data['payment_type']}"
+            )
+            
+            db.add(payment)
+            db.commit()
+            db.refresh(payment)
+
+            # Click API ga to'lov so'rovi
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Auth": self._generate_auth_header()
+            }
+
+            payload = {
+                "service_id": self.service_id,
+                "card_token": payment_data["card_token"],
+                "amount": payment_data["amount"],
+                "transaction_parameter": transaction_id
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/merchant/card_token/payment",
+                    headers=headers,
+                    json=payload,
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    
+                    # Payment modelini yangilash
+                    payment.click_trans_id = str(result.get("payment_id", ""))
+                    payment.status = "processing" if result.get("error_code", 0) == 0 else "failed"
+                    db.commit()
+
+                    # Muvaffaqiyatli to'lov bo'lsa, handle qilish
+                    if result.get("error_code", 0) == 0 and result.get("payment_status") == 2:
+                        await self.handle_successful_payment(transaction_id, str(result.get("payment_id")), db)
+                        payment.status = "completed"
+                        db.commit()
+
+                    return {
+                        "success": True,
+                        "payment_id": result.get("payment_id"),
+                        "payment_status": result.get("payment_status"),
+                        "transaction_id": transaction_id,
+                        "error_code": result.get("error_code", 0),
+                        "error_note": result.get("error_note")
+                    }
+                else:
+                    payment.status = "failed"
+                    db.commit()
+                    return {
+                        "success": False,
+                        "transaction_id": transaction_id,
+                        "error_code": response.status_code,
+                        "error_note": f"HTTP Error: {response.status_code}"
+                    }
+
+        except Exception as e:
+            if 'payment' in locals():
+                payment.status = "failed"
+                db.commit()
+            return {
+                "success": False,
+                "error_code": -1,
+                "error_note": f"To'lov yaratishda xatolik: {str(e)}"
+            }
+
+    async def delete_card_token(self, card_token: str) -> Dict[str, Any]:
+        """Karta tokenini o'chirish"""
+        try:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Auth": self._generate_auth_header()
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(
+                    f"{self.base_url}/merchant/card_token/{self.service_id}/{card_token}",
+                    headers=headers,
+                    timeout=30.0
+                )
+
+                return {
+                    "success": response.status_code == 200,
+                    "error_code": 0 if response.status_code == 200 else response.status_code,
+                    "error_note": None if response.status_code == 200 else f"HTTP Error: {response.status_code}"
+                }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error_code": -1,
+                "error_note": f"Token o'chirishda xatolik: {str(e)}"
+            }
 
 
 # Singleton instance

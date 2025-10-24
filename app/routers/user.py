@@ -1043,7 +1043,7 @@ async def add_payment_card(
         db.query(PaymentCard)
         .filter(
             PaymentCard.user_id == current_user.id,
-            PaymentCard.card_number_hash
+            PaymentCard.card_number_encrypted
             == hashlib.sha256(card_data.card_number.encode()).hexdigest(),
         )
         .first()
@@ -1073,13 +1073,15 @@ async def add_payment_card(
     # Create payment card
     payment_card = PaymentCard(
         user_id=current_user.id,
-        card_number_hash=hashlib.sha256(card_data.card_number.encode()).hexdigest(),
-        masked_card_number=mask_card_number(card_data.card_number),
+        card_number_encrypted=hashlib.sha256(card_data.card_number.encode()).hexdigest(),
         card_type=get_card_type(card_data.card_number),
         card_holder_name=card_data.card_holder_name,
         expiry_month=card_data.expiry_month,
         expiry_year=card_data.expiry_year,
+        phone_number=current_user.phone,
         is_default=card_data.is_default,
+        is_active=True,
+        last_four_digits=card_data.card_number[-4:],
         created_at=datetime.utcnow(),
     )
 
@@ -1087,7 +1089,19 @@ async def add_payment_card(
     db.commit()
     db.refresh(payment_card)
 
-    return payment_card
+    # Build response with masked number from last four digits
+    response = PaymentCardResponse(
+        id=payment_card.id,
+        masked_card_number=f"**** **** **** {payment_card.last_four_digits}",
+        card_type=payment_card.card_type or "Unknown",
+        card_holder_name=payment_card.card_holder_name,
+        expiry_month=payment_card.expiry_month,
+        expiry_year=payment_card.expiry_year,
+        is_default=payment_card.is_default,
+        created_at=payment_card.created_at,
+    )
+
+    return response
 
 
 @router.get("/payment-cards", response_model=List[PaymentCardResponse])
@@ -1106,7 +1120,19 @@ async def get_user_payment_cards(
         .all()
     )
 
-    return cards
+    return [
+        PaymentCardResponse(
+            id=c.id,
+            masked_card_number=f"**** **** **** {c.last_four_digits}",
+            card_type=c.card_type or "Unknown",
+            card_holder_name=c.card_holder_name,
+            expiry_month=c.expiry_month,
+            expiry_year=c.expiry_year,
+            is_default=c.is_default,
+            created_at=c.created_at,
+        )
+        for c in cards
+    ]
 
 
 @router.put("/payment-cards/{card_id}", response_model=PaymentCardResponse)
@@ -1137,7 +1163,7 @@ async def update_payment_card(
             PaymentCard.user_id == current_user.id, PaymentCard.id != card_id
         ).update({"is_default": False})
 
-    # Update fields
+    # Update fields (allowed: card_holder_name, expiry_month, expiry_year, is_default)
     update_data = card_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(card, field, value)
@@ -1145,7 +1171,16 @@ async def update_payment_card(
     db.commit()
     db.refresh(card)
 
-    return card
+    return PaymentCardResponse(
+        id=card.id,
+        masked_card_number=f"**** **** **** {card.last_four_digits}",
+        card_type=card.card_type or "Unknown",
+        card_holder_name=card.card_holder_name,
+        expiry_month=card.expiry_month,
+        expiry_year=card.expiry_year,
+        is_default=card.is_default,
+        created_at=card.created_at,
+    )
 
 
 @router.delete("/payment-cards/{card_id}", response_model=dict)
@@ -1216,7 +1251,17 @@ async def set_default_payment_card(
     db.commit()
     db.refresh(card)
 
-    return card
+    return PaymentCardResponse(
+        id=card.id,
+        masked_card_number=f"**** **** **** {card.last_four_digits}",
+        card_type=card.card_type or "Unknown",
+        card_holder_name=card.card_holder_name,
+        expiry_month=card.expiry_month,
+        expiry_year=card.expiry_year,
+        is_default=card.is_default,
+        created_at=card.created_at,
+    )
+
 """
 City dataset (districts) loader for user city selection
 """

@@ -1,25 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from app.database import get_db
 from app.services.click_service import click_service
 from app.middleware.auth import get_current_user, get_current_admin
+from app.middleware.rate_limiter import check_rate_limit, check_card_token_rate_limit
+from app.utils.payment_validator import PaymentValidator
 from app.models import User, Admin, Payment
+from app.schemas.user import CardTokenRequest, CardTokenResponse, DirectCardPaymentRequest, DirectCardPaymentResponse
 from pydantic import BaseModel
 
 
 class EmployeePostPaymentRequest(BaseModel):
-    employee_id: int
+    employee_id: str
     post_count: int = 4
 
 
 class UserPremiumPaymentRequest(BaseModel):
-    user_id: int
+    user_id: str
     duration: int = 30  # 30 yoki 90 kun
 
 
 class SalonTopPaymentRequest(BaseModel):
-    salon_id: int
+    salon_id: str
     duration: int = 7  # 7 yoki 30 kun
 
 
@@ -31,6 +34,10 @@ class PaymentCallbackRequest(BaseModel):
     transaction_id: str
     click_trans_id: str
     status: str
+    sign: Optional[str] = None  # Click imzosi (ixtiyoriy)
+    merchant_id: Optional[str] = None
+    service_id: Optional[str] = None
+    amount: Optional[int] = None
 
 
 router = APIRouter(prefix="/payment", tags=["Payment"])
@@ -175,7 +182,7 @@ async def check_payment_status(
                 detail="To'lov topilmadi"
             )
         
-        if payment.user_id != current_user.id:
+        if not payment.user_id or payment.user_id != current_user.id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Siz faqat o'zingizning to'lovlaringizni ko'ra olasiz"
@@ -205,8 +212,36 @@ async def payment_callback(
     - **transaction_id**: Transaction ID
     - **click_trans_id**: Click transaction ID
     - **status**: To'lov holati
+    - **sign**: Imzo (ixtiyoriy) – tekshiruv uchun
     """
     try:
+        payment = db.query(Payment).filter(Payment.transaction_id == request.transaction_id).first()
+        if not payment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="To'lov topilmadi"
+            )
+
+        # Idempotency: agar allaqachon yakunlangan bo'lsa, qaytamiz
+        if payment.status == "completed":
+            return {"success": True, "message": "Allaqachon yakunlangan", "transaction_id": request.transaction_id}
+
+        # Optional signature verification (agar sign bor bo'lsa)
+        if request.sign and request.merchant_id and request.service_id:
+            params = {
+                "merchant_id": request.merchant_id,
+                "service_id": request.service_id,
+                "transaction_param": request.transaction_id
+            }
+            if request.amount is not None:
+                params["amount"] = request.amount
+            expected = click_service.generate_signature(params)
+            if expected != request.sign:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Imzo mos kelmadi"
+                )
+
         if request.status == "success":
             result = await click_service.handle_successful_payment(
                 transaction_id=request.transaction_id,
@@ -222,23 +257,49 @@ async def payment_callback(
             
             return {
                 "success": True,
-                "message": "To'lov muvaffaqiyatli qayta ishlandi"
+                "message": "To'lov muvaffaqiyatli yakunlandi",
+                "transaction_id": request.transaction_id
             }
         else:
-            # To'lov muvaffaqiyatsiz bo'lgan holat
-            payment = db.query(Payment).filter(Payment.transaction_id == request.transaction_id).first()
-            if payment:
-                payment.status = "failed"
-                db.commit()
-            
-            return {
-                "success": False,
-                "message": "To'lov muvaffaqiyatsiz"
-            }
+            # Failed/cancelled
+            payment.status = "failed"
+            payment.updated_at = payment.updated_at  # trigger onupdate
+            db.commit()
+            return {"success": False, "message": "To'lov bajarilmadi", "transaction_id": request.transaction_id}
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Callback qayta ishlashda xatolik: {str(e)}"
+            detail=f"Callbackda xatolik: {str(e)}"
+        )
+
+
+@router.get("/admin/status/{transaction_id}", summary="Admin: to'lov holatini tekshirish")
+async def admin_check_payment_status(
+    transaction_id: str,
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Admin uchun to'lov holatini tekshirish
+    
+    - **transaction_id**: Transaction ID
+    """
+    try:
+        payment = db.query(Payment).filter(Payment.transaction_id == transaction_id).first()
+        if not payment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="To'lov topilmadi"
+            )
+        result = await click_service.check_payment_status(transaction_id)
+        return {"success": True, "data": result}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"To'lov holatini tekshirishda xatolik: {str(e)}"
         )
 
 
@@ -248,30 +309,318 @@ async def get_payment_history(
     db: Session = Depends(get_db)
 ) -> Dict[str, Any]:
     """
-    Foydalanuvchining to'lov tarixi
+    Foydalanuvchi to'lov tarixi
     """
     try:
-        payments = db.query(Payment).filter(Payment.user_id == current_user.id).all()
+        payments = db.query(Payment).filter(Payment.user_id == current_user.id).order_by(Payment.created_at.desc()).all()
+        data = [
+            {
+                "id": p.id,
+                "amount": p.amount,
+                "type": p.payment_type,
+                "transaction_id": p.transaction_id,
+                "status": p.status,
+                "created_at": p.created_at,
+            }
+            for p in payments
+        ]
+        return {"success": True, "data": data}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Tarixni olishda xatolik: {str(e)}"
+        )
+
+
+# Karta tokenizatsiyasi endpointlari
+@router.post("/card-token/create", response_model=CardTokenResponse, summary="Karta tokenini yaratish")
+async def create_card_token(
+    request: CardTokenRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _: None = Depends(check_card_token_rate_limit)
+) -> CardTokenResponse:
+    """
+    Karta ma'lumotlarini tokenizatsiya qilish
+    
+    Rate limit: 3 so'rov 5 daqiqada
+    """
+    try:
+        # Qo'shimcha validatsiya
+        if not PaymentValidator.validate_card_number(request.card_number):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Karta raqami noto'g'ri formatda"
+            )
         
-        payment_list = []
-        for payment in payments:
-            payment_list.append({
-                "id": payment.id,
-                "amount": payment.amount,
-                "payment_type": payment.payment_type,
-                "transaction_id": payment.transaction_id,
-                "status": payment.status,
-                "description": payment.description,
-                "created_at": payment.created_at,
-                "updated_at": payment.updated_at
-            })
+        if not PaymentValidator.validate_expiry_date(request.expire_month, request.expire_year):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Karta amal qilish muddati noto'g'ri yoki o'tgan"
+            )
+        
+        # Karta raqamini tozalash
+        clean_card_number = PaymentValidator.sanitize_card_number(request.card_number)
+        
+        result = await click_service.create_card_token(
+            card_number=clean_card_number,
+            expire_month=request.expire_month,
+            expire_year=request.expire_year
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Karta tokenini yaratishda xatolik")
+            )
+        
+        return CardTokenResponse(
+            success=True,
+            card_token=result["card_token"],
+            phone_number=result.get("phone_number"),
+            message="Karta tokeni muvaffaqiyatli yaratildi"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Karta tokenini yaratishda xatolik: {str(e)}"
+        )
+
+
+@router.post("/card-token/verify", summary="Karta tokenini tasdiqlash")
+async def verify_card_token(
+    card_token: str,
+    sms_code: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    SMS kod orqali karta tokenini tasdiqlash
+    """
+    try:
+        result = await click_service.verify_card_token(card_token, sms_code)
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Karta tokenini tasdiqlashda xatolik")
+            )
         
         return {
             "success": True,
-            "data": payment_list
+            "message": "Karta tokeni muvaffaqiyatli tasdiqlandi"
         }
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"To'lov tarixini olishda xatolik: {str(e)}"
+            detail=f"Karta tokenini tasdiqlashda xatolik: {str(e)}"
+        )
+
+
+@router.delete("/card-token/{card_token}", summary="Karta tokenini o'chirish")
+async def delete_card_token(
+    card_token: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+) -> Dict[str, Any]:
+    """
+    Karta tokenini o'chirish
+    """
+    try:
+        result = await click_service.delete_card_token(card_token)
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Karta tokenini o'chirishda xatolik")
+            )
+        
+        return {
+            "success": True,
+            "message": "Karta tokeni muvaffaqiyatli o'chirildi"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Karta tokenini o'chirishda xatolik: {str(e)}"
+        )
+
+
+# To'g'ridan-to'g'ri karta to'lovi endpointlari
+@router.post("/direct/employee-post", response_model=DirectCardPaymentResponse, summary="Employee post uchun to'g'ridan-to'g'ri karta to'lovi")
+async def create_direct_employee_post_payment(
+    request: DirectCardPaymentRequest,
+    http_request: Request,
+    current_admin: Admin = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+    _: None = Depends(lambda req: check_rate_limit(req, max_requests=5, window_seconds=60))
+) -> DirectCardPaymentResponse:
+    """
+    Employee post uchun to'g'ridan-to'g'ri karta to'lovi
+    
+    Rate limit: 5 so'rov 1 daqiqada
+    """
+    try:
+        # Miqdor validatsiyasi
+        if not PaymentValidator.validate_amount(request.amount, "employee_post"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="To'lov miqdori noto'g'ri (1,000 - 1,000,000 so'm)"
+            )
+        
+        # Employee ID validatsiyasi
+        if not request.employee_id or not request.employee_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Employee ID talab qilinadi"
+            )
+        
+        result = await click_service.create_direct_card_payment(
+            card_token=request.card_token,
+            amount=request.amount,
+            payment_type="employee_post",
+            employee_id=request.employee_id,
+            user_id=None,
+            salon_id=None,
+            admin_id=str(current_admin.id),
+            db=db
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "To'lovni amalga oshirishda xatolik")
+            )
+        
+        return DirectCardPaymentResponse(
+            success=True,
+            transaction_id=result["transaction_id"],
+            payment_id=result["payment_id"],
+            status=result["status"],
+            message="To'lov muvaffaqiyatli amalga oshirildi"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"To'lovni amalga oshirishda xatolik: {str(e)}"
+        )
+
+
+@router.post("/direct/user-premium", response_model=DirectCardPaymentResponse, summary="User premium uchun to'g'ridan-to'g'ri karta to'lovi")
+async def create_direct_user_premium_payment(
+    request: DirectCardPaymentRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _: None = Depends(lambda req: check_rate_limit(req, max_requests=3, window_seconds=300))
+) -> DirectCardPaymentResponse:
+    """
+    User premium uchun to'g'ridan-to'g'ri karta to'lovi
+    
+    Rate limit: 3 so'rov 5 daqiqada
+    """
+    try:
+        # Miqdor validatsiyasi
+        if not PaymentValidator.validate_amount(request.amount, "user_premium"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="To'lov miqdori noto'g'ri (5,000 - 500,000 so'm)"
+            )
+        
+        result = await click_service.create_direct_card_payment(
+            card_token=request.card_token,
+            amount=request.amount,
+            payment_type="user_premium",
+            employee_id=None,
+            user_id=str(current_user.id),
+            salon_id=None,
+            admin_id=None,
+            db=db
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "To'lovni amalga oshirishda xatolik")
+            )
+        
+        return DirectCardPaymentResponse(
+            success=True,
+            transaction_id=result["transaction_id"],
+            payment_id=result["payment_id"],
+            status=result["status"],
+            message="To'lov muvaffaqiyatli amalga oshirildi"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"To'lovni amalga oshirishda xatolik: {str(e)}"
+        )
+
+
+@router.post("/direct/salon-top", response_model=DirectCardPaymentResponse, summary="Salon top uchun to'g'ridan-to'g'ri karta to'lovi")
+async def create_direct_salon_top_payment(
+    request: DirectCardPaymentRequest,
+    http_request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    _: None = Depends(lambda req: check_rate_limit(req, max_requests=3, window_seconds=300))
+) -> DirectCardPaymentResponse:
+    """
+    Salon top uchun to'g'ridan-to'g'ri karta to'lovi
+    
+    Rate limit: 3 so'rov 5 daqiqada
+    """
+    try:
+        # Miqdor validatsiyasi
+        if not PaymentValidator.validate_amount(request.amount, "salon_top"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="To'lov miqdori noto'g'ri (10,000 - 2,000,000 so'm)"
+            )
+        
+        # Salon ID validatsiyasi
+        if not request.salon_id or not request.salon_id.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Salon ID talab qilinadi"
+            )
+        
+        result = await click_service.create_direct_card_payment(
+            card_token=request.card_token,
+            amount=request.amount,
+            payment_type="salon_top",
+            employee_id=None,
+            user_id=str(current_user.id),
+            salon_id=request.salon_id,
+            admin_id=None,
+            db=db
+        )
+        
+        if not result.get("success"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "To'lovni amalga oshirishda xatolik")
+            )
+        
+        return DirectCardPaymentResponse(
+            success=True,
+            transaction_id=result["transaction_id"],
+            payment_id=result["payment_id"],
+            status=result["status"],
+            message="To'lov muvaffaqiyatli amalga oshirildi"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"To'lovni amalga oshirishda xatolik: {str(e)}"
         )

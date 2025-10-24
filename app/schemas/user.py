@@ -296,3 +296,79 @@ class TokenResponse(BaseModel):
     success: bool
     message: Optional[Union[str, None]] = None
     token: str
+
+
+# Karta tokenizatsiyasi uchun schemalar
+class CardTokenRequest(BaseModel):
+    card_number: str
+    expiry_month: int
+    expiry_year: int
+    card_holder_name: str
+    phone_number: Optional[str] = None
+    temporary: Optional[bool] = True  # True - bir martalik, False - ko'p martalik
+
+    @validator('card_number')
+    def validate_card_number(cls, v):
+        # Faqat raqamlar
+        if not v.isdigit():
+            raise ValueError('Karta raqami faqat raqamlardan iborat bo\'lishi kerak')
+        # Uzunlik tekshiruvi (13-19 raqam)
+        if len(v) < 13 or len(v) > 19:
+            raise ValueError('Karta raqami 13-19 raqam orasida bo\'lishi kerak')
+        return v
+
+    @validator('expiry_month')
+    def validate_month(cls, v):
+        if v < 1 or v > 12:
+            raise ValueError('Oy 1-12 orasida bo\'lishi kerak')
+        return v
+
+    @validator('expiry_year')
+    def validate_year(cls, v):
+        from datetime import datetime
+        current_year = datetime.now().year
+        if v < current_year or v > current_year + 20:
+            raise ValueError(f'Yil {current_year}-{current_year + 20} orasida bo\'lishi kerak')
+        return v
+
+
+class CardTokenResponse(BaseModel):
+    success: bool
+    card_token: Optional[str] = None
+    phone_number: Optional[str] = None
+    temporary: bool
+    error_code: Optional[int] = None
+    error_note: Optional[str] = None
+
+
+class DirectCardPaymentRequest(BaseModel):
+    card_token: str
+    amount: float
+    payment_type: str  # employee_post, user_premium, salon_top
+    duration_months: Optional[int] = None  # premium va salon_top uchun
+    post_count: Optional[int] = None  # employee_post uchun
+    employee_id: Optional[str] = None
+    user_id: Optional[str] = None
+    salon_id: Optional[str] = None
+
+    @validator('amount')
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError('Miqdor 0 dan katta bo\'lishi kerak')
+        return v
+
+    @validator('payment_type')
+    def validate_payment_type(cls, v):
+        allowed_types = ['employee_post', 'user_premium', 'salon_top']
+        if v not in allowed_types:
+            raise ValueError(f'To\'lov turi {allowed_types} dan biri bo\'lishi kerak')
+        return v
+
+
+class DirectCardPaymentResponse(BaseModel):
+    success: bool
+    payment_id: Optional[str] = None
+    payment_status: Optional[int] = None
+    transaction_id: Optional[str] = None
+    error_code: Optional[int] = None
+    error_note: Optional[str] = None
