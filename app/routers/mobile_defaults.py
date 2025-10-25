@@ -8,6 +8,8 @@ from app.i18nMini import get_translation
 from app.models.salon import Salon
 from app.models.user_favourite_salon import UserFavouriteSalon
 from app.schemas.salon import MobileSalonListResponse
+from app.auth.dependencies import get_current_user_optional
+from app.models.user import User
 
 # Reuse helpers from mobile salon router to keep item shape consistent
 from app.routers.salon_mobile import build_mobile_item, calculate_distance
@@ -56,7 +58,7 @@ async def filter_with_defaults_mobile(
     top: Optional[bool] = Query(None, description="Top salonlarni ko'rsatish (is_top=True)"),
     discount: Optional[bool] = Query(None, description="Chegirmali salonlarni ko'rsatish (salon_sale mavjud)"),
     recommended: Optional[bool] = Query(None, description="Tavsiya etilgan salonlarni ko'rsatish (yuqori rating)"),
-    isLiked: Optional[bool] = Query(None, description="Foydalanuvchi like bosgan salonlar (userId kerak)"),
+    isLiked: Optional[bool] = Query(None, description="Foydalanuvchi like bosgan salonlar (token kerak)"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -67,6 +69,7 @@ async def filter_with_defaults_mobile(
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """DEFAULT_SALON_TYPES va DEFAULT_SALON_COMFORT asosida alohida routerda filtr"""
     try:
@@ -126,7 +129,7 @@ async def filter_with_defaults_mobile(
                     continue
             salons = filtered
 
-        # Comfort filtering: 3 usuldan + eski flaglar bilan birlashtiramiz
+        # Comfort filtering
         selected_comforts: List[str] = []
         if comforts_list:
             selected_comforts = [c.strip().lower() for c in comforts_list if c]
@@ -144,9 +147,6 @@ async def filter_with_defaults_mobile(
             except Exception:
                 selected_comforts = []
 
-        # Eski boolean flaglar olib tashlandi; faqat comforts*, types* paramlar ishlatiladi
-
-        # Alias xaritasi (canonical -> aliases)
         alias_map = {
             'parking': [],
             'cafee': ['coffee'],
@@ -158,10 +158,9 @@ async def filter_with_defaults_mobile(
             'kids': ['children_service'],
         }
 
-        # Comfortlar bo'yicha AND mantiqda filtrlash
         for c in selected_comforts:
             key = c.lower()
-            # canonical keylar
+            key = c.lower()
             canonical = key
             if key == 'onlyfemale':
                 canonical = 'onlyFemale'
@@ -171,36 +170,33 @@ async def filter_with_defaults_mobile(
                 canonical = 'kids'
             elif key == 'bath':
                 canonical = 'bath'
-            # aliaslar
             aliases = alias_map.get(key, [])
             salons = [s for s in salons if _amenity_flag(s, canonical, aliases=aliases)]
 
-        # Eski boolean comfort flaglar bilan alohida filtrlash ham olib tashlandi
-
-        # Top salonlar filtri
+        # Top
         if top is True:
             salons = [s for s in salons if s.is_top is True]
 
-        # Chegirmali salonlar filtri
+        # Discount
         if discount is True:
             salons = [s for s in salons if s.salon_sale is not None and len(s.salon_sale) > 0]
 
-        # Tavsiya etilgan salonlar filtri (yuqori rating)
+        # Recommended
         if recommended is True:
             salons = [s for s in salons if s.salon_rating is not None and s.salon_rating >= 4.0]
 
-        # Foydalanuvchi like bosgan salonlar filtri
+        # Liked filter via user token
         if isLiked is not None:
-            if not userId:
-                raise HTTPException(status_code=400, detail="isLiked filtri uchun userId talab qilinadi")
+            if current_user is None:
+                raise HTTPException(status_code=401, detail="isLiked filtri uchun foydalanuvchi token kerak")
             filtered = []
             for s in salons:
                 try:
                     is_fav = db.query(UserFavouriteSalon).filter(
-                        UserFavouriteSalon.user_id == userId,
+                        UserFavouriteSalon.user_id == str(current_user.id),
                         UserFavouriteSalon.salon_id == str(s.id)
                     ).first() is not None
-                    if (isLiked and is_fav) or ((isLiked is False) and (not is_fav)):
+                    if (isLiked and is_fav) or (isLiked is False and not is_fav):
                         filtered.append(s)
                 except Exception:
                     continue
@@ -209,7 +205,8 @@ async def filter_with_defaults_mobile(
         total = len(salons)
         offset = (page - 1) * limit
         paginated = salons[offset: offset + limit]
-        items = [build_mobile_item(s, language, db, userId) for s in paginated]
+        user_id_for_favorite = str(current_user.id) if current_user else userId
+        items = [build_mobile_item(s, language, db, user_id_for_favorite) for s in paginated]
 
         return MobileSalonListResponse(
             success=True,
