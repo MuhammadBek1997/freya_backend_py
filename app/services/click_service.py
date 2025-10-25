@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Payment, Employee, User, Salon, SalonTopHistory
 from app.config import settings
+import logging
 
 
 class ClickService:
@@ -289,7 +290,7 @@ class ClickService:
             payload = {
                 "service_id": self.service_id,
                 "card_number": card_data["card_number"],
-                "expire_date": f"{card_data['expiry_month']:02d}{card_data['expiry_year']}",
+                "expire_date": f"{card_data['expiry_month']:02d}{str(card_data['expiry_year'])[-2:]}",
                 "temporary": card_data.get("temporary", True)
             }
 
@@ -303,11 +304,12 @@ class ClickService:
 
                 if response.status_code == 200:
                     result = response.json()
+                    success_flag = (result.get("error_code", 0) == 0 and bool(result.get("card_token")))
                     return {
-                        "success": True,
+                        "success": success_flag,
                         "card_token": result.get("card_token"),
                         "phone_number": result.get("phone_number"),
-                        "temporary": result.get("temporary", True),
+                        "temporary": result.get("temporary", card_data.get("temporary", True)),
                         "error_code": result.get("error_code", 0),
                         "error_note": result.get("error_note")
                     }
@@ -409,13 +411,14 @@ class ClickService:
             }
 
             async with httpx.AsyncClient() as client:
+                logger.info(f"[Click] Direct payment request start txn={transaction_id} amount={payment_data['amount']} type={payment_data['payment_type']}")
                 response = await client.post(
                     f"{self.base_url}/merchant/card_token/payment",
                     headers=headers,
                     json=payload,
-                    timeout=30.0
+                    timeout=httpx.Timeout(10.0, connect=5.0, read=10.0, write=10.0)
                 )
-
+                logger.info(f"[Click] Direct payment response status={response.status_code} txn={transaction_id}")
                 if response.status_code == 200:
                     result = response.json()
                     

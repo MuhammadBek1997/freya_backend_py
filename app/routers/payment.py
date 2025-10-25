@@ -354,7 +354,8 @@ async def create_card_token(
                 detail="Karta raqami noto'g'ri formatda"
             )
         
-        if not PaymentValidator.validate_expiry_date(request.expire_month, request.expire_year):
+        # Schema: expiry_month/expiry_year — shunga mos ishlatamiz
+        if not PaymentValidator.validate_expiry_date(request.expiry_month, request.expiry_year):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Karta amal qilish muddati noto'g'ri yoki o'tgan"
@@ -363,23 +364,26 @@ async def create_card_token(
         # Karta raqamini tozalash
         clean_card_number = PaymentValidator.sanitize_card_number(request.card_number)
         
-        result = await click_service.create_card_token(
-            card_number=clean_card_number,
-            expire_month=request.expire_month,
-            expire_year=request.expire_year
-        )
+        result = await click_service.create_card_token({
+            "card_number": clean_card_number,
+            "expiry_month": request.expiry_month,
+            "expiry_year": request.expiry_year,
+            "temporary": getattr(request, "temporary", True)
+        })
         
-        if not result.get("success"):
+        if not result.get("success") or not result.get("card_token"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.get("error", "Karta tokenini yaratishda xatolik")
+                detail=result.get("error_note") or "Karta tokenini yaratishda xatolik"
             )
         
         return CardTokenResponse(
             success=True,
-            card_token=result["card_token"],
+            card_token=result.get("card_token"),
             phone_number=result.get("phone_number"),
-            message="Karta tokeni muvaffaqiyatli yaratildi"
+            temporary=result.get("temporary", True),
+            error_code=result.get("error_code"),
+            error_note=result.get("error_note")
         )
     except HTTPException:
         raise
@@ -478,16 +482,14 @@ async def create_direct_employee_post_payment(
                 detail="Employee ID talab qilinadi"
             )
         
-        result = await click_service.create_direct_card_payment(
-            card_token=request.card_token,
-            amount=request.amount,
-            payment_type="employee_post",
-            employee_id=request.employee_id,
-            user_id=None,
-            salon_id=None,
-            admin_id=str(current_admin.id),
-            db=db
-        )
+        result = await click_service.create_direct_card_payment({
+            "card_token": request.card_token,
+            "amount": request.amount,
+            "payment_type": "employee_post",
+            "employee_id": request.employee_id,
+            "user_id": None,
+            "salon_id": None
+        }, db=db)
         
         if not result.get("success"):
             raise HTTPException(
@@ -497,10 +499,11 @@ async def create_direct_employee_post_payment(
         
         return DirectCardPaymentResponse(
             success=True,
-            transaction_id=result["transaction_id"],
-            payment_id=result["payment_id"],
-            status=result["status"],
-            message="To'lov muvaffaqiyatli amalga oshirildi"
+            transaction_id=result.get("transaction_id"),
+            payment_id=str(result.get("payment_id")) if result.get("payment_id") is not None else None,
+            payment_status=result.get("payment_status"),
+            error_code=result.get("error_code"),
+            error_note=result.get("error_note")
         )
     except HTTPException:
         raise
@@ -532,16 +535,14 @@ async def create_direct_user_premium_payment(
                 detail="To'lov miqdori noto'g'ri (5,000 - 500,000 so'm)"
             )
         
-        result = await click_service.create_direct_card_payment(
-            card_token=request.card_token,
-            amount=request.amount,
-            payment_type="user_premium",
-            employee_id=None,
-            user_id=str(current_user.id),
-            salon_id=None,
-            admin_id=None,
-            db=db
-        )
+        result = await click_service.create_direct_card_payment({
+            "card_token": request.card_token,
+            "amount": request.amount,
+            "payment_type": "user_premium",
+            "employee_id": None,
+            "user_id": str(current_user.id),
+            "salon_id": None
+        }, db=db)
         
         if not result.get("success"):
             raise HTTPException(
@@ -551,10 +552,11 @@ async def create_direct_user_premium_payment(
         
         return DirectCardPaymentResponse(
             success=True,
-            transaction_id=result["transaction_id"],
-            payment_id=result["payment_id"],
-            status=result["status"],
-            message="To'lov muvaffaqiyatli amalga oshirildi"
+            transaction_id=result.get("transaction_id"),
+            payment_id=str(result.get("payment_id")) if result.get("payment_id") is not None else None,
+            payment_status=result.get("payment_status"),
+            error_code=result.get("error_code"),
+            error_note=result.get("error_note")
         )
     except HTTPException:
         raise
@@ -593,16 +595,14 @@ async def create_direct_salon_top_payment(
                 detail="Salon ID talab qilinadi"
             )
         
-        result = await click_service.create_direct_card_payment(
-            card_token=request.card_token,
-            amount=request.amount,
-            payment_type="salon_top",
-            employee_id=None,
-            user_id=str(current_user.id),
-            salon_id=request.salon_id,
-            admin_id=None,
-            db=db
-        )
+        result = await click_service.create_direct_card_payment({
+            "card_token": request.card_token,
+            "amount": request.amount,
+            "payment_type": "salon_top",
+            "employee_id": None,
+            "user_id": str(current_user.id),
+            "salon_id": request.salon_id
+        }, db=db)
         
         if not result.get("success"):
             raise HTTPException(
@@ -612,10 +612,11 @@ async def create_direct_salon_top_payment(
         
         return DirectCardPaymentResponse(
             success=True,
-            transaction_id=result["transaction_id"],
-            payment_id=result["payment_id"],
-            status=result["status"],
-            message="To'lov muvaffaqiyatli amalga oshirildi"
+            transaction_id=result.get("transaction_id"),
+            payment_id=str(result.get("payment_id")) if result.get("payment_id") is not None else None,
+            payment_status=result.get("payment_status"),
+            error_code=result.get("error_code"),
+            error_note=result.get("error_note")
         )
     except HTTPException:
         raise
