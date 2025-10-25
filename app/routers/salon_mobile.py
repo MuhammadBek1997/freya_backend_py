@@ -15,7 +15,8 @@ from app.schemas.salon import (
     MobileSalonItem, 
     MobileSalonDetailResponse, 
     MobileAddressInfo, 
-    MobileSalonListResponse
+    MobileSalonListResponse,
+    NearbySalonItem
 )
 from app.models.employee import Employee, EmployeeComment
 from app.models.schedule import Schedule
