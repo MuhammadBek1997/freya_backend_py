@@ -784,7 +784,10 @@ async def add_favourite_salon(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
-    Sevimli salonga qo'shish
+    Sevimli salonni like kaliti asosida qo'shish yoki bekor qilish
+    - like=True bo'lsa: favourite qo'shiladi (agar mavjud bo'lmasa)
+    - like=False bo'lsa: favourite olib tashlanadi (agar mavjud bo'lsa)
+    - like=None bo'lsa: default True (qo'shish)
     """
     # Check if salon exists
     salon = db.query(Salon).filter(Salon.id == favourite_data.salon_id).first()
@@ -804,23 +807,25 @@ async def add_favourite_salon(
         .first()
     )
 
-    if existing_favourite:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_translation(language, "auth.userExists"),
-        )
+    like_flag = True if favourite_data.like is None else bool(favourite_data.like)
 
-    # Add to favourites
-    favourite = UserFavouriteSalon(
-        user_id=current_user.id,
-        salon_id=favourite_data.salon_id,
-        created_at=datetime.utcnow(),
-    )
-
-    db.add(favourite)
-    db.commit()
-
-    return {"success": True, "message": get_translation(language, "success")}
+    if like_flag:
+        # Add to favourites if not exists
+        if not existing_favourite:
+            favourite = UserFavouriteSalon(
+                user_id=current_user.id,
+                salon_id=favourite_data.salon_id,
+                created_at=datetime.utcnow(),
+            )
+            db.add(favourite)
+            db.commit()
+        return {"success": True, "message": get_translation(language, "success")}
+    else:
+        # Remove from favourites if exists
+        if existing_favourite:
+            db.delete(existing_favourite)
+            db.commit()
+        return {"success": True, "message": get_translation(language, "success")}
 
 
 @router.post("/favourites/remove", response_model=dict)

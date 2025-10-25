@@ -151,6 +151,7 @@ class UserLocationUpdate(BaseModel):
 
 class FavouriteSalonRequest(BaseModel):
     salon_id: str
+    like: Optional[bool] = None
 
 
 class EmployeeContactRequest(BaseModel):
