@@ -6,6 +6,7 @@ import json
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.salon import Salon
+from app.models.user_favourite_salon import UserFavouriteSalon
 from app.schemas.salon import MobileSalonListResponse
 
 # Reuse helpers from mobile salon router to keep item shape consistent
@@ -55,6 +56,7 @@ async def filter_with_defaults_mobile(
     top: Optional[bool] = Query(None, description="Top salonlarni ko'rsatish (is_top=True)"),
     discount: Optional[bool] = Query(None, description="Chegirmali salonlarni ko'rsatish (salon_sale mavjud)"),
     recommended: Optional[bool] = Query(None, description="Tavsiya etilgan salonlarni ko'rsatish (yuqori rating)"),
+    isLiked: Optional[bool] = Query(None, description="Foydalanuvchi like bosgan salonlar (userId kerak)"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -186,6 +188,23 @@ async def filter_with_defaults_mobile(
         # Tavsiya etilgan salonlar filtri (yuqori rating)
         if recommended is True:
             salons = [s for s in salons if s.salon_rating is not None and s.salon_rating >= 4.0]
+
+        # Foydalanuvchi like bosgan salonlar filtri
+        if isLiked is not None:
+            if not userId:
+                raise HTTPException(status_code=400, detail="isLiked filtri uchun userId talab qilinadi")
+            filtered = []
+            for s in salons:
+                try:
+                    is_fav = db.query(UserFavouriteSalon).filter(
+                        UserFavouriteSalon.user_id == userId,
+                        UserFavouriteSalon.salon_id == str(s.id)
+                    ).first() is not None
+                    if (isLiked and is_fav) or ((isLiked is False) and (not is_fav)):
+                        filtered.append(s)
+                except Exception:
+                    continue
+            salons = filtered
 
         total = len(salons)
         offset = (page - 1) * limit
