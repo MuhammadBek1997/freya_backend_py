@@ -245,6 +245,18 @@ class MobileSalonItem(BaseModel):
     class Config:
         from_attributes = True
 
+# Nearby-specific lightweight item for /mobile/salons/nearby
+class NearbySalonItem(BaseModel):
+    id: str
+    name: str
+    salonServices: List[str] = []
+    address: Optional[str] = None
+    rate: Optional[float] = 0.0
+    reviewsCount: int = 0
+    distance: Optional[float] = None
+    isFavorite: bool = False
+    photos: List[str] = []
+
 # Mobile-specific salon list response with pagination
 class MobileSalonListResponse(BaseModel):
     success: bool

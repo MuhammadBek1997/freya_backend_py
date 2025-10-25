@@ -673,7 +673,7 @@ async def filter_salons(
             detail=get_translation(language, "errors.500")
         )
 
-@router.get("/nearby", response_model=List[MobileSalonItem])
+@router.get("/nearby", response_model=List[NearbySalonItem])
 async def get_nearby_salons(
     latitude: float = Query(...),
     longitude: float = Query(...),
@@ -688,18 +688,79 @@ async def get_nearby_salons(
     """Get nearby salons within specified radius."""
     try:
         validate_coordinates(latitude, longitude, language)
-        
         query = db.query(Salon).filter(Salon.is_active == True, Salon.location.isnot(None))
-        
         private_value = parse_is_private(is_private)
         if private_value is not None:
             query = query.filter(Salon.private_salon == private_value)
-        
         all_salons = query.all()
-        nearby = filter_by_distance(all_salons, latitude, longitude, radius)
-        paginated = paginate(nearby, page, limit)
-        
-        return [build_mobile_item(s, language, db, userId) for s in paginated]
+        nearby_salons = filter_by_distance(all_salons, latitude, longitude, radius)
+        paginated = paginate(nearby_salons, page, limit)
+
+        result: List[NearbySalonItem] = []
+        for salon in paginated:
+            # Address (localized)
+            address = get_localized_field(salon, "address", language)
+            # Services
+            types = salon.salon_types if salon.salon_types else DEFAULT_SALON_TYPES
+            try:
+                selected_services = [
+                    str(t.get("type", "")).strip()
+                    for t in types
+                    if isinstance(t, dict) and t.get("selected")
+                ]
+                if not selected_services:
+                    selected_services = [
+                        str(t.get("type", "")).strip()
+                        for t in types
+                        if isinstance(t, dict)
+                    ]
+                salon_services = [s for s in selected_services if s]
+            except Exception:
+                salon_services = []
+
+            # Rating
+            rate = float(salon.salon_rating) if salon.salon_rating is not None else 0.0
+
+            # Reviews count
+            try:
+                reviews_count = db.query(func.count(EmployeeComment.id)).join(Employee).filter(
+                    Employee.salon_id == str(salon.id)
+                ).scalar() or 0
+            except Exception:
+                reviews_count = 0
+
+            # Distance
+            distance_val = None
+            try:
+                s_loc = salon.location or {}
+                s_lat = float(s_loc.get("lat"))
+                s_lng = float(s_loc.get("lng"))
+                distance_val = round(calculate_distance(float(latitude), float(longitude), s_lat, s_lng), 2)
+            except Exception:
+                distance_val = None
+
+            # Favorite
+            is_fav = is_favourite_salon(db, str(salon.id), userId)
+
+            # Photos
+            try:
+                photos = salon.photos or []
+            except Exception:
+                photos = []
+
+            result.append(NearbySalonItem(
+                id=str(salon.id),
+                name=salon.salon_name,
+                salonServices=salon_services,
+                address=address,
+                rate=rate,
+                reviewsCount=reviews_count,
+                distance=distance_val,
+                isFavorite=is_fav,
+                photos=photos,
+            ))
+
+        return result
     except HTTPException:
         raise
     except Exception as e:
