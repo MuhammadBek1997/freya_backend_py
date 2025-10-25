@@ -759,6 +759,7 @@ async def get_nearby_salons(
                 distance=distance_val,
                 isFavorite=is_fav,
                 photos=photos,
+                logo=salon.logo or "" ,
             ))
 
         return result

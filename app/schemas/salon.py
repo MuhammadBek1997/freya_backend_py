@@ -256,6 +256,7 @@ class NearbySalonItem(BaseModel):
     distance: Optional[float] = None
     isFavorite: bool = False
     photos: List[str] = []
+    logo: str
 
 # Mobile-specific salon list response with pagination
 class MobileSalonListResponse(BaseModel):
