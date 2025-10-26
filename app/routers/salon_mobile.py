@@ -23,6 +23,7 @@ from app.models.schedule import Schedule
 from app.models.appointment import Appointment
 from app.models.user_favourite_salon import UserFavouriteSalon
 from app.models.user import User
+from app.auth.dependencies import get_current_user_optional
 
 router = APIRouter(prefix="/mobile/salons", tags=["Mobile Salons"])
 
@@ -512,6 +513,7 @@ async def get_all_salons(
     db: Session = Depends(get_db),
     language: Optional[str] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get all active salons with pagination."""
     try:
@@ -526,7 +528,8 @@ async def get_all_salons(
         offset = (page - 1) * limit
         salons = query.order_by(Salon.created_at.desc()).offset(offset).limit(limit).all()
         
-        items = [build_mobile_item(s, language, db, userId) for s in salons]
+        user_id_for_favorite = str(current_user.id) if current_user else userId
+        items = [build_mobile_item(s, language, db, user_id_for_favorite) for s in salons]
         
         return MobileSalonListResponse(
             success=True,
@@ -620,6 +623,7 @@ async def filter_salons(
     db: Session = Depends(get_db),
     language: Optional[str] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Filter salons by multiple criteria. """
     try:
@@ -685,6 +689,7 @@ async def get_nearby_salons(
     db: Session = Depends(get_db),
     language: Optional[str] = Header(None, alias="X-User-language"),
     userId: Optional[str] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get nearby salons within specified radius."""
     try:
@@ -697,6 +702,7 @@ async def get_nearby_salons(
         nearby_salons = filter_by_distance(all_salons, latitude, longitude, radius)
         paginated = paginate(nearby_salons, page, limit)
 
+        user_id_for_favorite = str(current_user.id) if current_user else userId
         result: List[NearbySalonItem] = []
         for salon in paginated:
             # Address (localized)
@@ -741,7 +747,7 @@ async def get_nearby_salons(
                 distance_val = None
 
             # Favorite
-            is_fav = is_favourite_salon(db, str(salon.id), userId)
+            is_fav = is_favourite_salon(db, str(salon.id), user_id_for_favorite)
 
             # Photos
             try:
@@ -826,6 +832,7 @@ async def get_salon_by_id(
     userId: Optional[str] = Query(None),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     """Get detailed salon information by ID."""
     try:

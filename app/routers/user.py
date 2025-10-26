@@ -873,32 +873,14 @@ async def get_favourite_salons(
         .all()
     )
 
+    if not favourites:
+        return []
+
     salon_ids = [fav.salon_id for fav in favourites]
     salons = db.query(Salon).filter(Salon.id.in_(salon_ids)).all()
 
-    return [
-        {
-            "id": salon.id,
-            "name": salon.salon_name,
-            "location": salon.location,
-            "address_uz": salon.address_uz,
-            "address_ru": salon.address_ru,
-            "address_en": salon.address_en,
-            "orientation_uz": salon.orientation_uz,
-            "orientation_ru": salon.orientation_ru,
-            "orientation_en": salon.orientation_en,
-            "description_uz": salon.description_uz,
-            "description_ru": salon.description_ru,
-            "description_en": salon.description_en,
-            "phone": salon.salon_phone,
-            "rating": salon.salon_rating,
-            "image_url": salon.salon_phone,
-            "added_at": next(
-                fav.created_at for fav in favourites if fav.salon_id == salon.id
-            ),
-        }
-        for salon in salons
-    ]
+    # Return ORM objects; FastAPI + Pydantic will map to SalonResponse
+    return salons
 
 
 # Employee contacts endpoints

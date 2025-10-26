@@ -59,6 +59,14 @@ async def filter_with_defaults_mobile(
     discount: Optional[bool] = Query(None, description="Chegirmali salonlarni ko'rsatish (salon_sale mavjud)"),
     recommended: Optional[bool] = Query(None, description="Tavsiya etilgan salonlarni ko'rsatish (yuqori rating)"),
     isLiked: Optional[bool] = Query(None, description="Foydalanuvchi like bosgan salonlar (token kerak)"),
+    # News: 'top','new','nearby' vergul bilan ajratib yuboriladi
+    news: Optional[str] = Query(None, description="News filter: 'top','new','nearby' (vergul bilan)"),
+    # Possible: only_woman yoki all
+    possible: Optional[str] = Query(None, description="Possible: 'only_woman' yoki 'all'"),
+    # Search: salon nomi shu text bilan boshlansa
+    search: Optional[str] = Query(None, description="Salon nomi uchun prefix qidiruv"),
+    # Rate: 1..4 (5dan kichik) bo'lsa, shu qiymatga teng bo'lgan reytingdagilar
+    rate: Optional[int] = Query(None, ge=1, le=4, description="Aniq reyting (1..4) bo'yicha filtr"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -79,10 +87,49 @@ async def filter_with_defaults_mobile(
             is_private_value = is_private.lower() == 'true'
             query = query.filter(Salon.private_salon == is_private_value)
 
+        # Search by salon_name prefix (DB-level for performance)
+        if search and search.strip():
+            query = query.filter(Salon.salon_name.ilike(f"{search.strip()}%"))
+
         salons: List[Salon] = query.all()
 
-        # Distance filtering (if coordinates provided)
-        if latitude is not None and longitude is not None:
+        # News filter: faqat 'top','new','nearby' qiymatlarini qabul qiladi
+        sort_by_new = False
+        if news:
+            tokens = [n.strip().lower() for n in news.split(',') if n.strip()]
+            allowed = {"top", "new", "nearby"}
+            invalid = [n for n in tokens if n not in allowed]
+            if invalid:
+                raise HTTPException(status_code=400, detail="news faqat 'top','new','nearby' qiymatlarini qabul qiladi")
+
+            # nearby bo'lsa koordinatalar majburiy
+            if "nearby" in tokens:
+                if latitude is None or longitude is None:
+                    raise HTTPException(status_code=400, detail="nearby uchun latitude va longitude kerak")
+                use_radius = float(distance) if distance is not None else float(radius)
+                nearby: List[Salon] = []
+                for salon in salons:
+                    try:
+                        if salon.location and 'lat' in salon.location and 'lng' in salon.location:
+                            s_lat = float(salon.location['lat'])
+                            s_lng = float(salon.location['lng'])
+                            d_km = calculate_distance(float(latitude), float(longitude), s_lat, s_lng)
+                            if d_km <= use_radius:
+                                nearby.append(salon)
+                    except Exception:
+                        continue
+                salons = nearby
+
+            # top bo'lsa top=True filtrini qo'llash
+            if "top" in tokens:
+                salons = [s for s in salons if s.is_top is True]
+
+            # new bo'lsa created_at bo'yicha saralash (desc)
+            if "new" in tokens:
+                sort_by_new = True
+
+        # Distance filtering (if coordinates provided), agar news=nearby ishlatilmagan bo'lsa
+        if latitude is not None and longitude is not None and not (news and "nearby" in [n.strip().lower() for n in news.split(',') if n.strip()]):
             if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
                 raise HTTPException(status_code=400, detail=get_translation(language, "errors.400"))
             use_radius = float(distance) if distance is not None else float(radius)
@@ -173,6 +220,15 @@ async def filter_with_defaults_mobile(
             aliases = alias_map.get(key, [])
             salons = [s for s in salons if _amenity_flag(s, canonical, aliases=aliases)]
 
+        # Possible filter (only_woman | all)
+        if possible:
+            p = possible.strip().lower()
+            if p not in ("only_woman", "all"):
+                raise HTTPException(status_code=400, detail="possible faqat 'only_woman' yoki 'all' bo'lishi mumkin")
+            if p == "only_woman":
+                salons = [s for s in salons if _amenity_flag(s, 'onlyFemale', aliases=['onlyWoman','onlyWomen'])]
+            # 'all' bo'lsa hech narsa qilmaymiz
+
         # Top
         if top is True:
             salons = [s for s in salons if s.is_top is True]
@@ -184,6 +240,29 @@ async def filter_with_defaults_mobile(
         # Recommended
         if recommended is True:
             salons = [s for s in salons if s.salon_rating is not None and s.salon_rating >= 4.0]
+
+        # new bo'lsa created_at bo'yicha saralash (desc)
+        if sort_by_new:
+            try:
+                salons = sorted(salons, key=lambda s: getattr(s, 'created_at', None) or 0, reverse=True)
+            except Exception:
+                pass
+
+        # Rate filter: 1..4 uchun aniq tenglik
+        if rate is not None:
+            filtered: List[Salon] = []
+            for s in salons:
+                try:
+                    r = s.salon_rating
+                    if r is None:
+                        continue
+                    # ratingni butun songa tushirib, aniq tenglik
+                    r_int = int(float(r))
+                    if r_int == int(rate):
+                        filtered.append(s)
+                except Exception:
+                    continue
+            salons = filtered
 
         # Liked filter via user token
         if isLiked is not None:
