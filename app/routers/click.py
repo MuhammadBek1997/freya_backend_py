@@ -88,7 +88,7 @@ async def complete_payment(
     return {}
 
 
-@router.port("/create_payment")
+@router.post("/create_payment")
 async def create_payment():
     """Create a payment using Click service."""
     invoice = await click.create_invoice(
