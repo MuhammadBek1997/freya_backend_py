@@ -29,7 +29,7 @@ class ClickService:
         """To'lov URL yaratish"""
         amount = payment_data.get("amount")
         order_id = payment_data.get("order_id")
-        return_url = payment_data.get("return_url", f"{settings.frontend_url}/payment/success")
+        return_url = payment_data.get("return_url", f"{settings.frontend_url}/payment/callback")
         description = payment_data.get("description", "To'lov")
 
         params = {
@@ -411,14 +411,14 @@ class ClickService:
             }
 
             async with httpx.AsyncClient() as client:
-                logger.info(f"[Click] Direct payment request start txn={transaction_id} amount={payment_data['amount']} type={payment_data['payment_type']}")
+                logging.info(f"[Click] Direct payment request start txn={transaction_id} amount={payment_data['amount']} type={payment_data['payment_type']}")
                 response = await client.post(
                     f"{self.base_url}/merchant/card_token/payment",
                     headers=headers,
                     json=payload,
                     timeout=httpx.Timeout(10.0, connect=5.0, read=10.0, write=10.0)
                 )
-                logger.info(f"[Click] Direct payment response status={response.status_code} txn={transaction_id}")
+                logging.info(f"[Click] Direct payment response status={response.status_code} txn={transaction_id}")
                 if response.status_code == 200:
                     result = response.json()
                     
