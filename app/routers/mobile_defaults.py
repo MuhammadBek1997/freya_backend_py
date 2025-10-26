@@ -248,13 +248,15 @@ async def filter_with_defaults_mobile(
             except Exception:
                 pass
 
-        # Rate filter: oraliq qiymatlar (<=5) uchun aniq tenglik (epsilon)
+        # Rate filter: oraliq qiymatlar (<=5) uchun ±0.5 interval
         if rate is not None:
             try:
                 rate_val = float(rate)
             except Exception:
                 rate_val = None
             if rate_val is not None and rate_val <= 5:
+                lower = max(rate_val - 0.5, 0.0)
+                upper = min(rate_val + 0.5, 5.0)
                 filtered: List[Salon] = []
                 for s in salons:
                     try:
@@ -262,8 +264,7 @@ async def filter_with_defaults_mobile(
                         if r is None:
                             continue
                         r_val = float(r)
-                        # Floating point nozikligi uchun kichik epsilon
-                        if abs(r_val - rate_val) < 1e-2:
+                        if r_val >= lower and r_val <= upper:
                             filtered.append(s)
                     except Exception:
                         continue
