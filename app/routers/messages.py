@@ -180,10 +180,10 @@ async def get_conversation_messages(
 class SendMessageRequest(BaseModel):
     receiver_id: str
     receiver_type: str  # "employee" yoki "salon"
-    message_text: str
+    message_text: Optional[str] = None
     message_type: Optional[str] = "text"
     file_url: Optional[str] = None
-
+    
 
 # POST /api/messages/send - Xabar yuborish
 @router.post("/send", status_code=status.HTTP_201_CREATED)
