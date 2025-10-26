@@ -70,7 +70,7 @@ async def get_conversations(
                 "chat_id": chat.id,
                 "chat_type": chat.chat_type,
                 "participant": participant,
-                "last_message": chat.last_message,
+                "last_message": chat.last_message or "",
                 "last_message_time": chat.last_message_time,
                 "unread_count": unread_count,
                 "user_avatar_url": getattr(current_user, "avatar_url", None),
