@@ -31,6 +31,7 @@ from app.routers.mobile_schedules import router as mobile_schedules_router
 from app.routers.comments import router as comments_router
 from app.routers.mobile_noitf import router as mobile_notifications_router
 from app.routers.history import router as history_router
+from app.routers.click import router as click_router
 
 
 
@@ -162,6 +163,8 @@ app.include_router(city_router, prefix="/api")
 app.include_router(comments_router, prefix="/api")
 app.include_router(mobile_notifications_router, prefix="/api")
 app.include_router(history_router, prefix="/api")
+
+app.include_router(click_router, prefix="/api")
 
 
 # Static files
