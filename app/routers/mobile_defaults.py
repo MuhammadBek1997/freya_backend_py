@@ -65,8 +65,8 @@ async def filter_with_defaults_mobile(
     possible: Optional[str] = Query(None, description="Possible: 'only_woman' yoki 'all'"),
     # Search: salon nomi shu text bilan boshlansa
     search: Optional[str] = Query(None, description="Salon nomi uchun prefix qidiruv"),
-    # Rate: 1..4 (5dan kichik) bo'lsa, shu qiymatga teng bo'lgan reytingdagilar
-    rate: Optional[int] = Query(None, ge=1, le=4, description="Aniq reyting (1..4) bo'yicha filtr"),
+    # Rate: oraliq qiymatlar qabul qilinadi; >5 bo'lsa e'tiborga olinmaydi
+    rate: Optional[float] = Query(None, description="Reyting bo'yicha filtr (oraliq qiymatlar, >5 e'tibor qilinmaydi)"),
     latitude: Optional[float] = Query(None),
     longitude: Optional[float] = Query(None),
     radius: float = Query(10.0, ge=0.1, le=100),
@@ -248,21 +248,27 @@ async def filter_with_defaults_mobile(
             except Exception:
                 pass
 
-        # Rate filter: 1..4 uchun aniq tenglik
+        # Rate filter: oraliq qiymatlar (<=5) uchun aniq tenglik (epsilon)
         if rate is not None:
-            filtered: List[Salon] = []
-            for s in salons:
-                try:
-                    r = s.salon_rating
-                    if r is None:
+            try:
+                rate_val = float(rate)
+            except Exception:
+                rate_val = None
+            if rate_val is not None and rate_val <= 5:
+                filtered: List[Salon] = []
+                for s in salons:
+                    try:
+                        r = s.salon_rating
+                        if r is None:
+                            continue
+                        r_val = float(r)
+                        # Floating point nozikligi uchun kichik epsilon
+                        if abs(r_val - rate_val) < 1e-2:
+                            filtered.append(s)
+                    except Exception:
                         continue
-                    # ratingni butun songa tushirib, aniq tenglik
-                    r_int = int(float(r))
-                    if r_int == int(rate):
-                        filtered.append(s)
-                except Exception:
-                    continue
-            salons = filtered
+                salons = filtered
+            # rate > 5 bo'lsa e'tiborga olinmaydi (filtr qo'llanmaydi)
 
         # Liked filter via user token
         if isLiked is not None:
