@@ -756,6 +756,9 @@ async def get_salon_by_id(
             "address_uz": salon.address_uz,
             "address_ru": salon.address_ru,
             "address_en": salon.address_en,
+            "orientation_uz": salon.orientation_uz,
+            "orientation_ru": salon.orientation_ru,
+            "orientation_en": salon.orientation_en,
             # Qo'shimcha maydonlar: xizmat ko'rsatilgan odamlar va xodimlar soni
             "served_users_count": db.query(func.count(Appointment.id))
             .join(Employee, Appointment.employee_id == Employee.id)
