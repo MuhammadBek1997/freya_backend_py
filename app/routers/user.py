@@ -1124,7 +1124,7 @@ async def get_user_payment_cards(
 
 @router.put("/payment-cards/{card_id}", response_model=PaymentCardResponse)
 async def update_payment_card(
-    card_id: int,
+    card_id: str,
     card_update: PaymentCardUpdate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -1172,7 +1172,7 @@ async def update_payment_card(
 
 @router.delete("/payment-cards/{card_id}", response_model=dict)
 async def delete_payment_card(
-    card_id: int,
+    card_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
@@ -1209,7 +1209,7 @@ async def delete_payment_card(
 
 @router.put("/payment-cards/{card_id}/set-default", response_model=PaymentCardResponse)
 async def set_default_payment_card(
-    card_id: int,
+    card_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),

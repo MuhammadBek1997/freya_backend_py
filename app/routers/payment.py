@@ -1,13 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
+import hashlib
 from app.database import get_db
 from app.services.click_service import click_service
 from app.middleware.auth import get_current_user, get_current_admin
 from app.middleware.rate_limiter import check_rate_limit, check_card_token_rate_limit
 from app.utils.payment_validator import PaymentValidator
 from app.models import User, Admin, Payment
-from app.schemas.user import CardTokenRequest, CardTokenResponse, DirectCardPaymentRequest, DirectCardPaymentResponse
+from app.models.payment_card import PaymentCard
+from app.schemas.user import (
+    CardTokenRequest,
+    CardTokenResponse,
+    DirectCardPaymentRequest,
+    DirectCardPaymentResponse,
+    PaymentCardResponse,
+)
 from pydantic import BaseModel
 
 
@@ -41,6 +49,22 @@ class PaymentCallbackRequest(BaseModel):
 
 
 router = APIRouter(prefix="/payment", tags=["Payment"])
+
+
+def _detect_card_type(card_number: str) -> str:
+    """Detect card type from card number (basic prefixes)."""
+    if not card_number:
+        return "Unknown"
+    if card_number.startswith("4"):
+        return "Visa"
+    elif card_number.startswith(("51", "52", "53", "54", "55")):
+        return "MasterCard"
+    elif card_number.startswith("9860"):
+        return "Uzcard"
+    elif card_number.startswith("8600"):
+        return "Humo"
+    else:
+        return "Unknown"
 
 
 @router.post("/employee-post", summary="Employee post uchun to'lov yaratish")
@@ -377,6 +401,41 @@ async def create_card_token(
                 detail=result.get("error_note") or "Karta tokenini yaratishda xatolik"
             )
         
+        # Persist card in payment_cards upon successful token creation (idempotent)
+        try:
+            # Build encrypted fingerprint (hash) and last four
+            encrypted = hashlib.sha256(clean_card_number.encode()).hexdigest()
+            last_four = clean_card_number[-4:] if len(clean_card_number) >= 4 else clean_card_number
+
+            # Skip if already exists for this user
+            existing = db.query(PaymentCard).filter(
+                PaymentCard.user_id == current_user.id,
+                PaymentCard.card_number_encrypted == encrypted,
+            ).first()
+
+            if not existing:
+                # Determine default: first card becomes default
+                user_cards_count = db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).count()
+                is_default = user_cards_count == 0
+
+                card = PaymentCard(
+                    user_id=str(current_user.id),
+                    card_number_encrypted=encrypted,
+                    card_holder_name=request.card_holder_name,
+                    expiry_month=request.expiry_month,
+                    expiry_year=request.expiry_year,
+                    card_type=_detect_card_type(clean_card_number),
+                    phone_number=(request.phone_number or current_user.phone or ""),
+                    is_default=is_default,
+                    is_active=True,
+                    last_four_digits=last_four,
+                )
+                db.add(card)
+                db.commit()
+        except Exception:
+            # Do not break token creation flow if persistence fails
+            db.rollback()
+
         return CardTokenResponse(
             success=True,
             card_token=result.get("card_token"),
@@ -625,3 +684,34 @@ async def create_direct_salon_top_payment(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"To'lovni amalga oshirishda xatolik: {str(e)}"
         )
+
+
+@router.get("/cards", response_model=List[PaymentCardResponse], summary="Foydalanuvchi kartalarini olish")
+async def get_payment_cards(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> List[PaymentCardResponse]:
+    """
+    Foydalanuvchining to'lov kartalari ro'yxatini qaytaradi.
+    Default kartalar birinchi, so'ngra yaratilgan vaqti bo'yicha.
+    """
+    cards = (
+        db.query(PaymentCard)
+        .filter(PaymentCard.user_id == current_user.id)
+        .order_by(PaymentCard.is_default.desc(), PaymentCard.created_at.desc())
+        .all()
+    )
+
+    return [
+        PaymentCardResponse(
+            id=c.id,
+            masked_card_number=f"**** **** **** {c.last_four_digits}",
+            card_type=c.card_type or "Unknown",
+            card_holder_name=c.card_holder_name,
+            expiry_month=c.expiry_month,
+            expiry_year=c.expiry_year,
+            is_default=c.is_default,
+            created_at=c.created_at,
+        )
+        for c in cards
+    ]

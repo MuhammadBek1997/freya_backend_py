@@ -208,9 +208,11 @@ class PaymentCardAdd(BaseModel):
     @validator('expiry_year')
     def validate_year(cls, v):
         current_year = datetime.now().year
-        if v < current_year or v > current_year + 20:
+        # Ikki raqamli yil kiritsangiz (masalan, 26), 2000 + yil ko'rinishiga o'tkazamiz
+        normalized_year = v if v >= 100 else (2000 + v)
+        if normalized_year < current_year or normalized_year > current_year + 20:
             raise ValueError('Yil noto\'g\'ri')
-        return v
+        return normalized_year
 
 
 class PaymentCardUpdate(BaseModel):
@@ -227,10 +229,12 @@ class PaymentCardUpdate(BaseModel):
 
     @validator('expiry_year')
     def validate_year(cls, v):
-        if v:
+        if v is not None:
             current_year = datetime.now().year
-            if v < current_year or v > current_year + 20:
+            normalized_year = v if v >= 100 else (2000 + v)
+            if normalized_year < current_year or normalized_year > current_year + 20:
                 raise ValueError('Yil noto\'g\'ri')
+            return normalized_year
         return v
 
 
@@ -273,7 +277,7 @@ class UserCityUpdate(BaseModel):
 
 
 class PaymentCardResponse(BaseModel):
-    id: int
+    id: str
     masked_card_number: str
     card_type: str
     card_holder_name: str
@@ -281,6 +285,23 @@ class PaymentCardResponse(BaseModel):
     expiry_year: int
     is_default: bool
     created_at: datetime
+
+    @validator('id', pre=True)
+    def convert_id_to_str(cls, v):
+        if hasattr(v, '__str__'):
+            return str(v)
+        return v
+
+    @validator('expiry_year', pre=False)
+    def to_two_digit_year(cls, v):
+        # Javobda yilni 2 raqamli (YY) ko'rinishda qaytaramiz
+        if v is None:
+            return v
+        try:
+            v_int = int(v)
+            return v_int % 100
+        except Exception:
+            return v
 
     class Config:
         from_attributes = True
@@ -328,9 +349,10 @@ class CardTokenRequest(BaseModel):
     def validate_year(cls, v):
         from datetime import datetime
         current_year = datetime.now().year
-        if v < current_year or v > current_year + 20:
+        normalized_year = v if v >= 100 else (2000 + v)
+        if normalized_year < current_year or normalized_year > current_year + 20:
             raise ValueError(f'Yil {current_year}-{current_year + 20} orasida bo\'lishi kerak')
-        return v
+        return normalized_year
 
 
 class CardTokenResponse(BaseModel):
