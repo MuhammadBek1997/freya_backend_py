@@ -25,7 +25,7 @@ class PaymentWithToken(BaseModel):
 
 
 class PaymentCard(BaseModel):
-    id: int
+    id: str
     card_number: str
     expiry_at: str
     is_default: bool
