@@ -156,7 +156,7 @@ def get_user_payment_cards(
 
 @router.post("/pay/premium")
 def pay_for_premium(
-    card_id: int = None,
+    card_id: str = None,
     quantity_months: int = 1,
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),

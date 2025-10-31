@@ -14,12 +14,12 @@ class CardTokenCreate(BaseModel):
 
 
 class CardTokenVerify(BaseModel):
-    card_id: int
+    card_id: str
     sms_code: str
 
 
 class PaymentWithToken(BaseModel):
-    card_id: int
+    card_id: str
     amount: float
     transaction_id: str
 
