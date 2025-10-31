@@ -207,6 +207,11 @@ def pay_for_premium(
                 "error_code": result["error_code"],
                 "error": result["error_note"],
             }
+        
+        return {
+            "success": True,
+            "payment_id": payment.id,
+        }
 
 
 # ============= WEBHOOK ENDPOINTS =============
