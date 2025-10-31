@@ -496,7 +496,7 @@ class ClickPaymentProvider:
         
         # Проверка для complete
         if action == '1':
-            if order_id != merchant_prepare_id:
+            if order_id != merchant_prepare_id or 1:
                 logger.error(f"❌ ID mismatch | order={order_id}, prepare={merchant_prepare_id}")
                 return {
                     'error': '-6',

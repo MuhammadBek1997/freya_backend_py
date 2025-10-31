@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict
+from typing import Dict, List, Union
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, get_current_user_only
@@ -131,7 +131,7 @@ def verify_card_token(
     }
 
 
-@router.get("/cards", response_model=list[PaymentCardSchema])
+@router.get("/cards", response_model=List[Union[PaymentCardSchema, Dict, None]])
 def get_user_payment_cards(
     current_user: User = Depends(get_current_user_only), db: Session = Depends(get_db)
 ):
@@ -172,9 +172,11 @@ def pay_for_premium(
     db.refresh(payment)
 
     if card_id:
+        print(card_id)
+        print(current_user.id)
         get_card = (
             db.query(PaymentCard)
-            .filter(
+            .where(
                 PaymentCard.id == card_id,
                 PaymentCard.user_id == current_user.id,
                 PaymentCard.is_active == True,
@@ -182,6 +184,7 @@ def pay_for_premium(
             )
             .first()
         )
+        print(get_card)
         if not get_card:
             return {
                 "success": False,
@@ -194,7 +197,7 @@ def pay_for_premium(
         result = click_provider.payment_with_token(
             card_token=get_card.card_token,
             amount=payment.amount,
-            transaction_id=payment.id,
+            merchant_trans_id=payment.paymet_id,
         )
         if result.get("error_code"):
             payment.status = PaymentStatus.ERROR.value
@@ -206,41 +209,40 @@ def pay_for_premium(
             }
 
 
-
-
-
 # ============= WEBHOOK ENDPOINTS =============
 def parse_webhook_body(body: bytes) -> Dict[str, str]:
     """
     Парсинг тела webhook запроса от Click
-    
+
     Args:
         body: Сырое тело запроса (bytes)
-        
+
     Returns:
         Dict с распарсенными данными
-        
+
     Example:
         body = b'click_trans_id=123&service_id=456&amount=1000'
         data = parse_webhook_body(body)
         # {'click_trans_id': '123', 'service_id': '456', 'amount': '1000'}
     """
     from urllib.parse import parse_qs, unquote
-    
+
     try:
         # Декодируем bytes в строку
-        body_str = body.decode('utf-8')
+        body_str = body.decode("utf-8")
         logging.debug(f"Raw webhook body: {body_str}")
-        
+
         # Парсим URL-encoded данные
         parsed = parse_qs(body_str, keep_blank_values=True)
-        
+
         # Конвертируем списки в строки (parse_qs возвращает списки)
-        result = {key: values[0] if values else '' for key, values in parsed.items()}
-        
-        logging.info(f"📥 Webhook data parsed: {json.dumps(result, ensure_ascii=False)}")
+        result = {key: values[0] if values else "" for key, values in parsed.items()}
+
+        logging.info(
+            f"📥 Webhook data parsed: {json.dumps(result, ensure_ascii=False)}"
+        )
         return result
-        
+
     except Exception as e:
         logging.error(f"❌ Failed to parse webhook body: {e}")
         return {}
@@ -252,9 +254,11 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
     data = parse_webhook_body(body)
 
     # Получить payment из БД
-    payment = db.query(ClickPayment).filter(
-        ClickPayment.id == data['merchant_trans_id']
-    ).first()
+    payment = (
+        db.query(ClickPayment)
+        .filter(ClickPayment.id == data["merchant_trans_id"])
+        .first()
+    )
     if not payment:
         return {
             "error": "5",
@@ -270,12 +274,12 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
     if validation_result["error"] == "0":
         payment.status = PaymentStatus.WAITING.value
         db.commit()
-    
+
     response = {
         **validation_result,
         "click_trans_id": data.get("click_trans_id"),
         "merchant_trans_id": data.get("merchant_trans_id"),
-        "merchant_prepare_id": payment.paymet_id
+        "merchant_prepare_id": payment.paymet_id,
     }
     print(response)
 
@@ -288,14 +292,14 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
     data = parse_webhook_body(body)
 
     # Получить payment из БД
-    payment = db.query(ClickPayment).filter(
-        ClickPayment.paymet_id == data['merchant_prepare_id']
-    ).first()
+    payment = (
+        db.query(ClickPayment)
+        .filter(ClickPayment.paymet_id == data["merchant_prepare_id"])
+        .first()
+    )
 
     validation_result = click_provider.validate_webhook_data(
-        webhook_data=data,
-        expected_amount= payment.amount,
-        payment_status=payment.status
+        webhook_data=data, expected_amount=payment.amount, payment_status=payment.status
     )
 
     if validation_result["error"] == "0":
@@ -320,4 +324,3 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
     print(response)
 
     return response
-

@@ -30,4 +30,3 @@ class PaymentCard(BaseModel):
     expiry_at: str
     is_default: bool
     is_active: bool
-    is_verified: bool
