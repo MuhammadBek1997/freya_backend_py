@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import BigInteger, Column, Integer, String, DateTime, ForeignKey, Text, Boolean, func
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.models.base import BaseModel
@@ -23,3 +23,17 @@ class Payment(BaseModel):
     user = relationship("User", back_populates="payments")
     employee = relationship("Employee", back_populates="payments")
     salon = relationship("Salon", back_populates="payments")
+
+
+class ClickPayment(BaseModel):
+    __tablename__ = "click_payments"
+
+    paymet_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    payment_for = Column(String(50), nullable=False)  # employee_post, user_premium, salon_top
+    amount = Column(Text, nullable=False)
+    status = Column(String(20), default="created")  # pending, completed, failed, cancelled
+    click_paydoc_id = Column(String(255), nullable=True)
+    click_trans_id = Column(String(255), unique=True, nullable=True)
+
+
+

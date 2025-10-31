@@ -1,0 +1,30 @@
+2025-10-31 16:33:21,410 - Click - INFO - Request URL: https://api.click.uz/v2/merchant/card_token/payment, data: {
+  "service_id": "80178",
+  "card_token": "8F6544C3-0654-4F4D-A54C-073BB99D4FA1",
+  "amount": 1000.0,
+  "transaction_parameter": "123465"
+}, headers: {
+  "Content-Type": "application/json",
+  "Accept": "application/json",
+  "Auth": "61876:9a7d2fc110cc2b978a850ac0604435fa3df2c64a:1761924801"
+}
+
+2025-10-31 16:33:23,023 - root - INFO - 📥 Webhook data parsed: {"click_trans_id": "3341641214", "service_id": "80178", "click_paydoc_id": "4504382249", "merchant_trans_id": "123465", "amount": "1000", "action": "0", "sign_time": "2025-10-31 20:32:37", "error": "0", "error_note": "Success", "sign_string": "ee358c2af165fadb711949d40fa9c1c1", "param2": "merchant"}
+{'error': '0', 'error_note': 'Success', 'click_trans_id': '3341641214', 'merchant_trans_id': '123465', 'merchant_prepare_id': '123465'}
+INFO:     127.0.0.1:35150 - "POST /webhook/click/prepare HTTP/1.1" 200 OK
+
+
+2025-10-31 16:33:23,782 - root - INFO - 📥 Webhook data parsed: {"click_trans_id": "3341641214", "service_id": "80178", "click_paydoc_id": "4504382249", "merchant_trans_id": "123465", "amount": "1000", "action": "1", "sign_time": "2025-10-31 20:32:37", "error": "0", "error_note": "Success", "merchant_prepare_id": "123465", "sign_string": "49c8d11bbe90354bb96ee42671604b6c", "param2": "merchant"}
+{'error': '0', 'error_note': 'Success', 'click_trans_id': '3341641214', 'merchant_trans_id': '123465', 'merchant_prepare_id': '123465', 'merchant_confirm_id': '123465'}
+INFO:     127.0.0.1:35152 - "POST /webhook/click/complete HTTP/1.1" 200 OK
+
+2025-10-31 16:33:24,073 - Click - INFO - ✅ Request completed in 2.66s | Status: 200
+2025-10-31 16:33:24,074 - Click - INFO - 📥 Response: {
+  "error_code": 0,
+  "error_note": "Успешно проведен",
+  "payment_id": "4504382249",
+  "payment_status": 2,
+  "eps_id": "0064"
+}
+2025-10-31 16:33:24,076 - Click - INFO - ✅ Payment successful | payment_id=4504382249
+INFO:     127.0.0.1:35148 - "POST /api/click/payment/with-token HTTP/1.1" 200 OK
