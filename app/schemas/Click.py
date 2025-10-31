@@ -1,4 +1,4 @@
-from app.models.base import BaseModel
+from pydantic import BaseModel
 
 
 class InvoiceCreate(BaseModel):

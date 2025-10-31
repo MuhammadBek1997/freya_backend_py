@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from app.database import engine, Base
 from app.routers import auth_router, admin_router
 from app.routers.photos import router as photos_router
-from app.routers.payment import router as payment_router
+# from app.routers.payment import router as payment_router
 from app.routers.messages import router as messages_router
 
 # from app.routers.sms import router as sms_router
@@ -148,7 +148,7 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(user_router)
 app.include_router(employee_router, prefix="/api")
 app.include_router(salon_router, prefix="/api")
-app.include_router(payment_router, prefix="/api")
+# app.include_router(payment_router, prefix="/api")
 app.include_router(appointment_router, prefix="/api")
 app.include_router(schedule_router, prefix="/api")
 # app.include_router(sms_router, prefix="/api")
