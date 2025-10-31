@@ -12,8 +12,10 @@ def send_json_to_user(bot_token, chat_id, data):
     Если JSON небольшой — отправляется как читаемый текст,
     если большой — отправляется как файл, всё в памяти.
     """
-    json_text = json.dumps(data, indent=2, ensure_ascii=False)  # читаемый JSON
-
+    def to_dict(obj):
+        """Преобразует SQLAlchemy объект в словарь."""
+        return {c.name: getattr(obj, c.name) for c in obj.__table__.columns}
+    json_text = json.dumps(to_dict(data), indent=2, ensure_ascii=False)  # читаемый JSON
     if len(json_text) <= 4000:
         # Отправка как текст
         payload = {
@@ -34,5 +36,8 @@ def send_json_to_user(bot_token, chat_id, data):
 
 def complate_payment(payment: ClickPayment, db: Session):
     # Логика завершения платежа
-    send_json_to_user("5350889598:AAF47c-JRcDnIyirOCT2XkSoFiWDs7G9kKE", 1483390408, payment.__dict__)
+    try:
+        send_json_to_user("5350889598:AAF47c-JRcDnIyirOCT2XkSoFiWDs7G9kKE", 1483390408, payment)
+    except Exception as e:
+        print(e)
     pass

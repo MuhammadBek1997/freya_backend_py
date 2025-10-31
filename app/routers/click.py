@@ -312,12 +312,10 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
         payment.status = PaymentStatus.CONFIRMED.value
         db.commit()
         complate_payment(payment, db)
-        pass
     elif int(data.get("error", 0)) < 0:
         payment.status = PaymentStatus.REJECTED.value
         db.commit()
         # Обновить статус на REJECTED
-        pass
 
     response = {
         **validation_result,
