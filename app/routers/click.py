@@ -212,7 +212,27 @@ def pay_for_premium(
             "success": True,
             "payment_id": payment.id,
         }
+    else:
+        invoice = click_provider.create_invoice(
+            amount=payment.amount,
+            phone_number=current_user.phone,
+            merchant_trans_id=payment.id,
+        )
 
+        if invoice.get("error_code"):
+            payment.status = PaymentStatus.ERROR.value
+            db.commit()
+            return {
+                "success": False,
+                "error_code": invoice["error_code"],
+                "error": invoice["error_note"],
+            }
+
+        return {
+            "success": True,
+            "message": "invoice_created",
+            "invoice_id": invoice["invoice_id"],
+        }
 
 # ============= WEBHOOK ENDPOINTS =============
 def parse_webhook_body(body: bytes) -> Dict[str, str]:
