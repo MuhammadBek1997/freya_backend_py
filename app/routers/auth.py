@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.models import Admin, Employee
+from app.models import Admin, Employee, User
 from app.schemas.auth import (
     LoginRequest, 
     LoginResponse, 
@@ -330,6 +330,64 @@ async def get_admin_profile(
         logger.error(f"Admin profile olish xatosi: {error}")
         # Simple translation function
 
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
+
+@router.get("/check-availability")
+async def check_availability(
+    username: Union[str, None] = None,
+    email: Union[str, None] = None,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Username yoki email mavjudligini tekshiruvchi endpoint.
+    - Faqat username yuborilsa: true/false qaytaradi
+    - Faqat email yuborilsa: true/false qaytaradi
+    - Ikkalasi yuborilsa: {"username_exists": bool, "email_exists": bool} qaytaradi
+    """
+    try:
+        if not username and not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="username yoki email query param talab qilinadi"
+            )
+
+        def username_exists(u: str) -> bool:
+            if not u:
+                return False
+            return bool(
+                db.query(User).filter(User.username == u).first()
+                or db.query(Admin).filter(Admin.username == u).first()
+                or db.query(Employee).filter(Employee.username == u).first()
+            )
+
+        def email_exists(e: str) -> bool:
+            if not e:
+                return False
+            return bool(
+                db.query(User).filter(User.email == e).first()
+                or db.query(Admin).filter(Admin.email == e).first()
+                or db.query(Employee).filter(Employee.email == e).first()
+            )
+
+        if username and not email:
+            return username_exists(username)
+        if email and not username:
+            return email_exists(email)
+
+        return {
+            "username_exists": username_exists(username),
+            "email_exists": email_exists(email),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(f"Availability check xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")
