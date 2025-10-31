@@ -197,7 +197,7 @@ def pay_for_premium(
         result = click_provider.payment_with_token(
             card_token=get_card.card_token,
             amount=payment.amount,
-            merchant_trans_id=payment.paymet_id,
+            merchant_trans_id=payment.id,
         )
         if result.get("error_code"):
             payment.status = PaymentStatus.ERROR.value
