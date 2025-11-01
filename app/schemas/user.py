@@ -395,3 +395,11 @@ class DirectCardPaymentResponse(BaseModel):
     transaction_id: Optional[str] = None
     error_code: Optional[int] = None
     error_note: Optional[str] = None
+
+
+class UserPremiumStatusResponse(BaseModel):
+    is_premium: bool
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    remaining_days: Optional[int] = None
+    duration_months: Optional[int] = None

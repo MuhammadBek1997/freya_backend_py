@@ -13,6 +13,7 @@ from .analytics import Analytics
 from .salon_top_history import SalonTopHistory
 from .service import Service
 from .payment import Payment
+from .user_premium import UserPremium
 from .appointment import Appointment
 from .user_chat import UserChat
 from .temp_registration import TempRegistration
@@ -44,6 +45,7 @@ __all__ = [
     "SalonTopHistory",
     "Service",
     "Payment",
+    "UserPremium",
     "Appointment",
     "UserChat",
     "TempRegistration",

@@ -52,8 +52,10 @@ from app.schemas.user import (
     TokenResponse,
     UserCityResponse,
     UserCityUpdate,
-    UserAvatarUpdate
+    UserAvatarUpdate,
+    UserPremiumStatusResponse
 )
+from app.models.user_premium import UserPremium
 from app.schemas.employee import EmployeeResponse
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.auth.jwt_utils import JWTUtils
@@ -683,6 +685,36 @@ async def get_current_user_info(
 ):
     """Token yuborilganda joriy foydalanuvchi maʼlumotlarini qaytarish"""
     return current_user
+
+
+@router.get("/premium-status", response_model=UserPremiumStatusResponse)
+async def get_user_premium_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Foydalanuvchining premium holatini olish: aktiv davr tugash sanasi va qolgan kunlar.
+    """
+    now = datetime.utcnow()
+    premium = (
+        db.query(UserPremium)
+        .filter(UserPremium.user_id == current_user.id, UserPremium.end_date > now)
+        .order_by(UserPremium.end_date.desc())
+        .first()
+    )
+
+    if not premium:
+        return UserPremiumStatusResponse(is_premium=False)
+
+    remaining_days = max((premium.end_date.date() - now.date()).days, 0)
+    return UserPremiumStatusResponse(
+        is_premium=True,
+        start_date=premium.start_date,
+        end_date=premium.end_date,
+        remaining_days=remaining_days,
+        duration_months=premium.duration_months,
+    )
 
 
 @router.post("/profile/image/upload", response_model=dict)
