@@ -1,17 +1,15 @@
+from dataclasses import Field
 import json
 import logging
-from typing import Dict, List, Union
-from fastapi import APIRouter, Depends, Request
+from typing import Dict, List, Literal, Union
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, get_current_user_only
 from app.config import settings
-
-import hashlib
-import hmac
-import time
-import httpx
+from pydantic import Field
 
 from app.database import get_db
+from app.models.employee import Employee
 from app.models.payment import ClickPayment
 from app.models.payment_card import PaymentCard
 from app.models.user import User
@@ -207,7 +205,7 @@ def pay_for_premium(
                 "error_code": result["error_code"],
                 "error": result["error_note"],
             }
-        
+
         return {
             "success": True,
             "payment_id": payment.id,
@@ -233,6 +231,76 @@ def pay_for_premium(
             "message": "invoice_created",
             "invoice_id": invoice["invoice_id"],
         }
+
+
+@router.post("/pay/for_post/{pay_with}")
+def pay_for_post(
+    post_quantity: int,
+    pay_with: Literal["redirect", "invoice"],
+    card_type: Literal["humo", "uzcard"] = Query(
+        "humo", description="Type of card (Humo or Uzcard) *if pay with redirect"
+    ),
+    return_url: str = Query(
+        settings.frontend_url, description="URL to return after payment *if pay with redirect",
+    ),
+    employe: Employee = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if employe.role != "employee":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Faqat ishchi huquqi bilan kirish mumkin",
+        )
+
+    if pay_with not in ["redirect", "invoice"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Noto'g'ri to'lov usuli"
+        )
+
+    amount_per_post = 1500  # Example amount for 1 post
+    total_amount = amount_per_post * post_quantity
+    payment = ClickPayment(
+        payment_for=f"post_{employe.id}_{post_quantity}",
+        amount=str(total_amount),  # Example amount
+        status="created",
+    )
+    db.add(payment)
+    db.commit()
+    db.refresh(payment)
+
+    if pay_with == "invoice":
+        invoice = click_provider.create_invoice(
+            amount=payment.amount,
+            phone_number=employe.phone,
+            merchant_trans_id=payment.id,
+        )
+        if invoice.get("error_code"):
+            payment.status = PaymentStatus.ERROR.value
+            db.commit()
+            return {
+                "success": False,
+                "error_code": invoice["error_code"],
+                "error": invoice["error_note"],
+            }
+
+        return {
+            "success": True,
+            "message": "invoice_created",
+            "invoice_id": invoice["invoice_id"],
+        }
+    else:
+        if card_type not in ["humo", "uzcard"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Noto'g'ri karta turi",
+            )
+
+        return {
+            "success": True,
+            "payment_id": payment.id,
+            "redirect_url": f"https://my.click.uz/services/pay?service_id={click_provider.merchant_service_id}&merchant_id={click_provider.merchant_id}&amount={payment.amount}&transaction_param={payment.id}&return_url={return_url}&card_type={card_type}",
+        }
+
 
 # ============= WEBHOOK ENDPOINTS =============
 def parse_webhook_body(body: bytes) -> Dict[str, str]:
