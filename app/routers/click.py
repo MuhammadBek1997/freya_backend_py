@@ -161,7 +161,7 @@ def pay_for_premium(
 ):
     amount_for_month = 1000  # Example amount for 1 month
     payment = ClickPayment(
-        payment_for=f"premium_{current_user.id}",
+        payment_for=f"premium_{current_user.id}_{quantity_months}",
         amount=str(amount_for_month * quantity_months),  # Example amount
         status="created",
     )
