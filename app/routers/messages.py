@@ -62,7 +62,7 @@ async def get_conversations(
             participant = {
                 "type": "salon",
                 "id": chat.salon_id,
-                "name": getattr(salon, "name", None),
+                "name": getattr(salon, "salon_name", None),
             }
 
         data.append(
@@ -134,7 +134,7 @@ async def get_conversation_messages(
         participant = {
             "type": "salon",
             "id": chat.salon_id,
-            "name": getattr(salon, "name", None),
+            "name": getattr(salon, "salon_name", None),
         }
 
     messages = (
