@@ -75,43 +75,14 @@ def complate_payment(payment: ClickPayment, db: Session = None):
             )
 
         elif action == "premium":
-            # Grant premium months to user
-            user = db.query(User).filter(User.id == entity_id).first()
-            if not user:
-                logger.error(f"User not found for premium: {entity_id}")
-                return
-
-            now = datetime.utcnow()
-
-            # Find active premium record
-            premium = (
-                db.query(UserPremium)
-                .filter(UserPremium.user_id == entity_id, UserPremium.is_active == True)
-                .order_by(UserPremium.end_date.desc())
-                .first()
-            )
-
-            # Extend by calendar months using relativedelta
-            if premium and premium.end_date and premium.end_date > now:
-                premium.end_date = premium.end_date + relativedelta(months=quantity)
-                premium.duration_months = int(premium.duration_months or 0) + quantity
-                db.commit()
+            # Grant premium months to user via helper
+            try:
+                auto_extend_user_premium(entity_id, quantity, db)
                 logger.info(
-                    f"Extended premium for user {entity_id} by {quantity} month(s). New expiry: {premium.end_date}"
+                    f"Premium processing completed via helper for user {entity_id}, months={quantity}"
                 )
-            else:
-                new_premium = UserPremium(
-                    user_id=entity_id,
-                    start_date=now,
-                    end_date=now + relativedelta(months=quantity),
-                    duration_months=quantity,
-                    is_active=True,
-                )
-                db.add(new_premium)
-                db.commit()
-                logger.info(
-                    f"Activated premium for user {entity_id} for {quantity} month(s). Expires: {new_premium.end_date}"
-                )
+            except Exception as e:
+                logger.error(f"Failed to auto-extend premium for user {entity_id}: {e}")
 
         else:
             logger.warning(f"Unknown payment_for action: {action}")
@@ -127,3 +98,90 @@ def complate_payment(payment: ClickPayment, db: Session = None):
 # ses = SessionLocal()
 # payment = ses.query(ClickPayment).first()
 # complate_payment(payment, ses)
+
+
+def deactivate_expired_premiums(db: Session) -> int:
+    """Mark expired active premiums as inactive.
+
+    Sets `is_active=False` for records where `is_active=True` and `end_date <= now`.
+    Returns the number of affected rows.
+    """
+    logger = logging.getLogger("ClickComplete")
+    now = datetime.utcnow()
+    try:
+        affected = (
+            db.query(UserPremium)
+            .filter(UserPremium.is_active == True, UserPremium.end_date <= now)
+            .update({UserPremium.is_active: False}, synchronize_session=False)
+        )
+        db.commit()
+        logger.info(f"Deactivated {affected} expired premium record(s)")
+        return int(affected or 0)
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logging.exception(f"Error deactivating expired premiums: {str(e)}")
+        return 0
+
+
+def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
+    """Auto-extend a user's premium by given months or create a new active period.
+
+    - If there is an active premium (is_active=True and not expired), extend its end_date and duration_months
+    - Else, create a new premium record starting now for `months`
+    """
+    logger = logging.getLogger("ClickComplete")
+
+    if months <= 0:
+        raise ValueError("months must be a positive integer")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError(f"User not found: {user_id}")
+
+    now = datetime.utcnow()
+
+    # Ensure expired premiums are marked inactive before extending
+    try:
+        db.query(UserPremium).filter(
+            UserPremium.user_id == user_id,
+            UserPremium.is_active == True,
+            UserPremium.end_date <= now,
+        ).update({UserPremium.is_active: False}, synchronize_session=False)
+        db.commit()
+    except Exception:
+        # Non-critical: proceed to extend/create
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    premium = (
+        db.query(UserPremium)
+        .filter(UserPremium.user_id == user_id, UserPremium.is_active == True)
+        .order_by(UserPremium.end_date.desc())
+        .first()
+    )
+
+    if premium and premium.end_date and premium.end_date > now:
+        premium.end_date = premium.end_date + relativedelta(months=months)
+        premium.duration_months = int(premium.duration_months or 0) + months
+        db.commit()
+        logger.info(
+            f"Extended premium for user {user_id} by {months} month(s). New expiry: {premium.end_date}"
+        )
+    else:
+        new_premium = UserPremium(
+            user_id=user_id,
+            start_date=now,
+            end_date=now + relativedelta(months=months),
+            duration_months=months,
+            is_active=True,
+        )
+        db.add(new_premium)
+        db.commit()
+        logger.info(
+            f"Activated premium for user {user_id} for {months} month(s). Expires: {new_premium.end_date}"
+        )
