@@ -699,7 +699,7 @@ async def get_user_premium_status(
     now = datetime.utcnow()
     premium = (
         db.query(UserPremium)
-        .filter(UserPremium.user_id == current_user.id, UserPremium.end_date > now)
+        .filter(UserPremium.user_id == current_user.id, UserPremium.is_active == True)
         .order_by(UserPremium.end_date.desc())
         .first()
     )

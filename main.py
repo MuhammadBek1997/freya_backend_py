@@ -7,8 +7,12 @@ from fastapi.openapi.utils import get_openapi
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 
 from app.database import engine, Base
+from app.database import SessionLocal
+from app.services.click_complate import deactivate_expired_premiums
 from app.routers import auth_router, admin_router
 from app.routers.photos import router as photos_router
 # from app.routers.payment import router as payment_router
@@ -55,9 +59,38 @@ async def lifespan(app: FastAPI):
     except Exception:
         # Avoid breaking startup if admin creation fails
         pass
+
+    # APScheduler: deactivate expired premiums periodically
+    try:
+        scheduler = BackgroundScheduler(timezone="UTC")
+
+        def _deactivate_job():
+            db = SessionLocal()
+            try:
+                count = deactivate_expired_premiums(db)
+                if count:
+                    print(f"[Scheduler] Deactivated {count} expired premium(s)")
+            finally:
+                try:
+                    db.close()
+                except Exception:
+                    pass
+
+        # Run hourly and also at app startup once
+        _deactivate_job()
+        scheduler.add_job(_deactivate_job, CronTrigger(minute=0))
+        scheduler.start()
+        app.state.scheduler = scheduler
+    except Exception as e:
+        print(f"[Startup] Failed to start APScheduler: {e}")
     yield
     # Shutdown
-    pass
+    try:
+        sched = getattr(app.state, "scheduler", None)
+        if sched:
+            sched.shutdown(wait=False)
+    except Exception:
+        pass
 
 
 app = FastAPI(
