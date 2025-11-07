@@ -34,6 +34,7 @@ class ClickPayment(BaseModel):
     status = Column(String(20), default="created")  # pending, completed, failed, cancelled
     click_paydoc_id = Column(String(255), nullable=True)
     click_trans_id = Column(String(255), unique=True, nullable=True)
+    payment_card_id = Column(String(255), nullable=True)
 
 
 

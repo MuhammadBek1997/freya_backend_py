@@ -23,6 +23,7 @@ from .user_favourite_salon import UserFavouriteSalon
 from .content import Content
 from .user_favorite import UserFavorite
 from .photo import Photo
+from .notif import Notif
 from .user_employee_contact import UserEmployeeContact
 
 __all__ = [

@@ -3,12 +3,17 @@ from dateutil.relativedelta import relativedelta
 import logging
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from app.config import settings
 
+
+from app.config import Settings
 from app.database import SessionLocal
 from app.models.payment import ClickPayment
+from app.models.payment_card import PaymentCard
 from app.models.user import User
 from app.models.employee import EmployeePostLimit
 from app.models.user_premium import UserPremium
+from app.services.Click import PaymentStatus
 
 
 class Payment(BaseModel):
@@ -63,7 +68,9 @@ def complate_payment(payment: ClickPayment, db: Session = None):
                 .first()
             )
             if not limits:
-                limits = EmployeePostLimit(employee_id=entity_id, free_posts_used=0, total_paid_posts=0)
+                limits = EmployeePostLimit(
+                    employee_id=entity_id, free_posts_used=0, total_paid_posts=0
+                )
                 db.add(limits)
                 db.commit()
                 db.refresh(limits)
@@ -103,20 +110,117 @@ def complate_payment(payment: ClickPayment, db: Session = None):
 def deactivate_expired_premiums(db: Session) -> int:
     """Mark expired active premiums as inactive.
 
-    Sets `is_active=False` for records where `is_active=True` and `end_date <= now`.
+    For users without auto-pay: deactivates expired premiums immediately
+    For users with auto-pay: deactivates expired premiums so they can be processed again tomorrow
     Returns the number of affected rows.
     """
     logger = logging.getLogger("ClickComplete")
     now = datetime.utcnow()
     try:
-        affected = (
+        # Сначала деактивируем все дублирующиеся активные подписки
+        users_with_multiple = (
+            db.query(UserPremium.user_id)
+            .filter(UserPremium.is_active == True)
+            .group_by(UserPremium.user_id)
+            .having(db.func.count(UserPremium.id) > 1)
+            .all()
+        )
+
+        for user_id in users_with_multiple:
+            # Оставляем только самую свежую подписку активной
+            premiums = (
+                db.query(UserPremium)
+                .filter(
+                    UserPremium.user_id == user_id[0], UserPremium.is_active == True
+                )
+                .order_by(UserPremium.end_date.desc())
+                .all()
+            )
+            # Деактивируем все кроме последней
+            for premium in premiums[1:]:
+                premium.is_active = False
+            db.commit()
+            logger.warning(f"Fixed multiple active premiums for user {user_id[0]}")
+
+        # Получаем все истекшие активные премиумы
+        expired_premiums = (
             db.query(UserPremium)
             .filter(UserPremium.is_active == True, UserPremium.end_date <= now)
-            .update({UserPremium.is_active: False}, synchronize_session=False)
+            .all()
         )
+
+        affected = 0
+        for premium in expired_premiums:
+            # Деактивируем все истекшие подписки
+            premium.is_active = False
+            affected += 1
+
+            # Если у пользователя есть автопродление — подготовим платеж и попробуем провести его
+            if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay_id:
+                quantity_months = int(premium.duration_months or 1)
+                amount_for_month = Settings.AMOUNT_FOR_PREMIUM  # Example amount for 1 month
+
+                payment = ClickPayment(
+                    payment_for=f"premium_{premium.user.id}_{quantity_months}",
+                    amount=str(amount_for_month * quantity_months),
+                    status="created",
+                    payment_card_id=premium.user.card_for_auto_pay_id,
+                )
+                db.add(payment)
+                db.commit()
+                db.refresh(payment)
+
+                get_card = (
+                    db.query(PaymentCard)
+                    .filter(
+                        PaymentCard.id == premium.user.card_for_auto_pay_id,
+                        PaymentCard.user_id == premium.user.id,
+                        PaymentCard.is_active == True,
+                        PaymentCard.is_verified == True,
+                    )
+                    .first()
+                )
+                if not get_card:
+                    # Карту не нашли/неактивна — пометим платеж как ошибочный и продолжим
+                    payment.status = PaymentStatus.ERROR.value
+                    db.commit()
+                    logger.warning(
+                        f"Card not found or inactive for user {premium.user.id}; payment recorded as error. Will try next check."
+                    )
+                    continue
+
+                # Пометим платеж как в ожидании и попытаемся провести
+                payment.status = PaymentStatus.PENDING.value
+                db.commit()
+
+                try:
+                    result = settings.click_provider.payment_with_token(
+                        card_token=get_card.card_token,
+                        amount=payment.amount,
+                        merchant_trans_id=payment.id,
+                    )
+                except Exception as e:
+                    payment.status = PaymentStatus.ERROR.value
+                    db.commit()
+                    logger.error(f"Error while calling payment provider for user {premium.user.id}: {e}")
+                    # Не прерываем обработку: на следующей проверке попробуем снова
+                    continue
+
+                if result.get("error_code"):
+                    payment.status = PaymentStatus.ERROR.value
+                    db.commit()
+                    logger.warning(
+                        f"Payment provider returned error for user {premium.user.id}: {result.get('error_code')} - {result.get('error_note')}"
+                    )
+                    # Попробуем снова при следующей проверке
+                    continue
+
+                logger.info(f"Payment succeeded and recorded for user {premium.user.id}; extending premium.")
+
+
         db.commit()
         logger.info(f"Deactivated {affected} expired premium record(s)")
-        return int(affected or 0)
+        return affected
     except Exception as e:
         try:
             db.rollback()
@@ -129,8 +233,9 @@ def deactivate_expired_premiums(db: Session) -> int:
 def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
     """Auto-extend a user's premium by given months or create a new active period.
 
-    - If there is an active premium (is_active=True and not expired), extend its end_date and duration_months
-    - Else, create a new premium record starting now for `months`
+    - If there is an active non-expired premium, extends its duration
+    - If there are multiple active premiums, keeps the latest and extends it
+    - If no active non-expired premium exists, creates a new one
     """
     logger = logging.getLogger("ClickComplete")
 
@@ -143,45 +248,69 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
 
     now = datetime.utcnow()
 
-    # Ensure expired premiums are marked inactive before extending
-    try:
-        db.query(UserPremium).filter(
-            UserPremium.user_id == user_id,
-            UserPremium.is_active == True,
-            UserPremium.end_date <= now,
-        ).update({UserPremium.is_active: False}, synchronize_session=False)
-        db.commit()
-    except Exception:
-        # Non-critical: proceed to extend/create
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    premium = (
+    # Получаем все активные подписки пользователя
+    active_premiums = (
         db.query(UserPremium)
         .filter(UserPremium.user_id == user_id, UserPremium.is_active == True)
         .order_by(UserPremium.end_date.desc())
-        .first()
+        .all()
     )
 
-    if premium and premium.end_date and premium.end_date > now:
-        premium.end_date = premium.end_date + relativedelta(months=months)
-        premium.duration_months = int(premium.duration_months or 0) + months
+    # Если есть несколько активных подписок
+    if len(active_premiums) > 1:
+        # Оставляем только самую свежую, остальные деактивируем
+        latest_premium = active_premiums[0]
+        for premium in active_premiums[1:]:
+            premium.is_active = False
+        db.commit()
+        logger.warning(
+            f"Deactivated {len(active_premiums)-1} duplicate premium(s) for user {user_id}"
+        )
+
+        # Используем самую свежую подписку для продления
+        if latest_premium.end_date > now:
+            latest_premium.end_date = latest_premium.end_date + relativedelta(
+                months=months
+            )
+            latest_premium.duration_months = (
+                int(latest_premium.duration_months or 0) + months
+            )
+            db.commit()
+            logger.info(
+                f"Extended existing premium for user {user_id} by {months} month(s). New expiry: {latest_premium.end_date}"
+            )
+            return
+
+    # Если есть одна активная неистекшая подписка
+    elif len(active_premiums) == 1 and active_premiums[0].end_date > now:
+        active_premiums[0].end_date = active_premiums[0].end_date + relativedelta(
+            months=months
+        )
+        active_premiums[0].duration_months = (
+            int(active_premiums[0].duration_months or 0) + months
+        )
         db.commit()
         logger.info(
-            f"Extended premium for user {user_id} by {months} month(s). New expiry: {premium.end_date}"
+            f"Extended existing premium for user {user_id} by {months} month(s). New expiry: {active_premiums[0].end_date}"
         )
-    else:
-        new_premium = UserPremium(
-            user_id=user_id,
-            start_date=now,
-            end_date=now + relativedelta(months=months),
-            duration_months=months,
-            is_active=True,
-        )
-        db.add(new_premium)
-        db.commit()
-        logger.info(
-            f"Activated premium for user {user_id} for {months} month(s). Expires: {new_premium.end_date}"
-        )
+        return
+
+    # Деактивируем все оставшиеся/истекшие подписки и создаем новую
+    db.query(UserPremium).filter(
+        UserPremium.user_id == user_id, UserPremium.is_active == True
+    ).update({UserPremium.is_active: False}, synchronize_session=False)
+    db.commit()
+
+    # Создаем новую подписку
+    new_premium = UserPremium(
+        user_id=user_id,
+        start_date=now,
+        end_date=now + relativedelta(months=months),
+        duration_months=months,
+        is_active=True,
+    )
+    db.add(new_premium)
+    db.commit()
+    logger.info(
+        f"Activated premium for user {user_id} for {months} month(s). Expires: {new_premium.end_date}"
+    )

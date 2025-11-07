@@ -1,6 +1,8 @@
 import os
 from pydantic_settings import BaseSettings
-from typing import Optional, Union
+from typing import ClassVar, Optional, Union
+
+from app.services.Click import ClickPaymentProvider
 
 
 class Settings(BaseSettings):
@@ -52,6 +54,16 @@ class Settings(BaseSettings):
     SUPERADMIN_IS_ACTIVE: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
+
+    AMOUNT_FOR_PREMIUM: Optional[Union[str, int, bool, None]] = 1000 # so'm
+    AMOUNT_FOR_PER_POST: Optional[Union[str, int, bool, None]] = 1500 # so'm
+    click_provider: ClassVar[ClickPaymentProvider]  = ClickPaymentProvider(
+        merchant_id="44558",
+        merchant_service_id="80178",
+        merchant_user_id="61876",
+        secret_key="j4qMFKcdBIYS",
+    )
+
 
     class Config:
         env_file = ".env"

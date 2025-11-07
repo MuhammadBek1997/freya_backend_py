@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_user, get_current_user_only
 from app.config import settings
-from pydantic import Field
 
 from app.database import get_db
 from app.models.employee import Employee
@@ -18,7 +17,7 @@ from app.schemas.Click import (
     CardTokenVerify,
     PaymentCard as PaymentCardSchema,
 )
-from app.services.Click import ClickPaymentProvider, PaymentStatus
+from app.services.Click import PaymentStatus
 from app.services.click_complate import complate_payment
 from app.utils.payment_validator import PaymentValidator
 
@@ -28,12 +27,6 @@ router = APIRouter(
     tags=["Click"],
 )
 
-click_provider = ClickPaymentProvider(
-    merchant_id="44558",
-    merchant_service_id="80178",
-    merchant_user_id="61876",
-    secret_key="j4qMFKcdBIYS",
-)
 
 cards_temp = {}
 
@@ -59,7 +52,7 @@ def create_card_token(
             "error": "Ushbu karta allaqachon mavjud.",
         }
 
-    result = click_provider.create_card_token(
+    result = settings.click_provider.create_card_token(
         card_number=data.card_number,
         expire_date=data.expire_date,
         temporary=0,
@@ -109,7 +102,7 @@ def verify_card_token(
             "error": "Ushbu karta mavjud emas.",
         }
 
-    result = click_provider.verify_card_token(
+    result = settings.click_provider.verify_card_token(
         card_token=get_card.card_token, sms_code=data.sms_code
     )
     if result.get("error_code"):
@@ -159,19 +152,18 @@ def pay_for_premium(
     current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
 ):
-    amount_for_month = 1000  # Example amount for 1 month
+    amount_for_month = settings.AMOUNT_FOR_PREMIUM  # Example amount for 1 month
     payment = ClickPayment(
         payment_for=f"premium_{current_user.id}_{quantity_months}",
         amount=str(amount_for_month * quantity_months),  # Example amount
         status="created",
+        payment_card_id=card_id,
     )
     db.add(payment)
     db.commit()
     db.refresh(payment)
 
     if card_id:
-        print(card_id)
-        print(current_user.id)
         get_card = (
             db.query(PaymentCard)
             .where(
@@ -182,7 +174,6 @@ def pay_for_premium(
             )
             .first()
         )
-        print(get_card)
         if not get_card:
             return {
                 "success": False,
@@ -192,7 +183,7 @@ def pay_for_premium(
 
         payment.status = PaymentStatus.PENDING.value
         db.commit()
-        result = click_provider.payment_with_token(
+        result = settings.click_provider.payment_with_token(
             card_token=get_card.card_token,
             amount=payment.amount,
             merchant_trans_id=payment.id,
@@ -211,7 +202,7 @@ def pay_for_premium(
             "payment_id": payment.id,
         }
     else:
-        invoice = click_provider.create_invoice(
+        invoice = settings.click_provider.create_invoice(
             amount=payment.amount,
             phone_number=current_user.phone,
             merchant_trans_id=payment.id,
@@ -257,7 +248,7 @@ def pay_for_post(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Noto'g'ri to'lov usuli"
         )
 
-    amount_per_post = 1500  # Example amount for 1 post
+    amount_per_post = settings.AMOUNT_FOR_PER_POST  # Example amount for 1 post
     total_amount = amount_per_post * post_quantity
     payment = ClickPayment(
         payment_for=f"post_{employe.id}_{post_quantity}",
@@ -269,7 +260,7 @@ def pay_for_post(
     db.refresh(payment)
 
     if pay_with == "invoice":
-        invoice = click_provider.create_invoice(
+        invoice = settings.click_provider.create_invoice(
             amount=payment.amount,
             phone_number=employe.phone,
             merchant_trans_id=payment.id,
@@ -298,7 +289,7 @@ def pay_for_post(
         return {
             "success": True,
             "payment_id": payment.id,
-            "redirect_url": f"https://my.click.uz/services/pay?service_id={click_provider.merchant_service_id}&merchant_id={click_provider.merchant_id}&amount={payment.amount}&transaction_param={payment.id}&return_url={return_url}&card_type={card_type}",
+            "redirect_url": f"https://my.click.uz/services/pay?service_id={settings.click_provider.merchant_service_id}&merchant_id={settings.click_provider.merchant_id}&amount={payment.amount}&transaction_param={payment.id}&return_url={return_url}&card_type={card_type}",
         }
 
 
@@ -358,7 +349,7 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
             "error_note": "Payment not found",
         }
 
-    validation_result = click_provider.validate_webhook_data(
+    validation_result = settings.click_provider.validate_webhook_data(
         webhook_data=data,
         expected_amount=payment.amount,
         payment_status=payment.status,
@@ -391,7 +382,7 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
         .first()
     )
 
-    validation_result = click_provider.validate_webhook_data(
+    validation_result = settings.click_provider.validate_webhook_data(
         webhook_data=data, expected_amount=payment.amount, payment_status=payment.status
     )
 
@@ -400,6 +391,12 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
         payment.status = PaymentStatus.CONFIRMED.value
         db.commit()
         complate_payment(payment, db)
+        if payment.payment_for.startswith("premium"):
+            user_id = payment.payment_for.split("_")[1]
+            c_user = db.query(User).filter(User.id == user_id).first()
+            c_user.auto_pay_for_premium = True
+            c_user.card_for_auto_pay = payment.payment_card_id
+            db.commit()
     elif int(data.get("error", 0)) < 0:
         payment.status = PaymentStatus.REJECTED.value
         db.commit()

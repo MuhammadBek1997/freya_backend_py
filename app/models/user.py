@@ -29,6 +29,8 @@ class User(BaseModel):
     location_updated_at = Column(
         TIMESTAMP(timezone=False), server_default=func.now()
     )
+    auto_pay_for_premium = Column(Boolean, default=False)
+    card_for_auto_pay = Column(String(255), nullable=True)
 
     # Relationships
     payment_cards = relationship("PaymentCard", back_populates="user")

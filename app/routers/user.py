@@ -1040,246 +1040,275 @@ async def get_employee_contacts(
         for emp in employees
     ]
 
-
-@router.post("/payment-cards", response_model=PaymentCardResponse)
-async def add_payment_card(
-    card_data: PaymentCardAdd,
+@router.post("/auto_pay/off")
+async def auto_pay_off(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """
-    To'lov kartasini qo'shish
-    """
-    # Validate card number using Luhn algorithm
-    if not luhn_check(card_data.card_number):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400")
-        )
-
-    # Check if card already exists
-    existing_card = (
-        db.query(PaymentCard)
-        .filter(
-            PaymentCard.user_id == current_user.id,
-            PaymentCard.card_number_encrypted
-            == hashlib.sha256(card_data.card_number.encode()).hexdigest(),
-        )
-        .first()
-    )
-
-    if existing_card:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=get_translation(language, "auth.userExists"),
-        )
-
-    # If this is the first card or set as default, make it default
-    if card_data.is_default:
-        # Remove default from other cards
-        db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).update(
-            {"is_default": False}
-        )
-
-    # Check if user has no cards, make this default
-    user_cards_count = (
-        db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).count()
-    )
-
-    if user_cards_count == 0:
-        card_data.is_default = True
-
-    # Create payment card
-    payment_card = PaymentCard(
-        user_id=current_user.id,
-        card_number_encrypted=hashlib.sha256(card_data.card_number.encode()).hexdigest(),
-        card_type=get_card_type(card_data.card_number),
-        card_holder_name=card_data.card_holder_name,
-        expiry_month=card_data.expiry_month,
-        expiry_year=card_data.expiry_year,
-        phone_number=current_user.phone,
-        is_default=card_data.is_default,
-        is_active=True,
-        last_four_digits=card_data.card_number[-4:],
-        created_at=datetime.utcnow(),
-    )
-
-    db.add(payment_card)
+    user_id = current_user.id
+    user = db.query(User).filter(User.id == user_id).first()
+    user.auto_pay_for_premium = False
+    user.card_for_auto_pay = None
     db.commit()
-    db.refresh(payment_card)
-
-    # Build response with masked number from last four digits
-    response = PaymentCardResponse(
-        id=payment_card.id,
-        masked_card_number=f"**** **** **** {payment_card.last_four_digits}",
-        card_type=payment_card.card_type or "Unknown",
-        card_holder_name=payment_card.card_holder_name,
-        expiry_month=payment_card.expiry_month,
-        expiry_year=payment_card.expiry_year,
-        is_default=payment_card.is_default,
-        created_at=payment_card.created_at,
-    )
-
-    return response
-
-
-@router.get("/payment-cards", response_model=List[PaymentCardResponse])
-async def get_user_payment_cards(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-
-):
-    """
-    Foydalanuvchi to'lov kartalari ro'yxatini olish
-    """
-    cards = (
-        db.query(PaymentCard)
-        .filter(PaymentCard.user_id == current_user.id)
-        .order_by(PaymentCard.is_default.desc(), PaymentCard.created_at.desc())
-        .all()
-    )
-
-    return [
-        PaymentCardResponse(
-            id=c.id,
-            masked_card_number=f"**** **** **** {c.last_four_digits}",
-            card_type=c.card_type or "Unknown",
-            card_holder_name=c.card_holder_name,
-            expiry_month=c.expiry_month,
-            expiry_year=c.expiry_year,
-            is_default=c.is_default,
-            created_at=c.created_at,
-        )
-        for c in cards
-    ]
-
-
-@router.put("/payment-cards/{card_id}", response_model=PaymentCardResponse)
-async def update_payment_card(
-    card_id: str,
-    card_update: PaymentCardUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """
-    To'lov kartasini yangilash
-    """
-    card = (
-        db.query(PaymentCard)
-        .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
-        .first()
-    )
-
-    if not card:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
-        )
-
-    # If setting as default, remove default from other cards
-    if card_update.is_default:
-        db.query(PaymentCard).filter(
-            PaymentCard.user_id == current_user.id, PaymentCard.id != card_id
-        ).update({"is_default": False})
-
-    # Update fields (allowed: card_holder_name, expiry_month, expiry_year, is_default)
-    update_data = card_update.dict(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(card, field, value)
-
-    db.commit()
-    db.refresh(card)
-
-    return PaymentCardResponse(
-        id=card.id,
-        masked_card_number=f"**** **** **** {card.last_four_digits}",
-        card_type=card.card_type or "Unknown",
-        card_holder_name=card.card_holder_name,
-        expiry_month=card.expiry_month,
-        expiry_year=card.expiry_year,
-        is_default=card.is_default,
-        created_at=card.created_at,
-    )
-
-
-@router.delete("/payment-cards/{card_id}", response_model=dict)
-async def delete_payment_card(
-    card_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    language: Union[str, None] = Header(None, alias="X-User-language"),
-):
-    """
-    To'lov kartasini o'chirish
-    """
-    card = (
-        db.query(PaymentCard)
-        .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
-        .first()
-    )
-
-    if not card:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
-        )
-
-    was_default = card.is_default
-    db.delete(card)
-
-    # If deleted card was default, make another card default
-    if was_default:
-        remaining_card = (
-            db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).first()
-        )
-        if remaining_card:
-            remaining_card.is_default = True
-
-    db.commit()
-
     return {"success": True, "message": get_translation(language, "success")}
 
-
-@router.put("/payment-cards/{card_id}/set-default", response_model=PaymentCardResponse)
-async def set_default_payment_card(
+@router.post("/auto_pay/on")
+async def auto_pay_on(
     card_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """
-    To'lov kartasini asosiy qilib belgilash
-    """
-    card = (
-        db.query(PaymentCard)
-        .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
-        .first()
-    )
+    user_id = current_user.id
+    if db.query(PaymentCard).filter(PaymentCard.id == card_id, PaymentCard.user_id == user_id).first() is None:
+        return {"success": False, "message": "card_not_foun"}
 
-    if not card:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
-        )
-
-    # Remove default from all cards
-    db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).update(
-        {"is_default": False}
-    )
-
-    # Set this card as default
-    card.is_default = True
+    user = db.query(User).filter(User.id == user_id).first()
+    user.auto_pay_for_premium = True
+    user.card_for_auto_pay = card_id
     db.commit()
-    db.refresh(card)
+    return {"success": True, "message": get_translation(language, "success")}
 
-    return PaymentCardResponse(
-        id=card.id,
-        masked_card_number=f"**** **** **** {card.last_four_digits}",
-        card_type=card.card_type or "Unknown",
-        card_holder_name=card.card_holder_name,
-        expiry_month=card.expiry_month,
-        expiry_year=card.expiry_year,
-        is_default=card.is_default,
-        created_at=card.created_at,
-    )
+# @router.post("/payment-cards", response_model=PaymentCardResponse)
+# async def add_payment_card(
+#     card_data: PaymentCardAdd,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """
+#     To'lov kartasini qo'shish
+#     """
+#     # Validate card number using Luhn algorithm
+#     if not luhn_check(card_data.card_number):
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400")
+#         )
+
+#     # Check if card already exists
+#     existing_card = (
+#         db.query(PaymentCard)
+#         .filter(
+#             PaymentCard.user_id == current_user.id,
+#             PaymentCard.card_number_encrypted
+#             == hashlib.sha256(card_data.card_number.encode()).hexdigest(),
+#         )
+#         .first()
+#     )
+
+#     if existing_card:
+#         raise HTTPException(
+#             status_code=status.HTTP_400_BAD_REQUEST,
+#             detail=get_translation(language, "auth.userExists"),
+#         )
+
+#     # If this is the first card or set as default, make it default
+#     if card_data.is_default:
+#         # Remove default from other cards
+#         db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).update(
+#             {"is_default": False}
+#         )
+
+#     # Check if user has no cards, make this default
+#     user_cards_count = (
+#         db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).count()
+#     )
+
+#     if user_cards_count == 0:
+#         card_data.is_default = True
+
+#     # Create payment card
+#     payment_card = PaymentCard(
+#         user_id=current_user.id,
+#         card_number_encrypted=hashlib.sha256(card_data.card_number.encode()).hexdigest(),
+#         card_type=get_card_type(card_data.card_number),
+#         card_holder_name=card_data.card_holder_name,
+#         expiry_month=card_data.expiry_month,
+#         expiry_year=card_data.expiry_year,
+#         phone_number=current_user.phone,
+#         is_default=card_data.is_default,
+#         is_active=True,
+#         last_four_digits=card_data.card_number[-4:],
+#         created_at=datetime.utcnow(),
+#     )
+
+#     db.add(payment_card)
+#     db.commit()
+#     db.refresh(payment_card)
+
+#     # Build response with masked number from last four digits
+#     response = PaymentCardResponse(
+#         id=payment_card.id,
+#         masked_card_number=f"**** **** **** {payment_card.last_four_digits}",
+#         card_type=payment_card.card_type or "Unknown",
+#         card_holder_name=payment_card.card_holder_name,
+#         expiry_month=payment_card.expiry_month,
+#         expiry_year=payment_card.expiry_year,
+#         is_default=payment_card.is_default,
+#         created_at=payment_card.created_at,
+#     )
+
+#     return response
+
+
+# @router.get("/payment-cards", response_model=List[PaymentCardResponse])
+# async def get_user_payment_cards(
+#     current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+
+# ):
+#     """
+#     Foydalanuvchi to'lov kartalari ro'yxatini olish
+#     """
+#     cards = (
+#         db.query(PaymentCard)
+#         .filter(PaymentCard.user_id == current_user.id)
+#         .order_by(PaymentCard.is_default.desc(), PaymentCard.created_at.desc())
+#         .all()
+#     )
+
+#     return [
+#         PaymentCardResponse(
+#             id=c.id,
+#             masked_card_number=f"**** **** **** {c.last_four_digits}",
+#             card_type=c.card_type or "Unknown",
+#             card_holder_name=c.card_holder_name,
+#             expiry_month=c.expiry_month,
+#             expiry_year=c.expiry_year,
+#             is_default=c.is_default,
+#             created_at=c.created_at,
+#         )
+#         for c in cards
+#     ]
+
+
+# @router.put("/payment-cards/{card_id}", response_model=PaymentCardResponse)
+# async def update_payment_card(
+#     card_id: str,
+#     card_update: PaymentCardUpdate,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """
+#     To'lov kartasini yangilash
+#     """
+#     card = (
+#         db.query(PaymentCard)
+#         .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
+#         .first()
+#     )
+
+#     if not card:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
+#         )
+
+#     # If setting as default, remove default from other cards
+#     if card_update.is_default:
+#         db.query(PaymentCard).filter(
+#             PaymentCard.user_id == current_user.id, PaymentCard.id != card_id
+#         ).update({"is_default": False})
+
+#     # Update fields (allowed: card_holder_name, expiry_month, expiry_year, is_default)
+#     update_data = card_update.dict(exclude_unset=True)
+#     for field, value in update_data.items():
+#         setattr(card, field, value)
+
+#     db.commit()
+#     db.refresh(card)
+
+#     return PaymentCardResponse(
+#         id=card.id,
+#         masked_card_number=f"**** **** **** {card.last_four_digits}",
+#         card_type=card.card_type or "Unknown",
+#         card_holder_name=card.card_holder_name,
+#         expiry_month=card.expiry_month,
+#         expiry_year=card.expiry_year,
+#         is_default=card.is_default,
+#         created_at=card.created_at,
+#     )
+
+
+# @router.delete("/payment-cards/{card_id}", response_model=dict)
+# async def delete_payment_card(
+#     card_id: str,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """
+#     To'lov kartasini o'chirish
+#     """
+#     card = (
+#         db.query(PaymentCard)
+#         .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
+#         .first()
+#     )
+
+#     if not card:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
+#         )
+
+#     was_default = card.is_default
+#     db.delete(card)
+
+#     # If deleted card was default, make another card default
+#     if was_default:
+#         remaining_card = (
+#             db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).first()
+#         )
+#         if remaining_card:
+#             remaining_card.is_default = True
+
+#     db.commit()
+
+#     return {"success": True, "message": get_translation(language, "success")}
+
+
+# @router.put("/payment-cards/{card_id}/set-default", response_model=PaymentCardResponse)
+# async def set_default_payment_card(
+#     card_id: str,
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db),
+#     language: Union[str, None] = Header(None, alias="X-User-language"),
+# ):
+#     """
+#     To'lov kartasini asosiy qilib belgilash
+#     """
+#     card = (
+#         db.query(PaymentCard)
+#         .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
+#         .first()
+#     )
+
+#     if not card:
+#         raise HTTPException(
+#             status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"),
+#         )
+
+#     # Remove default from all cards
+#     db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).update(
+#         {"is_default": False}
+#     )
+
+#     # Set this card as default
+#     card.is_default = True
+#     db.commit()
+#     db.refresh(card)
+
+#     return PaymentCardResponse(
+#         id=card.id,
+#         masked_card_number=f"**** **** **** {card.last_four_digits}",
+#         card_type=card.card_type or "Unknown",
+#         card_holder_name=card.card_holder_name,
+#         expiry_month=card.expiry_month,
+#         expiry_year=card.expiry_year,
+#         is_default=card.is_default,
+#         created_at=card.created_at,
+#     )
 
 """
 City dataset (districts) loader for user city selection
