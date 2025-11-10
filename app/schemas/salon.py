@@ -241,6 +241,9 @@ class MobileSalonItem(BaseModel):
     reviews: Optional[int] = 0
     news: List[str] = []
     isFavorite: bool = False
+    # Koordinatalar: DEFAULT_LOCATION bilan aynan teng bo'lsa bo'sh qaytariladi
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     class Config:
         from_attributes = True

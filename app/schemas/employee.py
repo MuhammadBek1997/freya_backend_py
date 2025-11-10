@@ -74,6 +74,8 @@ class EmployeeResponse(BaseModel):
     # Additional fields
     comment_count: Optional[int] = 0
     avg_rating: Optional[float] = 0.0
+    # Yakunlangan ishlar soni (xodim necha mijozga xizmat ko'rsatgan)
+    done_works: Optional[int] = 0
     salon_name: Optional[str] = None
 
     class Config:

@@ -6,6 +6,7 @@ from typing import List, Optional, Union
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models.employee import Employee, EmployeeComment, EmployeePost, PostMedia, EmployeePostLimit
+from app.models.appointment import Appointment
 from app.models.user import User
 from app.models.salon import Salon
 from app.models.admin import Admin
@@ -146,6 +147,21 @@ async def get_all_employees(
         
         # Get paginated results
         results = query.offset(offset).limit(limit).all()
+
+        # Prepare mapping for done works (yakunlangan appointmentlar soni)
+        employee_ids = [str(emp.id) for (emp, _, _) in results]
+        done_works_map = {}
+        if employee_ids:
+            try:
+                rows = (
+                    db.query(Appointment.employee_id, func.count(Appointment.id).label('done_count'))
+                    .filter(Appointment.employee_id.in_(employee_ids), Appointment.status == 'done')
+                    .group_by(Appointment.employee_id)
+                    .all()
+                )
+                done_works_map = {str(r[0]): int(r[1] or 0) for r in rows}
+            except Exception:
+                done_works_map = {}
         
         # Format response
         employees = []
@@ -153,6 +169,8 @@ async def get_all_employees(
             employee = add_multilingual_fields(employee)
             employee.comment_count = comment_count or 0
             employee.avg_rating = float(avg_rating) if avg_rating else 0.0
+            # Yakunlangan ishlar sonini qo'shamiz
+            employee.done_works = done_works_map.get(str(employee.id), 0)
             employees.append(employee)
         
         return EmployeeListResponse(

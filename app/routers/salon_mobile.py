@@ -360,6 +360,19 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
     if city:
         city = city.strip()
     
+    # Coordinates
+    DEFAULT_LOCATION = {"lat": 41.31637032084059, "lng": 69.24750809550116}
+    location = salon.location if isinstance(salon.location, dict) else {}
+    lat = location.get("lat")
+    lng = location.get("lng")
+    # Agar default koordinata bo'lsa bo'sh qaytaramiz
+    if lat == DEFAULT_LOCATION.get("lat") and lng == DEFAULT_LOCATION.get("lng"):
+        lat_out = None
+        lng_out = None
+    else:
+        lat_out = lat
+        lng_out = lng
+
     rate = float(salon.salon_rating) if salon.salon_rating is not None else 0.0
     news = compose_news_tags(salon)
     is_fav = is_favourite_salon(db, str(salon.id), user_id)
@@ -375,6 +388,8 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
         reviews=0,
         news=news,
         isFavorite=is_fav,
+        latitude=lat_out,
+        longitude=lng_out,
     )
 
 
