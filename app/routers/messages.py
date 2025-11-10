@@ -546,7 +546,7 @@ async def employee_send_message(
     message_type = payload.message_type or "text"
     file_url = payload.file_url
 
-    # Chatni topish yoki yaratish (user_employee)
+    # Chatni topish (user_employee) — xodim birinchi bo'lib chatni boshlay olmaydi
     chat = (
         db.query(UserChat)
         .filter(
@@ -558,20 +558,8 @@ async def employee_send_message(
     )
 
     if not chat:
-        # Foydalanuvchi mavjudligini tekshirish
-        user = db.query(User).filter(User.id == receiver_id).first()
-        if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
-
-        chat = UserChat(
-            user_id=receiver_id,
-            employee_id=current_user.id,
-            chat_type="user_employee",
-            last_message=None,
-            last_message_time=None,
-        )
-        db.add(chat)
-        db.flush()
+        # Chat mavjud bo'lmasa, xodim birinchi xabar yubora olmaydi
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=get_translation(language, "errors.403"))
 
     # Xabar yaratish
     new_message = Message(
