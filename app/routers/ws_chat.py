@@ -79,6 +79,8 @@ async def ws_chat_info():
             "Ulanish: ws://<host>/api/ws/chat?token=...&receiver_id=...&receiver_type=employee",
             "Foydalanuvchi → xodim/salon: receiver_type=employee|salon",
             "Xodim → foydalanuvchi: receiver_type=user",
+            "Ulanishda server avtomatik ravishda oxirgi 50 ta xabarni 'history' event bilan yuboradi.",
+            "Paginatsiya: limit default 50 (≤200), offset default 0; javobda pagination {limit, offset, total} keladi.",
             "O'qilgan deb belgilash: client {event: 'mark_read'} yuboradi, server 'read' hodisasini broadcast qiladi.",
         ],
         usage_steps=[
@@ -86,6 +88,7 @@ async def ws_chat_info():
             "2) WS oching: ws://<host>/api/ws/chat?token=<JWT>&receiver_id=<ID>&receiver_type=employee|salon|user",
             "3) Xabar yuborish: {message_text, message_type='text'|'file'|... , file_url?}.",
             "4) O'qilgan deb belgilash: {event:'mark_read'} yuboring.",
+            "5) Tarixni olish: {event:'history', limit:50, offset:0} — keyingi sahifa uchun offsetni oshiring (masalan 50, 100...).",
             "5) Employee faqat mavjud chatga ulanadi; yangi chatni boshlab yubora olmaydi.",
             "6) Salon birinchi xabarni yubora olmaydi; user boshlaydi.",
         ],
@@ -111,6 +114,23 @@ async def ws_chat_info():
                 "desc": "O'qilgan deb belgilash broadcast",
                 "trigger": {"client_send": {"event": "mark_read"}},
                 "payload": {"event": "read", "room_id": "<chat_id>", "by_user_id": "<id>", "time": "<ISO>"}
+            },
+            "history": {
+                "desc": "Xabarlar tarixini paginatsiya bilan olish",
+                "trigger": {"client_send": {"event": "history", "limit": 50, "offset": 0}},
+                "payload": {
+                    "event": "history",
+                    "room_id": "<chat_id>",
+                    "items": [
+                        {
+                            "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee",
+                            "receiver_id": "<id>", "receiver_type": "user|employee|salon",
+                            "message_text": "...", "message_type": "text|file|...",
+                            "file_url": None, "is_read": False, "created_at": "<ISO>"
+                        }
+                    ],
+                    "pagination": {"limit": 50, "offset": 0, "total": 123}
+                }
             }
         },
         restrictions=[
@@ -139,6 +159,22 @@ async def ws_chat_info():
 
 
 manager = ConnectionManager()
+
+
+def _serialize_message(m: Message) -> Dict[str, Any]:
+    """Convert Message ORM to JSON-friendly dict."""
+    return {
+        "id": str(m.id),
+        "sender_id": str(m.sender_id),
+        "sender_type": str(m.sender_type),
+        "receiver_id": str(m.receiver_id),
+        "receiver_type": str(m.receiver_type),
+        "message_text": m.message_text,
+        "message_type": m.message_type,
+        "file_url": m.file_url,
+        "is_read": bool(m.is_read),
+        "created_at": m.created_at.isoformat() if getattr(m, "created_at", None) else None,
+    }
 
 
 def _get_or_create_chat(db, current_id: str, current_role: str, receiver_id: str, receiver_type: str) -> Optional[UserChat]:
@@ -271,6 +307,34 @@ async def websocket_chat(websocket: WebSocket):
             "time": datetime.utcnow().isoformat()
         })
 
+        # On connect: send latest 50 messages (pagination default)
+        try:
+            total_msgs = db.query(Message).filter(Message.user_chat_id == chat.id).count()
+            default_limit = 50
+            recent_msgs = (
+                db.query(Message)
+                .filter(Message.user_chat_id == chat.id)
+                .order_by(Message.created_at.desc())
+                .offset(0)
+                .limit(default_limit)
+                .all()
+            )
+            # Reverse to chronological order (oldest -> newest)
+            items = [_serialize_message(m) for m in reversed(recent_msgs)]
+            await websocket.send_text(json.dumps({
+                "event": "history",
+                "room_id": room_id,
+                "items": items,
+                "pagination": {
+                    "limit": default_limit,
+                    "offset": 0,
+                    "total": total_msgs,
+                }
+            }, default=str))
+        except Exception:
+            # Ignore history send failures
+            pass
+
         # Receive loop
         while True:
             data = await websocket.receive_text()
@@ -305,6 +369,50 @@ async def websocket_chat(websocket: WebSocket):
                     "time": datetime.utcnow().isoformat(),
                 })
 
+                continue
+
+            if event_type == "history":
+                # Client requests paginated history: {event:"history", offset?, limit?}
+                try:
+                    limit = parsed.get("limit") or 50
+                    offset = parsed.get("offset") or 0
+                    # Clamp values for safety
+                    try:
+                        limit = int(limit)
+                        offset = int(offset)
+                    except Exception:
+                        limit = 50
+                        offset = 0
+                    if limit < 1:
+                        limit = 50
+                    if limit > 200:
+                        limit = 200
+                    if offset < 0:
+                        offset = 0
+
+                    total_msgs = db.query(Message).filter(Message.user_chat_id == chat.id).count()
+                    msgs = (
+                        db.query(Message)
+                        .filter(Message.user_chat_id == chat.id)
+                        .order_by(Message.created_at.desc())
+                        .offset(offset)
+                        .limit(limit)
+                        .all()
+                    )
+                    items = [_serialize_message(m) for m in reversed(msgs)]
+                    await websocket.send_text(json.dumps({
+                        "event": "history",
+                        "room_id": room_id,
+                        "items": items,
+                        "pagination": {
+                            "limit": limit,
+                            "offset": offset,
+                            "total": total_msgs,
+                        }
+                    }, default=str))
+                except Exception:
+                    # Silently ignore history errors to keep WS alive
+                    pass
                 continue
 
             # Default: treat as a new chat message
