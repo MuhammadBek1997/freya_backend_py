@@ -99,6 +99,13 @@ def create_card_token(
         card_token=result["card_token"],
         card_number=data.card_number,
         expiry_at=data.expire_date,
+        # Birinchi karta bo'lsa, uni default qilamiz
+        is_default=(
+            db.query(PaymentCard)
+            .filter(PaymentCard.user_id == current_user.id)
+            .count()
+            == 0
+        ),
     )
     db.add(db_card)
     db.commit()
