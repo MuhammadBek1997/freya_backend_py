@@ -145,6 +145,67 @@ def get_user_payment_cards(
     return masked_cards
 
 
+@router.delete("/card/{card_id}")
+def delete_card_token(
+    card_id: str,
+    current_user: User = Depends(get_current_user_only),
+    db: Session = Depends(get_db),
+):
+    """
+    Foydalanuvchi kartasining tokenini Click provayderidan o'chirib,
+    bazadagi kartani ham o'chirish.
+    """
+
+    card = (
+        db.query(PaymentCard)
+        .filter(PaymentCard.id == card_id, PaymentCard.user_id == current_user.id)
+        .first()
+    )
+
+    if not card:
+        return {
+            "success": False,
+            "error_code": "CARD_NOT_FOUND",
+            "error": "Ushbu karta mavjud emas.",
+        }
+
+    # Provayderdan tokenni o'chirish
+    result = settings.click_provider.delete_card_token(card_token=card.card_token)
+    if result.get("error_code"):
+        return {
+            "success": False,
+            "error_code": result.get("error_code"),
+            "error": result.get("error_note", "Token o'chirishda xatolik"),
+        }
+
+    # Agar auto-pay ushbu karta bilan bog'langan bo'lsa, uni o'chiramiz
+    if getattr(current_user, "card_for_auto_pay", None) == card_id:
+        current_user.card_for_auto_pay = None
+        current_user.auto_pay_for_premium = False
+        db.add(current_user)
+
+    was_default = card.is_default
+
+    # Kartani bazadan o'chirish
+    db.delete(card)
+
+    # Agar default karta o'chirilsa, qolganlardan birini default qilamiz
+    if was_default:
+        remaining = (
+            db.query(PaymentCard)
+            .filter(PaymentCard.user_id == current_user.id)
+            .order_by(PaymentCard.created_at.desc())
+            .first()
+        )
+        if remaining:
+            remaining.is_default = True
+            db.add(remaining)
+
+    db.commit()
+
+    return {"success": True}
+
+
 @router.post("/pay/premium")
 def pay_for_premium(
     card_id: str = None,
