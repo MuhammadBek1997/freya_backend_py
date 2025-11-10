@@ -145,6 +145,11 @@ async def get_conversation_messages(
         .limit(limit)
         .all()
     )
+    total_msgs = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .count()
+    )
 
     data = [
         {
@@ -170,6 +175,7 @@ async def get_conversation_messages(
             "chat_type": chat.chat_type,
             "participant": participant,
             "messages": data,
+            "pagination": {"limit": limit, "offset": offset, "total": total_msgs},
             "user_avatar_url": getattr(current_user, "avatar_url", None),
             "employee_avatar_url": employee_avatar,
             "employee_profession": employee_profession,
@@ -445,6 +451,11 @@ async def get_employee_conversation_messages(
         .limit(limit)
         .all()
     )
+    total_msgs = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .count()
+    )
 
     # Participant details for employee-side conversation
     user = db.query(User).filter(User.id == user_id).first()
@@ -479,6 +490,7 @@ async def get_employee_conversation_messages(
             "chat_type": chat.chat_type,
             "participant": participant,
             "messages": data,
+            "pagination": {"limit": limit, "offset": offset, "total": total_msgs},
             "user_avatar_url": getattr(user, "avatar_url", None),
             "employee_avatar_url": getattr(current_user, "avatar_url", None),
         },
