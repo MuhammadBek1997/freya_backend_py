@@ -201,7 +201,7 @@ app.include_router(history_router, prefix="/api")
 app.include_router(click_router, prefix="/api")
 
 # WebSocket chat router (separate endpoint)
-app.include_router(ws_chat_router, prefix="/api")
+app.include_router(ws_chat_router)
 
 
 # Static files

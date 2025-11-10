@@ -46,6 +46,36 @@ def create_card_token(
         .first()
     )
     if get_card:
+        # Agar karta mavjud bo'lib, tasdiqlanmagan bo'lsa — qayta token olish
+        if not get_card.is_verified:
+            result = settings.click_provider.create_card_token(
+                card_number=data.card_number,
+                expire_date=data.expire_date,
+                temporary=0,
+            )
+            if result.get("error_code"):
+                return {
+                    "success": False,
+                    "error_code": result["error_code"],
+                    "error": result.get("error_note"),
+                }
+
+            # Mavjud yozuvni yangilaymiz va tasdiqlashni kutamiz
+            get_card.card_token = result["card_token"]
+            get_card.expiry_at = data.expire_date
+            get_card.is_active = False
+            get_card.is_verified = False
+            db.add(get_card)
+            db.commit()
+            db.refresh(get_card)
+
+            return {
+                "success": True,
+                "card_id": get_card.id,
+                "message": "sms_code_sent",
+            }
+
+        # Aks holda, karta tasdiqlangan — xatolik qaytaramiz
         return {
             "success": False,
             "error_code": "CARD_ALREADY_EXISTS",
@@ -169,7 +199,29 @@ def delete_card_token(
             "error": "Ushbu karta mavjud emas.",
         }
 
-    # Provayderdan tokenni o'chirish
+    # Agar karta tasdiqlanmagan bo'lsa — faqat bazadan o'chiramiz
+    if not card.is_verified:
+        if getattr(current_user, "card_for_auto_pay", None) == card_id:
+            current_user.card_for_auto_pay = None
+            current_user.auto_pay_for_premium = False
+            db.add(current_user)
+
+        was_default = card.is_default
+        db.delete(card)
+        if was_default:
+            remaining = (
+                db.query(PaymentCard)
+                .filter(PaymentCard.user_id == current_user.id)
+                .order_by(PaymentCard.created_at.desc())
+                .first()
+            )
+            if remaining:
+                remaining.is_default = True
+                db.add(remaining)
+        db.commit()
+        return {"success": True}
+
+    # Tasdiqlangan karta — provayderdan tokenni o'chiramiz
     result = settings.click_provider.delete_card_token(card_token=card.card_token)
     if result.get("error_code"):
         return {
