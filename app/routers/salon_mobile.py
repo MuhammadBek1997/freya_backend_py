@@ -187,6 +187,15 @@ def is_favourite_salon(db: Session, salon_id: str, user_id: Optional[str]) -> bo
     except Exception:
         return False
 
+def resolve_favorite_user_id(current_user: Optional[User], userId: Optional[str]) -> Optional[str]:
+    """Resolve the correct user id for favourites: prefer logged-in 'user' role."""
+    try:
+        if current_user and getattr(current_user, "role", "") == "user":
+            return str(current_user.id)
+    except Exception:
+        pass
+    return userId
+
 
 def get_amenity_status(salon: Salon, key: str, aliases: List[str] = None) -> bool:
     """Check if a specific amenity/comfort is active."""
@@ -543,7 +552,7 @@ async def get_all_salons(
         offset = (page - 1) * limit
         salons = query.order_by(Salon.created_at.desc()).offset(offset).limit(limit).all()
         
-        user_id_for_favorite = str(current_user.id) if current_user else userId
+        user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
         items = [build_mobile_item(s, language, db, user_id_for_favorite) for s in salons]
         
         return MobileSalonListResponse(
@@ -678,9 +687,10 @@ async def filter_salons(
             salons = filter_by_distance(salons, latitude, longitude, radius)
         
         # Build response
+        user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
         return {
             "success": True,
-            "data": [build_mobile_item(s, language, db, userId) for s in salons],
+            "data": [build_mobile_item(s, language, db, user_id_for_favorite) for s in salons],
             "pagination": build_pagination_metadata(total, page, limit),
         }
         
@@ -717,7 +727,7 @@ async def get_nearby_salons(
         nearby_salons = filter_by_distance(all_salons, latitude, longitude, radius)
         paginated = paginate(nearby_salons, page, limit)
 
-        user_id_for_favorite = str(current_user.id) if current_user else userId
+        user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
         result: List[NearbySalonItem] = []
         for salon in paginated:
             # Address (localized)
@@ -867,7 +877,8 @@ async def get_salon_by_id(
                 detail=get_translation(language, "errors.404")
             )
         
-        return build_mobile_detail(salon, language, db, userId, latitude, longitude)
+        user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
+        return build_mobile_detail(salon, language, db, user_id_for_favorite, latitude, longitude)
     except HTTPException:
         raise
     except Exception as e:
