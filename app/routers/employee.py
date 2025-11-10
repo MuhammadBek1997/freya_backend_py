@@ -213,7 +213,7 @@ async def get_employees_by_salon_id(
     try:
         # Check if salon exists
         salon = db.query(Salon).where(Salon.id == str(salon_id)).first()
-        print(f"Salon found: {salon }")
+        print(f"Salon found: {salon.salon_name }")
         if not salon:
             raise HTTPException(
                 status_code=404,
@@ -261,6 +261,10 @@ async def get_employees_by_salon_id(
             employee.comment_count = comment_count or 0
             employee.avg_rating = float(avg_rating) if avg_rating else 0.0
             employees.append(employee)
+            try:
+                employee.salon_name = salon.salon_name
+            except Exception:
+                employee.salon_name = None
         
         return EmployeeListResponse(
             success=True,
