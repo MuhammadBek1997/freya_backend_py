@@ -171,6 +171,11 @@ async def get_all_employees(
             employee.avg_rating = float(avg_rating) if avg_rating else 0.0
             # Yakunlangan ishlar sonini qo'shamiz
             employee.done_works = done_works_map.get(str(employee.id), 0)
+            # Bir salon kontekstida kelganligi uchun salon nomini to'ldiramiz
+            try:
+                employee.salon_name = salon.salon_name
+            except Exception:
+                employee.salon_name = None
             employees.append(employee)
         
         return EmployeeListResponse(
