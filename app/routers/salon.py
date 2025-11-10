@@ -98,7 +98,7 @@ DEFAULT_SALON_TYPES = [
     {"type": "for_children", "selected": False},
 ]
 
-DEFAULT_LOCATION = {"lat": 41, "lng": 64}
+DEFAULT_LOCATION = {"lat": 41.31637032084059, "lng": 69.24750809550116}
 
 DEFAULT_SALON_COMFORT = [
     {"name": "parking", "isActive": False},
