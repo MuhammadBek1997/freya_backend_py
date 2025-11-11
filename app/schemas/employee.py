@@ -12,6 +12,28 @@ class EmployeeCreate(BaseModel):
     username: str
     profession: str
     employee_password: str
+    work_start_time: Optional[str] = None  # HH:MM
+    work_end_time: Optional[str] = None    # HH:MM
+
+    @validator('work_start_time')
+    def validate_work_start_time(cls, v):
+        if v is None or v == '':
+            return v
+        v = v.strip()
+        import re
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("work_start_time noto'g'ri formatda (HH:MM)")
+        return v
+
+    @validator('work_end_time')
+    def validate_work_end_time(cls, v):
+        if v is None or v == '':
+            return v
+        v = v.strip()
+        import re
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("work_end_time noto'g'ri formatda (HH:MM)")
+        return v
 
 class EmployeeUpdate(BaseModel):
     name: Optional[str] = None
@@ -20,6 +42,28 @@ class EmployeeUpdate(BaseModel):
     email: Optional[EmailStr] = None
     username: Optional[str] = None
     profession: Optional[str] = None
+    work_start_time: Optional[str] = None  # HH:MM
+    work_end_time: Optional[str] = None    # HH:MM
+
+    @validator('work_start_time')
+    def validate_update_work_start_time(cls, v):
+        if v is None or v == '':
+            return v
+        v = v.strip()
+        import re
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("work_start_time noto'g'ri formatda (HH:MM)")
+        return v
+
+    @validator('work_end_time')
+    def validate_update_work_end_time(cls, v):
+        if v is None or v == '':
+            return v
+        v = v.strip()
+        import re
+        if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
+            raise ValueError("work_end_time noto'g'ri formatda (HH:MM)")
+        return v
 
 class EmployeeAvatarUpdate(BaseModel):
     avatar_url: str
@@ -53,6 +97,8 @@ class EmployeeResponse(BaseModel):
     created_at: datetime
     updated_at: Optional[datetime] = None
     deleted_at: Optional[datetime] = None
+    work_start_time: Optional[str] = None
+    work_end_time: Optional[str] = None
     
     # Multi-language fields
     name_uz: Optional[str] = None

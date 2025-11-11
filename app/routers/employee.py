@@ -66,6 +66,59 @@ async def update_my_avatar(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# Xodim o'z ish vaqtlarini (HH:MM) yangilashi
+class EmployeeWorkHoursPayload(EmployeeUpdate):
+    pass
+
+@router.put("/me/work-hours", response_model=SuccessResponse)
+async def update_my_work_hours(
+    payload: EmployeeWorkHoursPayload,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Xodim o'z ish boshlash/ tugash vaqtlarini yangilaydi"""
+    try:
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        if payload.work_start_time is None and payload.work_end_time is None:
+            raise HTTPException(status_code=400, detail="work_start_time yoki work_end_time talab qilinadi")
+
+        employee = db.query(Employee).filter(
+            and_(
+                Employee.id == current_user.id,
+                Employee.is_active == True,
+                Employee.deleted_at.is_(None)
+            )
+        ).first()
+
+        if not employee:
+            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+
+        update_data = payload.dict(exclude_unset=True)
+        if "work_start_time" in update_data:
+            employee.work_start_time = update_data["work_start_time"]
+        if "work_end_time" in update_data:
+            employee.work_end_time = update_data["work_end_time"]
+
+        db.commit()
+        db.refresh(employee)
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "data": {
+                "employee_id": str(employee.id),
+                "work_start_time": employee.work_start_time,
+                "work_end_time": employee.work_end_time,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 def add_multilingual_fields(employee):
     """Add multilingual fields to employee object"""
     # For now, we'll use the same value for all languages
@@ -441,7 +494,9 @@ async def create_employee(
             username=employee_data.username,
             profession=employee_data.profession,
             employee_password=hashed_password,
-            is_active=True
+            is_active=True,
+            work_start_time=employee_data.work_start_time,
+            work_end_time=employee_data.work_end_time
         )
         
         db.add(new_employee)

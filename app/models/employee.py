@@ -25,6 +25,10 @@ class Employee(BaseModel):
     is_waiting = Column(Boolean, default=False)
     deleted_at = Column(DateTime)
     
+    # Working hours (HH:MM format strings)
+    work_start_time = Column(String(5), nullable=True)
+    work_end_time = Column(String(5), nullable=True)
+    
     # Relationships
     salon = relationship("Salon", back_populates="employees")
     comments = relationship("EmployeeComment", back_populates="employee", cascade="all, delete-orphan")
