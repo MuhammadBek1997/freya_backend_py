@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_current_admin
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.salon import Salon
@@ -352,6 +352,15 @@ class EmployeeSendMessageRequest(BaseModel):
     file_url: Optional[str] = None
 
 
+# === Admin (private_admin) tarafidagi xabarlar uchun endpointlar ===
+
+class AdminSendMessageRequest(BaseModel):
+    receiver_id: str  # foydalanuvchi ID
+    message_text: str
+    message_type: Optional[str] = "text"
+    file_url: Optional[str] = None
+
+
 # GET /api/messages/employee/conversations - Xodim uchun barcha suhbatlar
 @router.get("/employee/conversations", status_code=status.HTTP_200_OK)
 async def get_employee_conversations(
@@ -578,6 +587,273 @@ async def employee_send_message(
         user_chat_id=chat.id,
         sender_id=current_user.id,
         sender_type="employee",
+        receiver_id=receiver_id,
+        receiver_type="user",
+        message_text=message_text,
+        message_type=message_type,
+        file_url=file_url,
+        is_read=False,
+    )
+
+    chat.last_message = message_text
+    chat.last_message_time = datetime.utcnow()
+
+    db.add(new_message)
+    db.commit()
+    db.refresh(new_message)
+
+    return {
+        "success": True,
+        "message": get_translation(language, "messages.sent"),
+        "data": {
+            "id": new_message.id,
+            "chat_id": chat.id,
+            "sender_id": new_message.sender_id,
+            "receiver_id": new_message.receiver_id,
+            "message_text": new_message.message_text,
+            "created_at": new_message.created_at,
+        },
+    }
+
+
+# GET /api/messages/admin/conversations - Admin (salon) uchun barcha suhbatlar
+@router.get("/admin/conversations", status_code=status.HTTP_200_OK)
+async def get_admin_conversations(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin (private_admin) uchun salon bo'yicha barcha user_salon suhbatlar ro'yxati"""
+
+    if not getattr(current_admin, "salon_id", None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+    chats: List[UserChat] = (
+        db.query(UserChat)
+        .filter(UserChat.salon_id == current_admin.salon_id, UserChat.chat_type == "user_salon")
+        .order_by(desc(UserChat.last_message_time))
+        .all()
+    )
+
+    data = []
+    for chat in chats:
+        # O'qilmagan xabarlar soni (salon tomoni uchun)
+        unread_count = (
+            db.query(Message)
+            .filter(
+                Message.user_chat_id == chat.id,
+                Message.receiver_type == "salon",
+                Message.receiver_id == current_admin.salon_id,
+                Message.is_read == False,
+            )
+            .count()
+        )
+
+        participant = None
+        if chat.user_id:
+            user = db.query(User).filter(User.id == chat.user_id).first()
+            participant = {
+                "type": "user",
+                "id": chat.user_id,
+                "name": getattr(user, "full_name", None) or getattr(user, "username", None),
+                "avatar_url": getattr(user, "avatar_url", None),
+            }
+
+        data.append(
+            {
+                "chat_id": chat.id,
+                "chat_type": chat.chat_type,
+                "participant": participant,
+                "last_message": chat.last_message,
+                "last_message_time": chat.last_message_time,
+                "unread_count": unread_count,
+                "user_avatar_url": getattr(user, "avatar_url", None) if chat.user_id else None,
+                "salon_id": current_admin.salon_id,
+            }
+        )
+
+    return {
+        "success": True,
+        "message": get_translation(language, "messages.conversationsFetched"),
+        "data": data,
+    }
+
+
+# GET /api/messages/admin/conversation/:userId - Admin (salon) uchun bitta suhbat xabarlari
+@router.get("/admin/conversation/{user_id}", status_code=status.HTTP_200_OK)
+async def get_admin_conversation_messages(
+    user_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin (salon) va berilgan foydalanuvchi orasidagi xabarlar"""
+
+    if not getattr(current_admin, "salon_id", None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+    chat = (
+        db.query(UserChat)
+        .filter(
+            UserChat.user_id == user_id,
+            UserChat.salon_id == current_admin.salon_id,
+            UserChat.chat_type == "user_salon",
+        )
+        .first()
+    )
+
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+
+    messages = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .order_by(asc(Message.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    total_msgs = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .count()
+    )
+
+    user = db.query(User).filter(User.id == user_id).first()
+    participant = {
+        "type": "user",
+        "id": user_id,
+        "name": getattr(user, "full_name", None) or getattr(user, "username", None),
+        "avatar_url": getattr(user, "avatar_url", None),
+    }
+
+    data = [
+        {
+            "id": m.id,
+            "sender_id": m.sender_id,
+            "sender_type": m.sender_type,
+            "receiver_id": m.receiver_id,
+            "receiver_type": m.receiver_type,
+            "message_text": m.message_text,
+            "message_type": m.message_type,
+            "file_url": m.file_url,
+            "is_read": m.is_read,
+            "created_at": m.created_at,
+        }
+        for m in messages
+    ]
+
+    return {
+        "success": True,
+        "message": get_translation(language, "messages.conversationFetched"),
+        "data": {
+            "chat_id": chat.id,
+            "chat_type": chat.chat_type,
+            "participant": participant,
+            "messages": data,
+            "pagination": {"limit": limit, "offset": offset, "total": total_msgs},
+            "user_avatar_url": getattr(user, "avatar_url", None),
+            "salon_id": current_admin.salon_id,
+        },
+    }
+
+
+# PUT /api/messages/admin/conversation/:userId/mark-read - Admin tomonidan o'qilgan deb belgilash
+@router.put("/admin/conversation/{user_id}/mark-read", status_code=status.HTTP_200_OK)
+async def mark_admin_conversation_read(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin (salon) uchun berilgan suhbatdagi o'qilmagan xabarlarni o'qilgan deb belgilash"""
+
+    if not getattr(current_admin, "salon_id", None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+    chat = (
+        db.query(UserChat)
+        .filter(
+            UserChat.user_id == user_id,
+            UserChat.salon_id == current_admin.salon_id,
+            UserChat.chat_type == "user_salon",
+        )
+        .first()
+    )
+
+    if not chat:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+
+    # Admin/salon uchun o'qilmagan xabarlarni o'qilgan qilish
+    db.query(Message).filter(
+        Message.user_chat_id == chat.id,
+        Message.receiver_type == "salon",
+        Message.receiver_id == current_admin.salon_id,
+        Message.is_read == False,
+    ).update({Message.is_read: True})
+
+    chat.unread_count = 0
+    db.commit()
+
+    return {
+        "success": True,
+        "message": get_translation(language, "messages.markedRead"),
+        "data": {"chat_id": chat.id},
+    }
+
+
+# POST /api/messages/admin/send - Admindan foydalanuvchiga xabar yuborish
+@router.post("/admin/send", status_code=status.HTTP_201_CREATED)
+async def admin_send_message(
+    payload: AdminSendMessageRequest,
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Admin (salon sifatida) foydalanuvchiga xabar yuboradi. Chat yo'q bo'lsa, yaratiladi (user_salon)."""
+
+    if not getattr(current_admin, "salon_id", None):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=get_translation(language, "errors.400"))
+
+    receiver_id = payload.receiver_id  # user ID
+    message_text = payload.message_text
+    message_type = payload.message_type or "text"
+    file_url = payload.file_url
+
+    # Chatni topish yoki yaratish (user_salon)
+    chat = (
+        db.query(UserChat)
+        .filter(
+            UserChat.user_id == receiver_id,
+            UserChat.salon_id == current_admin.salon_id,
+            UserChat.chat_type == "user_salon",
+        )
+        .first()
+    )
+
+    if not chat:
+        # Foydalanuvchi mavjudligini tekshirish
+        user = db.query(User).filter(User.id == receiver_id).first()
+        if not user:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+
+        chat = UserChat(
+            user_id=receiver_id,
+            salon_id=current_admin.salon_id,
+            chat_type="user_salon",
+            last_message=None,
+            last_message_time=None,
+        )
+        db.add(chat)
+        db.flush()
+
+    # Xabar yaratish (salon tomondan)
+    new_message = Message(
+        user_chat_id=chat.id,
+        sender_id=current_admin.salon_id,
+        sender_type="salon",
         receiver_id=receiver_id,
         receiver_type="user",
         message_text=message_text,
