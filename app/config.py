@@ -9,9 +9,9 @@ class Settings(BaseSettings):
     # Database
     # Fallback to local SQLite for fresh setups; override with DATABASE_URL in .env
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
-    # Fix for Heroku
-    # if database_url.startswith("postgres://"):
-    #     database_url = database_url.replace("postgres://", "postgresql://", 1)
+    # Fix for Heroku: translate legacy scheme to SQLAlchemy-compatible
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     # JWT
     secret_key: str = "gj589tujfj39if094fkvmi3jtju359im3u8hf1qsiodacr89rf3rijwcm3uwi"
