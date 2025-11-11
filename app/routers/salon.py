@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import Float, and_, cast, desc, or_, func, text
 from typing import Any, Dict, List, Optional, Union
