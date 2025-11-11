@@ -1035,6 +1035,8 @@ async def get_employee_contacts(
             "created_at": emp.created_at,
             "updated_at": emp.updated_at,
             "deleted_at": emp.deleted_at,
+            "work_start_time": getattr(emp, 'work_start_time', None) or "08:00",
+            "work_end_time": getattr(emp, 'work_end_time', None) or "20:00",
             "salon_name": emp.salon.salon_name if emp.salon else None,
         }
         for emp in employees

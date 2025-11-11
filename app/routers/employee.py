@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_, func, desc
+import sqlalchemy as sa
 from typing import List, Optional, Union
 
 from app.database import get_db
@@ -229,6 +230,11 @@ async def get_all_employees(
                 employee.salon_name = salon.salon_name
             except Exception:
                 employee.salon_name = None
+            # Agar ish soatlari berilmagan bo'lsa, default 08:00–20:00 qo'llaymiz
+            if not getattr(employee, "work_start_time", None):
+                employee.work_start_time = "08:00"
+            if not getattr(employee, "work_end_time", None):
+                employee.work_end_time = "20:00"
             employees.append(employee)
         
         return EmployeeListResponse(
@@ -251,6 +257,52 @@ async def get_all_employees(
             status_code=500,
             detail=get_translation(language, "errors.500")
         )
+
+# Eski xodimlar uchun default ish soatlarini bulk o'rnatish
+@router.put("/bulk/default-work-hours", response_model=SuccessResponse)
+async def set_default_work_hours_bulk(
+    db: Session = Depends(get_db),
+    current_admin = Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Eski xodimlarda work_start_time/work_end_time bo'lmasa 08:00–20:00 qilib o'rnatadi"""
+    try:
+        inspector = sa.inspect(db.get_bind())
+        tables = set(inspector.get_table_names())
+        if 'employees' not in tables:
+            return {"success": False, "message": "Jadval topilmadi", "data": {"requires_migration": True}}
+        cols = {c['name'] for c in inspector.get_columns('employees')}
+        if 'work_start_time' not in cols or 'work_end_time' not in cols:
+            return {
+                "success": False,
+                "message": "DB migratsiyasi kerak: employees jadvaliga ish soatlari ustunlarini qo'shing",
+                "data": {"requires_migration": True}
+            }
+
+        updated_count = 0
+        employees = db.query(Employee).filter(Employee.deleted_at.is_(None)).all()
+        for emp in employees:
+            changed = False
+            if not getattr(emp, 'work_start_time', None):
+                emp.work_start_time = '08:00'
+                changed = True
+            if not getattr(emp, 'work_end_time', None):
+                emp.work_end_time = '20:00'
+                changed = True
+            if changed:
+                updated_count += 1
+        db.commit()
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "data": {"updated_count": updated_count}
+        }
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
 
 @router.get("/salon/{salon_id}", response_model=EmployeeListResponse)
 async def get_employees_by_salon_id(
@@ -313,6 +365,11 @@ async def get_employees_by_salon_id(
             employee = add_multilingual_fields(employee)
             employee.comment_count = comment_count or 0
             employee.avg_rating = float(avg_rating) if avg_rating else 0.0
+            # Agar ish soatlari berilmagan bo'lsa, default 08:00–20:00 qo'llaymiz
+            if not getattr(employee, "work_start_time", None):
+                employee.work_start_time = "08:00"
+            if not getattr(employee, "work_end_time", None):
+                employee.work_end_time = "20:00"
             employees.append(employee)
             try:
                 employee.salon_name = salon.salon_name
