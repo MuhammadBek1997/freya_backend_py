@@ -2,12 +2,13 @@
 Authentication dependencies for FastAPI
 """
 from typing import Optional, Union
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Header, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Admin, User, Employee
 from app.auth.jwt_utils import JWTUtils
+from app.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -267,3 +268,28 @@ async def get_current_user_optional(
         return await get_current_user(credentials, db)
     except HTTPException:
         return None
+
+
+async def verify_bot_token(
+    x_bot_token: Optional[str] = Header(None, alias="X-Bot-Token")
+):
+    """Validate permanent bot token from header against BOT_SECRET_KEY.
+
+    Returns a simple dict on success; raises 401 on invalid/missing token,
+    and 500 if BOT_SECRET_KEY is not configured.
+    """
+    expected = settings.bot_secret_key
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="BOT_SECRET_KEY konfiguratsiyasi topilmadi"
+        )
+
+    provided = x_bot_token
+    if not provided or provided != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Bot token noto'g'ri yoki yo'q"
+        )
+
+    return {"bot": "telegram"}

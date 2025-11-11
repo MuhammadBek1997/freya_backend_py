@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     upload_path: str = "uploads/"
     max_file_size: int = 5242880  # 5 MB
 
+    # Telegram Bot
+    bot_secret_key: Optional[str] = os.getenv("BOT_SECRET_KEY")
+
     SUPERADMIN_EMAIL: Optional[Union[str, int, bool, None]] = "superadmin@localhost"
     SUPERADMIN_PASSWORD: Optional[Union[str, int, bool, None]] = "superadminpassword"
     SUPERADMIN_USERNAME: Optional[Union[str, int, bool, None]] = "superadmin"

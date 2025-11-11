@@ -25,6 +25,7 @@ from .user_favorite import UserFavorite
 from .photo import Photo
 from .notif import Notif
 from .user_employee_contact import UserEmployeeContact
+from .salon_bot_registration import SalonBotRegistration
 
 __all__ = [
     # "BaseModel",
@@ -58,4 +59,5 @@ __all__ = [
     "UserFavorite",
     "Photo",
     "UserEmployeeContact"
+    ,"SalonBotRegistration"
 ]

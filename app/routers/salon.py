@@ -16,6 +16,9 @@ from app.models.user import User
 from app.models.employee import Employee
 from app.models.appointment import Appointment
 from app.models.user_favourite_salon import UserFavouriteSalon
+from app.models import Admin
+from app.models.salon_bot_registration import SalonBotRegistration
+from sqlalchemy import or_
 from app.schemas.salon import (
     SalonCreate,
     SalonUpdate,
@@ -29,9 +32,12 @@ from app.schemas.salon import (
     PhotoDeleteRequest,
     StandardResponse,
     ErrorResponse,
+    BotRegistrationLogCreate,
+    BotRegistrationLogFilter,
 )
+from app.schemas.auth import CreateAdminRequest
 from app.auth.jwt_utils import JWTUtils
-from app.middleware.auth import get_current_user, get_current_admin
+from app.middleware.auth import get_current_user, get_current_admin, verify_bot_token
 from app.services.translation_service import translation_service
 
 router = APIRouter(prefix="/salons", tags=["Salons"])
@@ -69,6 +75,20 @@ class PaginatedSalonResponse(BaseModel):
     page: int
     limit: int
     total: int
+
+
+class AdminForBotCreate(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+    full_name: str
+    role: Optional[str] = "admin"
+
+
+class CombinedBotCreateRequest(BaseModel):
+    """Telegram bot orqali salon va adminni birgalikda yaratish uchun schema"""
+    salon: SalonCreate
+    admin: AdminForBotCreate
 # Default values
 DEFAULT_SALON_TYPES = [
     {"type": "beauty_salon", "selected": True},
@@ -329,7 +349,573 @@ async def create_salon(
         )
 
 
+@router.post("/bot/create", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+async def bot_create_salon(
+    salon_data: SalonCreate,
+    db: Session = Depends(get_db),
+    _bot=Depends(verify_bot_token),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Yangi salon yaratish (Telegram bot orqali, doimiy token bilan)"""
+    try:
+        # Reuse same creation logic as admin endpoint
+        salon_name = salon_data.salon_name
+        salon_phone = getattr(salon_data, "salon_phone", None)
+
+        if not salon_name or salon_name.strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400"),
+            )
+
+        salon_types_input = getattr(salon_data, "salon_types", None)
+        salon_types = (
+            salon_types_input
+            if (salon_types_input and len(salon_types_input) > 0)
+            else DEFAULT_SALON_TYPES
+        )
+
+        loc_value = getattr(salon_data, "location", None)
+        if loc_value and hasattr(loc_value, "dict"):
+            loc_dict = loc_value.dict()
+            lat_val = loc_dict.get("latitude")
+            lng_val = loc_dict.get("longitude")
+            if lat_val is None or lng_val is None:
+                location_dict = DEFAULT_LOCATION
+            else:
+                location_dict = {"lat": lat_val, "lng": lng_val}
+        else:
+            location_dict = DEFAULT_LOCATION
+
+        salon_comfort_input = getattr(salon_data, "salon_comfort", None)
+        salon_comfort = (
+            salon_comfort_input
+            if (salon_comfort_input and len(salon_comfort_input) > 0)
+            else DEFAULT_SALON_COMFORT
+        )
+
+        salon_types_dict = [
+            st.dict() if hasattr(st, "dict") else st for st in salon_types
+        ]
+        salon_comfort_dict = [
+            sc.dict() if hasattr(sc, "dict") else sc for sc in salon_comfort
+        ]
+
+        salon_instagram = getattr(salon_data, "salon_instagram", None)
+        salon_rating_val = getattr(salon_data, "salon_rating", None) or Decimal("0")
+        description_input = (
+            getattr(salon_data, "salon_description", None)
+            or getattr(salon_data, "description", None)
+            or ""
+        )
+        address_input = getattr(salon_data, "address", None) or ""
+        orientation_input = getattr(salon_data, "orientation", None) or ""
+
+        # Auto-translate description
+        if description_input:
+            description_lang = await translation_service.detect_language(
+                description_input
+            )
+            detected_lang = (
+                description_lang["data"]["language"]
+                if description_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=description_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                description_uz = translations.get("uz", description_input)
+                description_ru = translations.get("ru", description_input)
+                description_en = translations.get("en", description_input)
+            else:
+                description_uz = description_input
+                description_ru = description_input
+                description_en = description_input
+        else:
+            description_uz = None
+            description_ru = None
+            description_en = None
+
+        # Auto-translate address
+        if address_input:
+            address_lang = await translation_service.detect_language(address_input)
+            detected_lang = (
+                address_lang["data"]["language"]
+                if address_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=address_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                address_uz = translations.get("uz", address_input)
+                address_ru = translations.get("ru", address_input)
+                address_en = translations.get("en", address_input)
+            else:
+                address_uz = address_input
+                address_ru = address_input
+                address_en = address_input
+        else:
+            address_uz = None
+            address_ru = None
+            address_en = None
+
+        # Auto-translate orientation
+        if orientation_input:
+            orentation_lang = await translation_service.detect_language(
+                orientation_input
+            )
+            detected_lang = (
+                orentation_lang["data"]["language"]
+                if orentation_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=orientation_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                orientation_uz = translations.get("uz", orientation_input)
+                orientation_ru = translations.get("ru", orientation_input)
+                orientation_en = translations.get("en", orientation_input)
+            else:
+                orientation_uz = orientation_input
+                orientation_ru = orientation_input
+                orientation_en = orientation_input
+        else:
+            orientation_uz = None
+            orientation_ru = None
+            orientation_en = None
+
+        new_salon = Salon(
+            salon_name=salon_name,
+            salon_phone=salon_phone,
+            salon_instagram=salon_instagram,
+            salon_rating=salon_rating_val,
+            salon_types=salon_types_dict,
+            private_salon=salon_data.private_salon or False,
+            location=location_dict,
+            salon_comfort=salon_comfort_dict,
+            salon_sale=getattr(salon_data, "salon_sale", None),
+            logo=getattr(salon_data, "logo", None),
+            is_active=True,
+            is_private=getattr(salon_data, "is_private", None) or False,
+            description_uz=description_uz,
+            description_ru=description_ru,
+            description_en=description_en,
+            address_uz=address_uz,
+            address_ru=address_ru,
+            address_en=address_en,
+            orientation_uz=orientation_uz,
+            orientation_ru=orientation_ru,
+            orientation_en=orientation_en,
+        )
+
+        db.add(new_salon)
+        db.commit()
+        db.refresh(new_salon)
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "id": str(new_salon.id),
+                "salon_name": new_salon.salon_name,
+                "salon_phone": new_salon.salon_phone,
+                "logo": new_salon.logo,
+                "is_active": new_salon.is_active,
+                "created_at": (
+                    new_salon.created_at.isoformat() if new_salon.created_at else None
+                ),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+
+
+@router.post("/bot/create-with-admin", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+async def bot_create_salon_with_admin(
+    request: CombinedBotCreateRequest,
+    db: Session = Depends(get_db),
+    _bot=Depends(verify_bot_token),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Yangi salon va shu salon uchun admin yaratish (Telegram bot orqali, doimiy token bilan).
+
+    Hammasi bitta transaksiyada bajariladi: biri muvaffaqiyatsiz bo'lsa, ikkalasi ham bekor qilinadi.
+    """
+    try:
+        salon_data = request.salon
+        admin_req = request.admin
+
+        # --- Salon tayyorlash ---
+        salon_name = salon_data.salon_name
+        salon_phone = getattr(salon_data, "salon_phone", None)
+
+        if not salon_name or salon_name.strip() == "":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400"),
+            )
+
+        salon_types_input = getattr(salon_data, "salon_types", None)
+        salon_types = (
+            salon_types_input
+            if (salon_types_input and len(salon_types_input) > 0)
+            else DEFAULT_SALON_TYPES
+        )
+
+        loc_value = getattr(salon_data, "location", None)
+        if loc_value and hasattr(loc_value, "dict"):
+            loc_dict = loc_value.dict()
+            lat_val = loc_dict.get("latitude")
+            lng_val = loc_dict.get("longitude")
+            if lat_val is None or lng_val is None:
+                location_dict = DEFAULT_LOCATION
+            else:
+                location_dict = {"lat": lat_val, "lng": lng_val}
+        else:
+            location_dict = DEFAULT_LOCATION
+
+        salon_comfort_input = getattr(salon_data, "salon_comfort", None)
+        salon_comfort = (
+            salon_comfort_input
+            if (salon_comfort_input and len(salon_comfort_input) > 0)
+            else DEFAULT_SALON_COMFORT
+        )
+
+        salon_types_dict = [
+            st.dict() if hasattr(st, "dict") else st for st in salon_types
+        ]
+        salon_comfort_dict = [
+            sc.dict() if hasattr(sc, "dict") else sc for sc in salon_comfort
+        ]
+
+        salon_instagram = getattr(salon_data, "salon_instagram", None)
+        salon_rating_val = getattr(salon_data, "salon_rating", None) or Decimal("0")
+        description_input = (
+            getattr(salon_data, "salon_description", None)
+            or getattr(salon_data, "description", None)
+            or ""
+        )
+        address_input = getattr(salon_data, "address", None) or ""
+        orientation_input = getattr(salon_data, "orientation", None) or ""
+
+        # Auto-translate description
+        if description_input:
+            description_lang = await translation_service.detect_language(
+                description_input
+            )
+            detected_lang = (
+                description_lang["data"]["language"]
+                if description_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=description_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                description_uz = translations.get("uz", description_input)
+                description_ru = translations.get("ru", description_input)
+                description_en = translations.get("en", description_input)
+            else:
+                description_uz = description_input
+                description_ru = description_input
+                description_en = description_input
+        else:
+            description_uz = None
+            description_ru = None
+            description_en = None
+
+        # Auto-translate address
+        if address_input:
+            address_lang = await translation_service.detect_language(address_input)
+            detected_lang = (
+                address_lang["data"]["language"]
+                if address_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=address_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                address_uz = translations.get("uz", address_input)
+                address_ru = translations.get("ru", address_input)
+                address_en = translations.get("en", address_input)
+            else:
+                address_uz = address_input
+                address_ru = address_input
+                address_en = address_input
+        else:
+            address_uz = None
+            address_ru = None
+            address_en = None
+
+        # Auto-translate orientation
+        if orientation_input:
+            orentation_lang = await translation_service.detect_language(
+                orientation_input
+            )
+            detected_lang = (
+                orentation_lang["data"]["language"]
+                if orentation_lang.get("success")
+                else "uz"
+            )
+            translates = await translation_service.translate_to_all_languages(
+                text=orientation_input, source_language=detected_lang
+            )
+            if translates.get("success"):
+                translations = translates["data"]["translations"]
+                orientation_uz = translations.get("uz", orientation_input)
+                orientation_ru = translations.get("ru", orientation_input)
+                orientation_en = translations.get("en", orientation_input)
+            else:
+                orientation_uz = orientation_input
+                orientation_ru = orientation_input
+                orientation_en = orientation_input
+        else:
+            orientation_uz = None
+            orientation_ru = None
+            orientation_en = None
+
+        # --- Admin tekshiruvlari ---
+        # Username mavjudligini tekshirish
+        existing_admin = db.query(Admin).filter(Admin.username == admin_req.username).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "auth.userExists")
+            )
+
+        # Email mavjudligini tekshirish
+        existing_email = db.query(Admin).filter(Admin.email == admin_req.email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "auth.emailExists")
+            )
+
+        password_hash = JWTUtils.hash_password(admin_req.password)
+        role = admin_req.role if admin_req.role in ["admin", "private_admin"] else "admin"
+
+        # --- Transaksiya: salon va adminni saqlash ---
+        # Yangi salon
+        new_salon = Salon(
+            salon_name=salon_name,
+            salon_phone=salon_phone,
+            salon_instagram=salon_instagram,
+            salon_rating=salon_rating_val,
+            salon_types=salon_types_dict,
+            private_salon=salon_data.private_salon or False,
+            location=location_dict,
+            salon_comfort=salon_comfort_dict,
+            salon_sale=getattr(salon_data, "salon_sale", None),
+            logo=getattr(salon_data, "logo", None),
+            is_active=True,
+            is_private=getattr(salon_data, "is_private", None) or False,
+            description_uz=description_uz,
+            description_ru=description_ru,
+            description_en=description_en,
+            address_uz=address_uz,
+            address_ru=address_ru,
+            address_en=address_en,
+            orientation_uz=orientation_uz,
+            orientation_ru=orientation_ru,
+            orientation_en=orientation_en,
+        )
+
+        try:
+            # Begin transaction
+            db.add(new_salon)
+            db.flush()  # get salon id
+
+            new_admin = Admin(
+                username=admin_req.username,
+                email=admin_req.email,
+                password_hash=password_hash,
+                full_name=admin_req.full_name,
+                role=role,
+                salon_id=new_salon.id,
+                is_active=True
+            )
+
+            db.add(new_admin)
+            db.commit()
+            db.refresh(new_salon)
+            db.refresh(new_admin)
+        except Exception:
+            db.rollback()
+            raise
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "salon": {
+                    "id": str(new_salon.id),
+                    "salon_name": new_salon.salon_name,
+                    "salon_phone": new_salon.salon_phone,
+                    "logo": new_salon.logo,
+                    "is_active": new_salon.is_active,
+                    "created_at": (
+                        new_salon.created_at.isoformat() if new_salon.created_at else None
+                    ),
+                },
+                "admin": {
+                    "id": new_admin.id,
+                    "username": new_admin.username,
+                    "email": new_admin.email,
+                    "full_name": new_admin.full_name,
+                    "role": new_admin.role,
+                    "salon_id": new_admin.salon_id
+                }
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+
 @router.get("/", response_model=SalonListResponse)
+
+
+@router.post("/bot/registration-log", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+async def bot_registration_log(
+    payload: BotRegistrationLogCreate,
+    db: Session = Depends(get_db),
+    _bot=Depends(verify_bot_token),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Telegram bot uchun alohida log jadvali.
+
+    Muvaffaqiyatli (status=1) yoki muvaffaqiyatsiz (status=0) holatlarni yozib boradi.
+    status=1 bo'lsa, salon_id majburiy.
+    """
+    try:
+        # Agar status=1 bo'lsa, salon mavjudligini tasdiqlaymiz
+        if payload.status == 1:
+            if not payload.salon_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=get_translation(language, "errors.400"),
+                )
+            salon_exists = db.query(Salon).filter(Salon.id == payload.salon_id).first()
+            if not salon_exists:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=get_translation(language, "errors.404"),
+                )
+
+        rec = SalonBotRegistration(
+            phone=payload.phone,
+            telegram_id=payload.telegram_id,
+            stir=payload.stir,
+            salon_id=payload.salon_id,
+            status=payload.status,
+        )
+        db.add(rec)
+        db.commit()
+        db.refresh(rec)
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "id": rec.id,
+                "status": rec.status,
+                "salon_id": rec.salon_id,
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+
+@router.post("/bot/registration-find", response_model=StandardResponse, status_code=status.HTTP_200_OK)
+async def bot_registration_find(
+    payload: BotRegistrationLogFilter,
+    db: Session = Depends(get_db),
+    _bot=Depends(verify_bot_token),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Bot ro'yxat loglari ichidan filterlarga mos yozuvlarni topish.
+
+    Berilgan maydonlardan (phone, telegram_id, stir, salon_id, status) kamida bittasi bo'lsa,
+    shu qiymat(lar)ga mos barcha yozuvlar qaytariladi. Bir necha field berilsa, OR (yoki) orqali qidiriladi.
+    """
+    try:
+        conditions = []
+        if payload.phone:
+            conditions.append(SalonBotRegistration.phone == payload.phone)
+        if payload.telegram_id:
+            conditions.append(SalonBotRegistration.telegram_id == payload.telegram_id)
+        if payload.stir:
+            conditions.append(SalonBotRegistration.stir == payload.stir)
+        if payload.salon_id:
+            conditions.append(SalonBotRegistration.salon_id == payload.salon_id)
+        if payload.status is not None:
+            conditions.append(SalonBotRegistration.status == payload.status)
+
+        if not conditions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400"),
+            )
+
+        items = (
+            db.query(SalonBotRegistration)
+            .filter(or_(*conditions))
+            .order_by(SalonBotRegistration.created_at.desc())
+            .all()
+        )
+
+        data = [
+            {
+                "id": item.id,
+                "phone": item.phone,
+                "telegram_id": item.telegram_id,
+                "stir": item.stir,
+                "salon_id": item.salon_id,
+                "status": item.status,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+            }
+            for item in items
+        ]
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data=data,
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
 async def get_all_salons(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),

@@ -16,6 +16,7 @@ from app.schemas.auth import (
 )
 from app.auth import JWTUtils, get_current_superadmin, get_current_admin
 from app.middleware import get_language, get_translation_function
+from app.middleware.auth import verify_bot_token
 import logging
 
 logger = logging.getLogger(__name__)
@@ -230,6 +231,72 @@ async def create_admin(
     except Exception as error:
         logger.error(f"Admin yaratish xatosi: {error}")
         db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500")
+        )
+
+
+@router.post("/admin/bot/create", response_model=dict)
+async def bot_create_admin(
+    request: CreateAdminRequest,
+    db: Session = Depends(get_db),
+    _bot=Depends(verify_bot_token),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """
+    Create admin via Telegram bot (permanent token required).
+    Restricts role to 'admin' or 'private_admin'.
+    """
+    try:
+        existing_admin = db.query(Admin).filter(Admin.username == request.username).first()
+        if existing_admin:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "auth.userExists")
+            )
+
+        existing_email = db.query(Admin).filter(Admin.email == request.email).first()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "auth.emailExists")
+            )
+
+        password_hash = JWTUtils.hash_password(request.password)
+
+        role = request.role if request.role in ["admin", "private_admin"] else "admin"
+
+        new_admin = Admin(
+            username=request.username,
+            email=request.email,
+            password_hash=password_hash,
+            full_name=request.full_name,
+            role=role,
+            salon_id=request.salon_id,
+            is_active=True
+        )
+
+        db.add(new_admin)
+        db.commit()
+        db.refresh(new_admin)
+
+        return {
+            "message": get_translation(language, "auth.userCreated"),
+            "admin": {
+                "id": new_admin.id,
+                "username": new_admin.username,
+                "email": new_admin.email,
+                "full_name": new_admin.full_name,
+                "role": new_admin.role,
+                "salon_id": new_admin.salon_id
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as error:
+        logger.error(f"Bot admin create xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500")

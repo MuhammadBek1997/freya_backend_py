@@ -248,6 +248,65 @@ class MobileSalonItem(BaseModel):
     class Config:
         from_attributes = True
 
+
+# Bot Registration Log Create Schema (alohida jadval uchun)
+class BotRegistrationLogCreate(BaseModel):
+    phone: str
+    telegram_id: Optional[str] = None
+    stir: Optional[str] = None
+    salon_id: Optional[str] = None
+    status: int  # 0 yoki 1
+
+    @validator('status')
+    def validate_status(cls, v):
+        if v not in (0, 1):
+            raise ValueError('status faqat 0 yoki 1 bo\'lishi kerak')
+        return v
+
+    @validator('salon_id', always=True)
+    def validate_salon_id_for_success(cls, v, values):
+        # Agar status=1 (muvaffaqiyatli) bo'lsa, salon_id bo'lishi maqsadga muvofiq
+        status = values.get('status')
+        if status == 1 and not v:
+            # salon_id talabiy emas, lekin ogohlantirish sifatida xatolik ko'taramiz
+            raise ValueError('status=1 bo\'lsa, salon_id berilishi kerak')
+        return v
+
+
+# Bot Registration Log Filter Schema (qidiruv uchun)
+class BotRegistrationLogFilter(BaseModel):
+    phone: Optional[str] = None
+    telegram_id: Optional[str] = None
+    stir: Optional[str] = None
+    salon_id: Optional[str] = None
+    status: Optional[int] = None
+
+    @validator('status')
+    def validate_status_optional(cls, v):
+        if v is not None and v not in (0, 1):
+            raise ValueError('status faqat 0 yoki 1 bo\'lishi mumkin')
+        return v
+
+    @validator('*', pre=True, always=True)
+    def ensure_at_least_one(cls, v, values, **kwargs):
+        # Bu validator har bir field uchun chaqiriladi; oxirida umumiy tekshiruvni qilamiz
+        # Pydanticda umumiy tekshiruv uchun root_validator ishlatish mumkin, ammo bu versiyada soddaroq usul.
+        return v
+
+    @validator('phone', always=True)
+    def root_check(cls, v, values):
+        # At least one filter must be provided
+        has_any = any([
+            v,
+            values.get('telegram_id'),
+            values.get('stir'),
+            values.get('salon_id'),
+            values.get('status') is not None,
+        ])
+        if not has_any:
+            raise ValueError('Kamida bitta filter (phone|telegram_id|stir|salon_id|status) berilishi kerak')
+        return v
+
 # Nearby-specific lightweight item for /mobile/salons/nearby
 class NearbySalonItem(BaseModel):
     id: str
