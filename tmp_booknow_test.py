@@ -49,16 +49,27 @@ def main():
             notes="booknow test",
         )
 
-        resp = asyncio.run(create_appointment(data, db=session, language='uz'))
+        # First attempt: should succeed
+        print("[TEST] First booking attempt...")
+        resp1 = asyncio.run(create_appointment(data, db=session, language='uz'))
         try:
-            out = resp.dict()
+            out1 = resp1.dict()
         except Exception:
-            out = resp.model_dump()
-        print("[RESULT] Response:", out)
-        b = out.get("bookedAppointments") or []
-        print("[RESULT] bookedAppointments count:", len(b))
-        if b:
-            print("[RESULT] first booked:", b[0])
+            out1 = resp1.model_dump()
+        print("[RESULT-1] status:", "OK")
+        print("[RESULT-1] payload:", out1)
+
+        # Second attempt on the same slot: should fail with 409
+        print("[TEST] Second booking attempt (same slot, expect 409)...")
+        try:
+            resp2 = asyncio.run(create_appointment(data, db=session, language='uz'))
+            try:
+                out2 = resp2.dict()
+            except Exception:
+                out2 = resp2.model_dump()
+            print("[RESULT-2] UNEXPECTED SUCCESS:", out2)
+        except Exception as e:
+            print("[RESULT-2] Expected conflict:", str(e))
     except Exception as e:
         print("[ERROR]", e)
     finally:

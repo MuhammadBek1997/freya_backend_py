@@ -108,6 +108,34 @@ async def create_appointment(
     # Генерация номера заявки
     application_number = await generate_application_number(db)
     
+    # Проверка времени в рамках расписания (если в расписании заданы границы)
+    if getattr(schedule, 'start_time', None) and getattr(schedule, 'end_time', None):
+        if not (schedule.start_time <= appointment_data.application_time <= schedule.end_time):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400")
+            )
+
+    # Проверка на двойное бронирование: тот же сотрудник, дата и время, не отменён
+    if employee_id:
+        conflict = (
+            db.query(Appointment)
+            .filter(
+                and_(
+                    Appointment.employee_id == employee_id,
+                    Appointment.application_date == appointment_data.application_date,
+                    Appointment.application_time == appointment_data.application_time,
+                    Appointment.is_cancelled == False,
+                )
+            )
+            .first()
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=get_translation(language, "errors.409")
+            )
+    
     # Создание заявки
     new_appointment = Appointment(
         application_number=application_number,

@@ -1,9 +1,12 @@
-from sqlalchemy import Column, Date, Float, String, Boolean, DateTime, Integer, ForeignKey, Text, Numeric, Time
+from sqlalchemy import Column, Date, Float, String, Boolean, DateTime, Integer, ForeignKey, Text, Numeric, Time, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
 class Appointment(BaseModel):
     __tablename__ = "appointments"
+    __table_args__ = (
+        UniqueConstraint('employee_id', 'application_date', 'application_time', name='uq_employee_slot'),
+    )
     
     application_number = Column(String(50), unique=True, nullable=False, index=True)
     user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
