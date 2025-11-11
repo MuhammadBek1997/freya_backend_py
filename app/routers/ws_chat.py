@@ -1,6 +1,6 @@
 from typing import Dict, Set, Any, Optional, List
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel
@@ -12,6 +12,8 @@ from app.models.employee import Employee
 from app.models.salon import Salon
 from app.models.user_chat import UserChat
 from app.models.message import Message
+from app.models.notification import Notification
+from app.models.notif import Notif
 
 
 router = APIRouter(prefix="/api", tags=["WS"])
@@ -43,6 +45,16 @@ class ConnectionManager:
             except Exception:
                 # Drop broken connections
                 self.disconnect(room_id, ws)
+
+
+def _now_local_iso() -> str:
+    """Return current time ISO string with +05:00 offset (Asia/Tashkent)."""
+    try:
+        tz = timezone(timedelta(hours=5))
+        return datetime.now(tz).isoformat()
+    except Exception:
+        # Fallback to UTC if timezone fails
+        return datetime.utcnow().isoformat()
 
 
 class WSChatInfoResponse(BaseModel):
@@ -82,6 +94,8 @@ async def ws_chat_info():
             "Ulanishda server avtomatik ravishda oxirgi 50 ta xabarni 'history' event bilan yuboradi.",
             "Paginatsiya: limit default 50 (≤200), offset default 0; javobda pagination {limit, offset, total} keladi.",
             "O'qilgan deb belgilash: client {event: 'mark_read'} yuboradi, server 'read' hodisasini broadcast qiladi.",
+            "Vaqtlar ISO formatda UTC+05:00 (Asia/Tashkent) offset bilan yuboriladi (join/notification 'time', message 'created_at_local').",
+            "Notification sarlavhalari 3 tilda keladi: title (UZ), title_ru (RU), title_en (EN). UI tiliga mosini ko'rsating.",
         ],
         usage_steps=[
             "1) JWT token oling (login orqali).",
@@ -106,7 +120,7 @@ async def ws_chat_info():
                         "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee",
                         "receiver_id": "<id>", "receiver_type": "user|employee|salon",
                         "message_text": "...", "message_type": "text|file|...",
-                        "file_url": None, "is_read": False, "created_at": "<ISO>"
+                        "file_url": None, "is_read": False, "created_at": "<ISO>", "created_at_local": "<ISO+05:00>"
                     }
                 }
             },
@@ -126,10 +140,27 @@ async def ws_chat_info():
                             "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee",
                             "receiver_id": "<id>", "receiver_type": "user|employee|salon",
                             "message_text": "...", "message_type": "text|file|...",
-                            "file_url": None, "is_read": False, "created_at": "<ISO>"
+                            "file_url": None, "is_read": False, "created_at": "<ISO>", "created_at_local": "<ISO+05:00>"
                         }
                     ],
                     "pagination": {"limit": 50, "offset": 0, "total": 123}
+                }
+            },
+            "notification": {
+                "desc": "Yangi xabar haqida real-time bildirishnoma",
+                "payload": {
+                    "event": "notification",
+                    "room_id": "<chat_id>",
+                    "kind": "chat_message",
+                    "receiver_type": "user|employee",
+                    "title": "Yangi xabar",
+                    "title_ru": "Новое сообщение",
+                    "title_en": "New message",
+                    "message": "...",
+                    "to_user_id": "<user_id|null>",
+                    "to_employee_id": "<employee_id|null>",
+                    "unread_count": 3,
+                    "time": "<ISO+05:00>"
                 }
             }
         },
@@ -148,6 +179,8 @@ async def ws_chat_info():
             "employee_to_user_existing": "ws://<host>/api/ws/chat?token=<EMP_JWT>&receiver_id=<USER_ID>&receiver_type=user",
             "send_message": "ws.send(JSON.stringify({ message_text: 'Salom!', message_type: 'text' }))",
             "mark_read": "ws.send(JSON.stringify({ event: 'mark_read' }))",
+            "handle_notification_js": "ws.onmessage = (ev) => { const msg = JSON.parse(ev.data); if (msg.event === 'notification') { const title = (uiLang==='ru'? msg.title_ru : uiLang==='en' ? msg.title_en : msg.title); const toMe = (msg.receiver_type==='user' ? msg.to_user_id === myUserId : msg.to_employee_id === myEmployeeId); if (toMe) { showToast(title, msg.message); updateBadge(msg.unread_count); } } };",
+            "handle_message_time_js": "ws.onmessage = (ev) => { const msg = JSON.parse(ev.data); if (msg.event==='message') { const tLocal = msg.message.created_at_local || msg.message.created_at; renderMessage(msg.message, tLocal); } };",
         },
         errors={
             "WS_1008_POLICY_VIOLATION": "Parametrlar yetarli emas, token noto'g'ri, yoki employee uchun chat mavjud emas.",
@@ -174,6 +207,10 @@ def _serialize_message(m: Message) -> Dict[str, Any]:
         "file_url": m.file_url,
         "is_read": bool(m.is_read),
         "created_at": m.created_at.isoformat() if getattr(m, "created_at", None) else None,
+        "created_at_local": (
+            m.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
+            if getattr(m, "created_at", None) else _now_local_iso()
+        ),
     }
 
 
@@ -304,7 +341,7 @@ async def websocket_chat(websocket: WebSocket):
             "room_id": room_id,
             "user_id": current_id,
             "role": current_role,
-            "time": datetime.utcnow().isoformat()
+            "time": _now_local_iso()
         })
 
         # On connect: send latest 50 messages (pagination default)
@@ -366,7 +403,7 @@ async def websocket_chat(websocket: WebSocket):
                     "event": "read",
                     "room_id": room_id,
                     "by_user_id": current_id,
-                    "time": datetime.utcnow().isoformat(),
+                    "time": _now_local_iso(),
                 })
 
                 continue
@@ -455,8 +492,59 @@ async def websocket_chat(websocket: WebSocket):
                     "file_url": file_url,
                     "is_read": False,
                     "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                    "created_at_local": (
+                        new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
+                        if new_message.created_at else _now_local_iso()
+                    ),
                 }
             })
+
+            # Build and persist notification (for user receivers only if subscribed)
+            try:
+                unread_count = db.query(Message).filter(
+                    Message.user_chat_id == chat.id,
+                    Message.receiver_id == receiver_id,
+                    Message.is_read == False,
+                ).count()
+
+                if receiver_type == "user":
+                    # Only create DB notification for users and when subscribed in Notif
+                    is_subscribed = db.query(Notif).filter(Notif.user_id == receiver_id).first() is not None
+                    if is_subscribed:
+                        notif = Notification(
+                            user_id=receiver_id,
+                            title="Yangi xabar",
+                            message=message_text or "",
+                            type="info",
+                            data={
+                                "kind": "chat_message",
+                                "chat_id": str(chat.id),
+                                "sender_id": current_id,
+                                "sender_type": current_role,
+                                "unread_count": unread_count,
+                            },
+                        )
+                        db.add(notif)
+                        db.commit()
+
+                # Broadcast a lightweight notification event to the room
+                await manager.broadcast(room_id, {
+                    "event": "notification",
+                    "room_id": room_id,
+                    "kind": "chat_message",
+                    "receiver_type": receiver_type,
+                    "title": "Yangi xabar",
+                    "title_ru": "Новое сообщение",
+                    "title_en": "New message",
+                    "message": message_text,
+                    "to_user_id": receiver_id if receiver_type == "user" else None,
+                    "to_employee_id": receiver_id if receiver_type == "employee" else None,
+                    "unread_count": unread_count,
+                    "time": _now_local_iso(),
+                })
+            except Exception:
+                # Do not fail WS on notification errors
+                pass
 
     except WebSocketDisconnect:
         # Client disconnected
