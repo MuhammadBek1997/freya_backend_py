@@ -514,7 +514,10 @@ async def create_employee(
                 "email": new_employee.email,
                 "role": new_employee.role,
                 "username": new_employee.username,
-                "profession": new_employee.profession
+                "profession": new_employee.profession,
+                # Include work hours so frontend sees them right away
+                "work_start_time": new_employee.work_start_time,
+                "work_end_time": new_employee.work_end_time
             }
         )
     except HTTPException:
