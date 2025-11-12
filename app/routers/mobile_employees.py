@@ -608,18 +608,17 @@ async def get_employee_schedules_by_date(
         total = len(employee_schedules)
         offset = (page - 1) * limit
         paginated = employee_schedules[offset: offset + limit]
-
-    return DailyEmployeeScheduleResponse(
-        success=True,
-        date=date,
-        data=paginated,
-        pagination={
-            "page": page,
-            "limit": limit,
-            "total": total,
-            "pages": (total + limit - 1) // limit if limit else 1,
-        }
-    )
+        return DailyEmployeeScheduleResponse(
+            success=True,
+            date=date,
+            data=paginated,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            }
+        )
 
     except HTTPException:
         raise
