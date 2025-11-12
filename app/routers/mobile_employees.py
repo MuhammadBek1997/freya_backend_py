@@ -16,6 +16,7 @@ from app.schemas.salon import MobileSalonItem
 from app.models.appointment import Appointment
 from app.models.busy_slot import BusySlot
 from app.models.user_favourite_salon import UserFavouriteSalon
+from app.auth.dependencies import get_current_user
 
 
 # Schema'lar kun bo'yicha xodimlar ish jadvali uchun
@@ -623,6 +624,87 @@ async def get_employee_schedules_by_date(
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
+# ==================== Employee's own schedules ====================
+@router.get(
+    "/me/schedules/{date}",
+    response_model=DailyEmployeeScheduleResponse,
+    summary="Mobil: Xodim o'z jadvali",
+    description="Autentifikatsiyadan o'tgan xodim berilgan sana uchun o'z ish jadvalini ko'radi."
+)
+async def get_my_schedules_by_date(
+    date: str,
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user = Depends(get_current_user),
+):
+    """Berilgan kun bo'yicha joriy xodimning ish jadvalini qaytaradi"""
+    try:
+        # Faqat xodimlar uchun
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        # Sana formatini tekshirish
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=get_translation(language, "errors.400") or "Invalid date format. Use YYYY-MM-DD"
+            )
+
+        # Xodim salonidagi o'sha kundagi aktiv schedule'lar
+        schedules = db.query(Schedule).filter(
+            and_(
+                Schedule.date == target_date,
+                Schedule.is_active == True,
+                Schedule.salon_id == current_user.salon_id,
+            )
+        ).all()
+
+        # Xodimga tegishli jadval elementlarini yig'ish
+        employee_schedules: List[EmployeeScheduleItem] = []
+        for schedule in schedules:
+            if schedule.employee_list and str(current_user.id) in [str(eid) for eid in schedule.employee_list]:
+                salon = db.query(Salon).filter(Salon.id == schedule.salon_id).first()
+
+                start_time = schedule.start_time.strftime("%H:%M") if schedule.start_time else "09:00"
+                end_time = schedule.end_time.strftime("%H:%M") if schedule.end_time else "18:00"
+                time_range = f"{start_time}-{end_time}"
+
+                employee_schedules.append(EmployeeScheduleItem(
+                    employee_id=str(current_user.id),
+                    employee_name=current_user.name or "Unknown",
+                    service_name=schedule.name,
+                    service_type=getattr(current_user, "profession", None),
+                    is_private=salon.private_salon if salon else False,
+                    time=time_range,
+                ))
+
+        # Pagination
+        total = len(employee_schedules)
+        offset = (page - 1) * limit
+        paginated = employee_schedules[offset: offset + limit]
+
+        return DailyEmployeeScheduleResponse(
+            success=True,
+            date=date,
+            data=paginated,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit if limit else 1,
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
 
 
