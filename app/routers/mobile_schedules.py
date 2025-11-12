@@ -36,6 +36,7 @@ class MobileAppointmentCreate(BaseModel):
     schedule_id: Optional[str] = None  # Service model'dan
     # schedule_id: str
     employee_id: str
+    service_id: Optional[str] = None
     application_date: Optional[date] = Field(None, alias="date")
     application_time: time = Field(alias="time")
 
@@ -171,6 +172,264 @@ def _weekday_short(d: date) -> Optional[str]:
         return weekdays[d.weekday()]
     except Exception:
         return None
+
+
+# ==================== Available Slots (extended) ====================
+class AvailableSlotItem(BaseModel):
+    start: str  # HH:MM
+    end: str    # HH:MM
+
+class AvailableServiceSlotsItem(BaseModel):
+    service_id: str
+    service_name: str
+    duration_minutes: int
+    slots: List[AvailableSlotItem]
+
+class AvailableSlotsResponse(BaseModel):
+    success: bool
+    employee_id: str
+    date: str
+    data: List[AvailableServiceSlotsItem]
+
+
+def _parse_hhmm(value: Optional[str]) -> Optional[time]:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%H:%M").time()
+    except Exception:
+        return None
+
+
+def _merge_intervals(intervals: List[tuple[datetime, datetime]]) -> List[tuple[datetime, datetime]]:
+    if not intervals:
+        return []
+    intervals = sorted(intervals, key=lambda x: x[0])
+    merged = [intervals[0]]
+    for start, end in intervals[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _subtract_intervals(base: tuple[datetime, datetime], busy: List[tuple[datetime, datetime]]) -> List[tuple[datetime, datetime]]:
+    """Subtract busy intervals from base and return free intervals."""
+    free: List[tuple[datetime, datetime]] = []
+    start, end = base
+    current = start
+    for b_start, b_end in busy:
+        # skip busy outside base
+        if b_end <= current:
+            continue
+        if b_start >= end:
+            break
+        if b_start > current:
+            free.append((current, b_start))
+        current = max(current, b_end)
+        if current >= end:
+            break
+    if current < end:
+        free.append((current, end))
+    return free
+
+
+@router.get(
+    "/{employee_id}/available-slots",
+    response_model=AvailableSlotsResponse,
+    summary="Mobil: Xodim bo'sh slotlari (kengaytirilgan)",
+    description=(
+        "Berilgan sana uchun xodimning ish oynasi ichida appointments va busy_slots ni hisobga olib, "
+        "turli davomiylikdagi servislar uchun mos slotlarni qaytaradi."
+    ),
+)
+async def get_available_slots(
+    employee_id: str,
+    date_str: str = Query(..., description="YYYY-MM-DD formatida sana"),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    # Xodimni tekshirish
+    employee = (
+        db.query(Employee)
+        .filter(
+            and_(Employee.id == employee_id, Employee.is_active == True, Employee.deleted_at.is_(None))
+        )
+        .first()
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+
+    # Sana
+    try:
+        day = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Invalid date format")
+
+    # Ish oynasi: avvalo Schedule dan (shu sanada xodim bor bo'lsa), bo'lmasa Employee ish vaqti
+    schedules = (
+        db.query(Schedule)
+        .filter(Schedule.date == day)
+        .order_by(Schedule.start_time.asc())
+        .all()
+    )
+
+    # Bir kunda xodim qatnashadigan har bir Schedule blokini alohida ish oynasi sifatida ko'rib chiqamiz
+    # Agar Schedule bo'lmasa, xodimning umumiy ish vaqti bitta blok bo'ladi
+    def _in_emp_list(emp_list, eid: str) -> bool:
+        if not emp_list:
+            return False
+        try:
+            if isinstance(emp_list, list):
+                # list elementlari string yoki object bo'lishi mumkin
+                return any(
+                    (str(x) == str(eid)) or (isinstance(x, dict) and str(x.get("id")) == str(eid))
+                    for x in emp_list
+                )
+            if isinstance(emp_list, str):
+                return str(eid) in emp_list
+        except Exception:
+            return False
+        return False
+
+    work_blocks: List[tuple[time, time]] = []
+    for sch in schedules or []:
+        try:
+            emp_list = sch.employee_list or []
+            if _in_emp_list(emp_list, employee_id):
+                if sch.start_time and sch.end_time and sch.start_time < sch.end_time:
+                    work_blocks.append((sch.start_time, sch.end_time))
+        except Exception:
+            continue
+
+    if not work_blocks:
+        # Fallback: xodimning umumiy ish vaqti
+        fallback_start = _parse_hhmm(employee.work_start_time)
+        fallback_end = _parse_hhmm(employee.work_end_time)
+        if fallback_start and fallback_end and fallback_start < fallback_end:
+            work_blocks.append((fallback_start, fallback_end))
+
+    if not work_blocks:
+        # Ish oynasi topilmasa, bo'sh slotlar yo'q
+        return AvailableSlotsResponse(success=True, employee_id=str(employee.id), date=day.isoformat(), data=[])
+
+    # Band oraliqlar: appointments (pending|accepted|done va cancelled=False) + busy_slots
+    from app.models.appointment import Appointment
+    from app.models.busy_slot import BusySlot
+
+    apps = (
+        db.query(Appointment)
+        .filter(
+            and_(
+                Appointment.employee_id == employee_id,
+                Appointment.application_date == day,
+                Appointment.is_cancelled == False,
+                Appointment.status.in_(["pending", "accepted", "done"]),
+            )
+        )
+        .all()
+    )
+
+    busy_rows = (
+        db.query(BusySlot)
+        .filter(and_(BusySlot.employee_id == employee_id, BusySlot.date == day))
+        .all()
+    )
+
+    # Busy intervallarni xom holatda yig'amiz (kun bo'yicha), keyin har bir ish blokiga clamp qilamiz
+    busy_intervals_raw: List[tuple[datetime, datetime]] = []
+    default_minutes = 30
+    for a in apps:
+        s = datetime.combine(day, a.application_time)
+        dur = a.duration_minutes or default_minutes
+        e = datetime.combine(day, a.end_time) if a.end_time else s + timedelta(minutes=dur)
+        if s < e:
+            busy_intervals_raw.append((s, e))
+
+    for b in busy_rows:
+        s = datetime.combine(day, b.start_time)
+        e = datetime.combine(day, b.end_time)
+        if s < e:
+            busy_intervals_raw.append((s, e))
+
+    # Har bir ish blokiga nisbatan bo'sh oraliqlarni hisoblaymiz
+    free_intervals_all: List[tuple[datetime, datetime]] = []
+    for ws, we in work_blocks:
+        block_start_dt = datetime.combine(day, ws)
+        block_end_dt = datetime.combine(day, we)
+        # Busylarni blok oynasiga clamp qilish
+        block_busy: List[tuple[datetime, datetime]] = []
+        for s, e in busy_intervals_raw:
+            cs = max(s, block_start_dt)
+            ce = min(e, block_end_dt)
+            if cs < ce:
+                block_busy.append((cs, ce))
+        busy_merged = _merge_intervals(block_busy)
+        free_intervals = _subtract_intervals((block_start_dt, block_end_dt), busy_merged)
+        free_intervals_all.extend(free_intervals)
+
+    # Servislar: xodim ishlayotgan salon bo'yicha faol servislar
+    services = (
+        db.query(Service)
+        .filter(Service.salon_id == employee.salon_id, Service.is_active == True)
+        .order_by(Service.duration.asc())
+        .all()
+    )
+
+    data: List[AvailableServiceSlotsItem] = []
+    for svc in services:
+        slots: List[AvailableSlotItem] = []
+        dur = int(svc.duration or 0)
+        if dur <= 0:
+            continue
+        for f_start, f_end in free_intervals_all:
+            cursor = f_start
+            step = timedelta(minutes=dur)
+            while cursor + step <= f_end:
+                start_str = cursor.strftime("%H:%M")
+                end_str = (cursor + step).strftime("%H:%M")
+                slots.append(AvailableSlotItem(start=start_str, end=end_str))
+                cursor += step
+        if slots:
+            data.append(
+                AvailableServiceSlotsItem(
+                    service_id=str(svc.id),
+                    service_name=svc.name,
+                    duration_minutes=dur,
+                    slots=slots,
+                )
+            )
+
+    return AvailableSlotsResponse(success=True, employee_id=str(employee.id), date=day.isoformat(), data=data)
+
+
+@router.get(
+    "/employee/me/available-slots",
+    response_model=AvailableSlotsResponse,
+    summary="Mobil: Joriy xodim bo'sh slotlari",
+    description="Token orqali aniqlangan xodim uchun berilgan sana bo'yicha bo'sh slotlarni qaytaradi",
+)
+async def get_my_available_slots(
+    date_str: str = Query(..., description="YYYY-MM-DD formatida sana"),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user: Union[User, Employee] = Depends(get_current_user),
+):
+    # Faqat employee roli uchun ruxsat
+    if not isinstance(current_user, Employee):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_translation(language, "errors.403") or "Faqat xodimlar uchun",
+        )
+
+    return await get_available_slots(
+        employee_id=str(current_user.id),
+        date_str=date_str,
+        db=db,
+        language=language,
+    )
 
 
 @router.get(
@@ -630,9 +889,39 @@ async def create_appointment(
                 detail=get_translation(language, "errors.404") or "Xodim topilmadi",
             )
 
-        # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa)
+        # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa). Agar berilmasa schedule ma'lumotlari ishlatiladi.
         service_name = schedule.name
         service_price = float(schedule.price)
+        duration_minutes = None
+        selected_end_time = None
+
+        if appointment_data.service_id:
+            svc = (
+                db.query(Service)
+                .filter(
+                    and_(
+                        Service.id == appointment_data.service_id,
+                        Service.salon_id == appointment_data.salon_id,
+                        Service.is_active == True,
+                    )
+                )
+                .first()
+            )
+            if not svc:
+                raise HTTPException(
+                    status_code=404,
+                    detail=get_translation(language, "errors.404") or "Servis topilmadi",
+                )
+            service_name = svc.name
+            service_price = float(svc.price) if getattr(svc, "price", None) is not None else service_price
+            duration_minutes = int(svc.duration or 0)
+            if duration_minutes <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Servis davomiyligi noto'g'ri",
+                )
+            # End time hisoblash
+            selected_end_time = (datetime.combine(resolved_date, selected_time) + timedelta(minutes=duration_minutes)).time()
 
         # 5. Karta tekshirish (only_card=True bo'lsa)
         if appointment_data.only_card:
@@ -663,32 +952,91 @@ async def create_appointment(
 
         # 6. Vaqt tekshirish (schedule vaqt oralig'ida bo'lishi kerak)
         if schedule.start_time and schedule.end_time:
+            # start ichida
             if not (schedule.start_time <= selected_time <= schedule.end_time):
                 raise HTTPException(
                     status_code=400,
                     detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas",
                 )
+            # agar servis berilgan bo'lsa, end ham ichida bo'lsin
+            if selected_end_time:
+                if not (schedule.start_time <= selected_end_time <= schedule.end_time):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=get_translation(language, "errors.400") or "Servis tugash vaqti jadval oralig'ida emas",
+                    )
 
-        # 7. Bir xil vaqtda appointment borligini tekshirish
-        existing_appointment = (
-            db.query(Appointment)
-            .filter(
-                and_(
-                    Appointment.employee_id == appointment_data.employee_id,
-                    Appointment.application_date == resolved_date,
-                    Appointment.application_time == selected_time,
-                    Appointment.is_cancelled == False,
+        # 7. Interval asosida to'qnashuvlarni tekshirish
+        # Agar duration berilgan bo'lsa, start-end oraliqni appointment va busy_slots bilan tekshiramiz
+        from app.models.busy_slot import BusySlot
+        if selected_end_time:
+            start_dt = datetime.combine(resolved_date, selected_time)
+            end_dt = datetime.combine(resolved_date, selected_end_time)
+
+            # Appointmentlar bilan to'qnashuv (cancelled=False va status in pending|accepted|done)
+            existing_apps = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.employee_id == appointment_data.employee_id,
+                        Appointment.application_date == resolved_date,
+                        Appointment.is_cancelled == False,
+                        Appointment.status.in_(["pending", "accepted", "done"]),
+                    )
                 )
+                .all()
             )
-            .first()
-        )
 
-        if existing_appointment:
-            raise HTTPException(
-                status_code=409,
-                detail=get_translation(language, "errors.409")
-                or "Bu vaqtda allaqachon appointment mavjud",
+            def _appt_interval(a: Appointment):
+                s = datetime.combine(resolved_date, a.application_time)
+                e = (
+                    datetime.combine(resolved_date, a.end_time)
+                    if a.end_time
+                    else s + timedelta(minutes=a.duration_minutes or 30)
+                )
+                return s, e
+
+            for a in existing_apps:
+                s, e = _appt_interval(a)
+                if (start_dt < e) and (end_dt > s):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
+                    )
+
+            # Busy slots bilan to'qnashuv
+            busy_rows = (
+                db.query(BusySlot)
+                .filter(and_(BusySlot.employee_id == appointment_data.employee_id, BusySlot.date == resolved_date))
+                .all()
             )
+            for b in busy_rows:
+                bs = datetime.combine(resolved_date, b.start_time)
+                be = datetime.combine(resolved_date, b.end_time)
+                if (start_dt < be) and (end_dt > bs):
+                    raise HTTPException(
+                        status_code=409,
+                        detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
+                    )
+        else:
+            # Oldingi nuqtaviy tekshiruv (servis berilmagan holat uchun)
+            existing_appointment = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.employee_id == appointment_data.employee_id,
+                        Appointment.application_date == resolved_date,
+                        Appointment.application_time == selected_time,
+                        Appointment.is_cancelled == False,
+                    )
+                )
+                .first()
+            )
+            if existing_appointment:
+                raise HTTPException(
+                    status_code=409,
+                    detail=get_translation(language, "errors.409") or "Bu vaqtda allaqachon appointment mavjud",
+                )
 
         # 8. Application number yaratish
         application_number = (
@@ -702,6 +1050,8 @@ async def create_appointment(
             phone_number=(current_user.phone if current_user and current_user.phone else ""),
             application_date=resolved_date,
             application_time=selected_time,
+            end_time=selected_end_time,
+            duration_minutes=duration_minutes,
             employee_id=appointment_data.employee_id,
             service_name=service_name,
             service_price=service_price,
@@ -819,7 +1169,11 @@ async def get_mobile_schedules_by_employee(
             return False
         try:
             if isinstance(emp_list, list):
-                return any(str(x) == str(eid) for x in emp_list)
+                return any(
+                    (str(x) == str(eid))
+                    or (isinstance(x, dict) and str(x.get("id")) == str(eid))
+                    for x in emp_list
+                )
             if isinstance(emp_list, str):
                 return str(eid) in emp_list
         except Exception:
@@ -951,6 +1305,43 @@ async def get_mobile_schedules_by_employee(
             "total": total,
             "pages": pages,
         },
+    )
+
+
+@router.get(
+    "/employee/me",
+    response_model=MobileEmployeeWeeklyResponse,
+    summary="Mobil: Joriy xodim uchun 1 haftalik jadval",
+    description="Token orqali aniqlangan xodimning 7 kunlik jadvali (employee_id avtomatik)",
+)
+async def get_my_weekly_schedules(
+    start_date: str = Query(
+        ..., description="YYYY-MM-DD formatida boshlang'ich sana (7 kunlik interval uchun)"
+    ),
+    page: int = Query(1, ge=1),
+    limit: int = Query(7, ge=1, le=7),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user: Union[User, Employee] = Depends(get_current_user),
+):
+    """Joriy token bilan kirgan xodimga tegishli jadvalni qaytaradi.
+    Agar token employee bo'lmasa, 403 qaytaradi.
+    """
+    if not isinstance(current_user, Employee):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=get_translation(language, "errors.403") or "Faqat xodimlar uchun",
+        )
+
+    employee_id = str(current_user.id)
+    # Mavjud funksiyaning logikasini qayta ishlatamiz
+    return await get_mobile_schedules_by_employee(
+        employee_id=employee_id,
+        start_date=start_date,
+        page=page,
+        limit=limit,
+        db=db,
+        language=language,
     )
 
 

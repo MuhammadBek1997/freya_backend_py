@@ -14,6 +14,7 @@ from app.models.schedule import Schedule
 from app.schemas.employee import MobileEmployeeListResponse, MobileEmployeeItem, MobileEmployeeDetailResponse
 from app.schemas.salon import MobileSalonItem
 from app.models.appointment import Appointment
+from app.models.busy_slot import BusySlot
 from app.models.user_favourite_salon import UserFavouriteSalon
 
 
@@ -608,19 +609,191 @@ async def get_employee_schedules_by_date(
         offset = (page - 1) * limit
         paginated = employee_schedules[offset: offset + limit]
 
-        return DailyEmployeeScheduleResponse(
-            success=True,
-            date=date,
-            data=paginated,
-            pagination={
-                "page": page,
-                "limit": limit,
-                "total": total,
-                "pages": (total + limit - 1) // limit if limit else 1,
-            }
-        )
+    return DailyEmployeeScheduleResponse(
+        success=True,
+        date=date,
+        data=paginated,
+        pagination={
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit if limit else 1,
+        }
+    )
 
     except HTTPException:
         raise
     except Exception as e:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
+# ==================== Available employees for a time window ====================
+class AvailableEmployeesResponse(BaseModel):
+    success: bool
+    data: List[MobileEmployeeItem]
+    pagination: dict
+
+
+@router.get(
+    "/available",
+    response_model=AvailableEmployeesResponse,
+    summary="Mobil: Tanlangan vaqtga bo'sh xodimlar",
+    description=(
+        "Berilgan salon, sana va vaqt oralig'i (start-end) uchun band xodimlarni chiqarib tashlab, "
+        "faol xodimlar ro'yxatini qaytaradi."
+    ),
+)
+async def get_available_employees(
+    salon_id: str,
+    date_str: str = Query(..., description="YYYY-MM-DD"),
+    start_time: str = Query(..., description="HH:MM"),
+    end_time: str = Query(..., description="HH:MM"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Tanlangan vaqt oralig'ida band bo'lmagan xodimlar ro'yxati"""
+    try:
+        # Parse date
+        try:
+            day = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+
+        # Parse times
+        try:
+            st = datetime.strptime(start_time, "%H:%M").time()
+            et = datetime.strptime(end_time, "%H:%M").time()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Vaqt formati noto'g'ri")
+        if st >= et:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
+
+        # Employees by salon
+        employees_q = (
+            db.query(Employee)
+            .filter(and_(Employee.salon_id == salon_id, Employee.is_active == True, Employee.deleted_at.is_(None)))
+            .order_by(Employee.created_at.desc())
+        )
+
+        # Pagination
+        offset = (page - 1) * limit
+        total = employees_q.count() or 0
+        employees = employees_q.offset(offset).limit(limit).all()
+
+        start_dt = datetime.combine(day, st)
+        end_dt = datetime.combine(day, et)
+
+        def _parse_hhmm(s: Optional[str]) -> Optional[datetime]:
+            if not s:
+                return None
+            try:
+                t = datetime.strptime(s, "%H:%M").time()
+                return datetime.combine(day, t)
+            except Exception:
+                return None
+
+        def is_within_work_window(emp: Employee) -> bool:
+            # If the employee has schedules on this day, require the interval to be fully inside ANY schedule window
+            day_schedules = (
+                db.query(Schedule)
+                .filter(and_(Schedule.date == day, Schedule.is_active == True))
+                .order_by(Schedule.start_time.asc())
+                .all()
+            )
+            has_emp_schedule = False
+            for sch in day_schedules:
+                try:
+                    emp_list = sch.employee_list or []
+                except Exception:
+                    emp_list = []
+                if str(emp.id) in emp_list:
+                    has_emp_schedule = True
+                    if sch.start_time and sch.end_time:
+                        sdt = datetime.combine(day, sch.start_time)
+                        edt = datetime.combine(day, sch.end_time)
+                        if start_dt >= sdt and end_dt <= edt:
+                            return True
+            if has_emp_schedule:
+                # Schedule bor, lekin tanlangan vaqt ichiga kirmadi
+                return False
+
+            # Fallback: employee ish vaqti
+            ws = _parse_hhmm(getattr(emp, "work_start_time", None))
+            we = _parse_hhmm(getattr(emp, "work_end_time", None))
+            if not ws or not we or ws >= we:
+                return False
+            return start_dt >= ws and end_dt <= we
+
+        def is_busy(emp_id: str) -> bool:
+            # Appointments overlap
+            apps = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.employee_id == emp_id,
+                        Appointment.application_date == day,
+                        Appointment.is_cancelled == False,
+                        Appointment.status.in_(["pending", "accepted", "done"]),
+                    )
+                )
+                .all()
+            )
+            for a in apps:
+                s = datetime.combine(day, a.application_time)
+                dur = a.duration_minutes or 30
+                e = datetime.combine(day, a.end_time) if a.end_time else s + timedelta(minutes=dur)
+                if (start_dt < e) and (end_dt > s):
+                    return True
+
+            # Busy slots overlap
+            busy_rows = (
+                db.query(BusySlot)
+                .filter(and_(BusySlot.employee_id == emp_id, BusySlot.date == day))
+                .all()
+            )
+            for b in busy_rows:
+                bs = datetime.combine(day, b.start_time)
+                be = datetime.combine(day, b.end_time)
+                if (start_dt < be) and (end_dt > bs):
+                    return True
+            return False
+
+        items: List[MobileEmployeeItem] = []
+        for emp in employees:
+            # Check work window
+            if not is_within_work_window(emp):
+                continue
+            # Check busy overlaps
+            if is_busy(str(emp.id)):
+                continue
+            full_name = (f"{emp.name} {emp.surname}" if emp.surname else (emp.name or "")).strip()
+            items.append(
+                MobileEmployeeItem(
+                    id=str(emp.id),
+                    name=full_name,
+                    avatar=getattr(emp, "avatar_url", None),
+                    workType=getattr(emp, "profession", None),
+                    rate=0.0,
+                    reviewsCount=0,
+                    works=0,
+                    perWeek=0,
+                )
+            )
+
+        return AvailableEmployeesResponse(
+            success=True,
+            data=items,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": len(items),
+                "pages": (len(items) + limit - 1) // limit if limit else 1,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))

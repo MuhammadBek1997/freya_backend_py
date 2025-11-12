@@ -6,7 +6,8 @@ from app.database import SessionLocal
 from app.models.schedule import Schedule
 from app.routers.mobile_schedules import create_appointment, MobileAppointmentCreate
 
-SCHEDULE_ID = "e78d69da-833d-4a1d-83e2-648b671b3085"
+# Provided test data
+SCHEDULE_ID = "5748962c-f099-482b-9717-50df8451b472"
 EMPLOYEE_ID = "4a8f338a-d03e-42a1-93b6-ba73d0cb0dbb"
 PHONE = "+998901234567"
 USER_NAME = "Booknow Tester"
@@ -27,8 +28,8 @@ def main():
             "end_time": schedule.end_time.strftime('%H:%M') if schedule.end_time else None,
         })
 
-        # pick a time within schedule range
-        app_time = schedule.start_time or dtime(10, 0)
+        # pick a time within schedule range (start_time + 30 minutes)
+        app_time = schedule.start_time or dtime(15, 0)
         if schedule.start_time and schedule.end_time:
             dt_start = datetime.combine(schedule.date, schedule.start_time)
             dt_end = datetime.combine(schedule.date, schedule.end_time)

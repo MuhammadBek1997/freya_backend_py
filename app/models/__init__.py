@@ -15,6 +15,7 @@ from .service import Service
 from .payment import Payment
 from .user_premium import UserPremium
 from .appointment import Appointment
+from .busy_slot import BusySlot
 from .user_chat import UserChat
 from .temp_registration import TempRegistration
 from .post import Post
@@ -49,6 +50,7 @@ __all__ = [
     "Payment",
     "UserPremium",
     "Appointment",
+    "BusySlot",
     "UserChat",
     "TempRegistration",
     "Post",

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, Float, String, Boolean, DateTime, Integer, ForeignKey, Text, Numeric, Time, UniqueConstraint
+from sqlalchemy import Column, Date, Float, String, Boolean, DateTime, Integer, ForeignKey, Text, Numeric, Time, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 
@@ -6,6 +6,7 @@ class Appointment(BaseModel):
     __tablename__ = "appointments"
     __table_args__ = (
         UniqueConstraint('employee_id', 'application_date', 'application_time', name='uq_employee_slot'),
+        Index('ix_appointments_emp_date', 'employee_id', 'application_date'),
     )
     
     application_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -14,6 +15,9 @@ class Appointment(BaseModel):
     phone_number = Column(String(20), nullable=False)
     application_date = Column(Date, nullable=False)
     application_time = Column(Time, nullable=False)
+    # Interval-based booking support
+    end_time = Column(Time, nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
     # schedule_id = Column(String(36), ForeignKey("schedules.id"), nullable=False)
     employee_id = Column(String(36), ForeignKey("employees.id"), nullable=True)
     service_name = Column(String(255), nullable=False)
