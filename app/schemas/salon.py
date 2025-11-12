@@ -1,4 +1,4 @@
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, model_validator
 from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
 from decimal import Decimal
@@ -287,25 +287,19 @@ class BotRegistrationLogFilter(BaseModel):
             raise ValueError('status faqat 0 yoki 1 bo\'lishi mumkin')
         return v
 
-    @validator('*', pre=True, always=True)
-    def ensure_at_least_one(cls, v, values, **kwargs):
-        # Bu validator har bir field uchun chaqiriladi; oxirida umumiy tekshiruvni qilamiz
-        # Pydanticda umumiy tekshiruv uchun root_validator ishlatish mumkin, ammo bu versiyada soddaroq usul.
-        return v
-
-    @validator('phone', always=True)
-    def root_check(cls, v, values):
-        # At least one filter must be provided
+    @model_validator(mode='after')
+    def check_any_filter(cls, model: "BotRegistrationLogFilter"):
+        # Kamida bitta filter maydoni berilgan bo'lishi kerak
         has_any = any([
-            v,
-            values.get('telegram_id'),
-            values.get('stir'),
-            values.get('salon_id'),
-            values.get('status') is not None,
+            getattr(model, 'phone', None),
+            getattr(model, 'telegram_id', None),
+            getattr(model, 'stir', None),
+            getattr(model, 'salon_id', None),
+            (getattr(model, 'status', None) is not None),
         ])
         if not has_any:
             raise ValueError('Kamida bitta filter (phone|telegram_id|stir|salon_id|status) berilishi kerak')
-        return v
+        return model
 
 # Nearby-specific lightweight item for /mobile/salons/nearby
 class NearbySalonItem(BaseModel):
