@@ -708,8 +708,218 @@ async def get_my_schedules_by_date(
         raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
 
 
+# ====== Xodim o'z jadvali: yaratish va tahrirlash (faqat o'z saloni) ======
+class MyScheduleItem(BaseModel):
+    id: str
+    salon_id: str
+    name: str
+    title: Optional[str] = None
+    price: float
+    date: str
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_active: bool = True
+
+
+class MyScheduleResponse(BaseModel):
+    success: bool
+    data: MyScheduleItem
+
+
+class MyScheduleCreate(BaseModel):
+    name: str
+    title: Optional[str] = None
+    date: str  # YYYY-MM-DD
+    start_time: Optional[str] = None  # HH:MM
+    end_time: Optional[str] = None  # HH:MM
+    price: float
+    repeat: Optional[bool] = False
+    repeat_value: Optional[str] = None
+    is_active: Optional[bool] = True
+
+
+class MyScheduleUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    date: Optional[str] = None  # YYYY-MM-DD
+    start_time: Optional[str] = None  # HH:MM
+    end_time: Optional[str] = None  # HH:MM
+    price: Optional[float] = None
+    repeat: Optional[bool] = None
+    repeat_value: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+def _to_my_item(s: Schedule) -> MyScheduleItem:
+    return MyScheduleItem(
+        id=str(s.id),
+        salon_id=str(s.salon_id),
+        name=s.name,
+        title=getattr(s, "title", None),
+        price=float(s.price),
+        date=s.date.isoformat(),
+        start_time=(s.start_time.strftime("%H:%M") if getattr(s, "start_time", None) else None),
+        end_time=(s.end_time.strftime("%H:%M") if getattr(s, "end_time", None) else None),
+        is_active=bool(getattr(s, "is_active", True)),
+    )
+
+
+@router.post(
+    "/me/schedules",
+    response_model=MyScheduleResponse,
+    summary="Mobil: Xodim o'z jadvalini yaratadi",
+    description="Xodim faqat o'z saloni uchun va faqat o'zi uchun jadval yarata oladi",
+)
+async def create_my_schedule(
+    payload: MyScheduleCreate,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user = Depends(get_current_user),
+):
+    try:
+        # Faqat xodimlar uchun
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        # Sana va vaqtlarni tekshirish
+        try:
+            d = datetime.strptime(payload.date, "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+
+        st_t = None
+        en_t = None
+        if payload.start_time:
+            try:
+                st_t = datetime.strptime(payload.start_time, "%H:%M").time()
+            except Exception:
+                raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start vaqti noto'g'ri")
+        if payload.end_time:
+            try:
+                en_t = datetime.strptime(payload.end_time, "%H:%M").time()
+            except Exception:
+                raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "End vaqti noto'g'ri")
+        if st_t and en_t and not (st_t < en_t):
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
+
+        # Jadval yaratish: faqat xodimning salonida va employee_list faqat o'zi
+        new_schedule = Schedule(
+            salon_id=str(current_user.salon_id),
+            name=payload.name,
+            title=payload.title,
+            date=d,
+            start_time=st_t,
+            end_time=en_t,
+            repeat=bool(payload.repeat or False),
+            repeat_value=payload.repeat_value,
+            employee_list=[str(current_user.id)],
+            price=payload.price,
+            is_active=bool(payload.is_active if payload.is_active is not None else True),
+        )
+        db.add(new_schedule)
+        db.commit()
+        db.refresh(new_schedule)
+
+        return MyScheduleResponse(success=True, data=_to_my_item(new_schedule))
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
+@router.put(
+    "/me/schedules/{schedule_id}",
+    response_model=MyScheduleResponse,
+    summary="Mobil: Xodim o'z jadvalini tahrirlaydi",
+    description="Xodim faqat o'z salonidagi va faqat o'ziga tegishli jadvalni tahrirlay oladi",
+)
+async def update_my_schedule(
+    schedule_id: str,
+    payload: MyScheduleUpdate,
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+    current_user = Depends(get_current_user),
+):
+    try:
+        # Faqat xodimlar uchun
+        if getattr(current_user, "role", None) != "employee":
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        schedule = db.query(Schedule).filter(Schedule.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404") or "Jadval topilmadi")
+
+        # Xodimning salonida bo'lishi shart
+        if str(schedule.salon_id) != str(current_user.salon_id):
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+
+        # Jadval faqat o'ziga tegishli bo'lishi kerak (employee_list faqat o'z idsi)
+        emp_list = schedule.employee_list or []
+        my_id = str(current_user.id)
+        only_me = (len(emp_list) == 1 and str(emp_list[0]) == my_id)
+        if not only_me:
+            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403") or "Faqat o'zingizga tegishli jadvalni tahrirlashingiz mumkin")
+
+        # Maydonlarni yangilash
+        if payload.name is not None:
+            schedule.name = payload.name
+        if payload.title is not None:
+            schedule.title = payload.title
+        if payload.price is not None:
+            schedule.price = payload.price
+        if payload.repeat is not None:
+            schedule.repeat = bool(payload.repeat)
+        if payload.repeat_value is not None:
+            schedule.repeat_value = payload.repeat_value
+        if payload.is_active is not None:
+            schedule.is_active = bool(payload.is_active)
+
+        # Sana/vaqtlar
+        if payload.date is not None:
+            try:
+                schedule.date = datetime.strptime(payload.date, "%Y-%m-%d").date()
+            except Exception:
+                raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+        st_t = schedule.start_time
+        en_t = schedule.end_time
+        if payload.start_time is not None:
+            try:
+                st_t = datetime.strptime(payload.start_time, "%H:%M").time()
+            except Exception:
+                raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start vaqti noto'g'ri")
+        if payload.end_time is not None:
+            try:
+                en_t = datetime.strptime(payload.end_time, "%H:%M").time()
+            except Exception:
+                raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "End vaqti noto'g'ri")
+        if st_t and en_t and not (st_t < en_t):
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
+        schedule.start_time = st_t
+        schedule.end_time = en_t
+
+        # employee_list ni faqat o'ziga o'rnatamiz
+        schedule.employee_list = [my_id]
+
+        db.commit()
+        db.refresh(schedule)
+
+        return MyScheduleResponse(success=True, data=_to_my_item(schedule))
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
 # ==================== Available employees for a time window ====================
 class AvailableEmployeesResponse(BaseModel):
+    success: bool
+    data: List[MobileEmployeeItem]
+    pagination: dict
+
+
+class BusyEmployeesResponse(BaseModel):
     success: bool
     data: List[MobileEmployeeItem]
     pagination: dict
@@ -871,6 +1081,235 @@ async def get_available_employees(
                 "limit": limit,
                 "total": len(items),
                 "pages": (len(items) + limit - 1) // limit if limit else 1,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
+@router.get(
+    "/busy",
+    response_model=BusyEmployeesResponse,
+    summary="Mobil: Tanlangan vaqtga band xodimlar",
+    description=(
+        "Berilgan salon, sana va vaqt oralig'i (start-end) uchun band xodimlar ro'yxatini qaytaradi."
+    ),
+)
+async def get_busy_employees(
+    salon_id: str,
+    date_str: str = Query(..., description="YYYY-MM-DD"),
+    start_time: str = Query(..., description="HH:MM"),
+    end_time: str = Query(..., description="HH:MM"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Tanlangan vaqt oralig'ida band xodimlar ro'yxati"""
+    try:
+        # Parse date
+        try:
+            day = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+
+        # Parse times
+        try:
+            st = datetime.strptime(start_time, "%H:%M").time()
+            et = datetime.strptime(end_time, "%H:%M").time()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Vaqt formati noto'g'ri")
+        if st >= et:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
+
+        # Employees by salon
+        employees_q = (
+            db.query(Employee)
+            .filter(and_(Employee.salon_id == salon_id, Employee.is_active == True, Employee.deleted_at.is_(None)))
+            .order_by(Employee.created_at.desc())
+        )
+
+        # Pagination
+        offset = (page - 1) * limit
+        total = employees_q.count() or 0
+        employees = employees_q.offset(offset).limit(limit).all()
+
+        start_dt = datetime.combine(day, st)
+        end_dt = datetime.combine(day, et)
+
+        def is_busy(emp_id: str) -> bool:
+            # Appointments overlap
+            apps = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.employee_id == emp_id,
+                        Appointment.application_date == day,
+                        Appointment.is_cancelled == False,
+                        Appointment.status.in_(["pending", "accepted", "done"]),
+                    )
+                )
+                .all()
+            )
+            for a in apps:
+                s = datetime.combine(day, a.application_time)
+                dur = a.duration_minutes or 30
+                e = datetime.combine(day, a.end_time) if a.end_time else s + timedelta(minutes=dur)
+                if (start_dt < e) and (end_dt > s):
+                    return True
+
+            # Busy slots overlap
+            busy_rows = (
+                db.query(BusySlot)
+                .filter(and_(BusySlot.employee_id == emp_id, BusySlot.date == day))
+                .all()
+            )
+            for b in busy_rows:
+                bs = datetime.combine(day, b.start_time)
+                be = datetime.combine(day, b.end_time)
+                if (start_dt < be) and (end_dt > bs):
+                    return True
+            return False
+
+        items: List[MobileEmployeeItem] = []
+        for emp in employees:
+            if not is_busy(str(emp.id)):
+                continue
+            full_name = (f"{emp.name} {emp.surname}" if emp.surname else (emp.name or "")).strip()
+            items.append(
+                MobileEmployeeItem(
+                    id=str(emp.id),
+                    name=full_name,
+                    avatar=getattr(emp, "avatar_url", None),
+                    workType=getattr(emp, "profession", None),
+                    rate=0.0,
+                    reviewsCount=0,
+                    works=0,
+                    perWeek=0,
+                )
+            )
+
+        return BusyEmployeesResponse(
+            success=True,
+            data=items,
+            pagination={
+                "page": page,
+                "limit": limit,
+                "total": len(items),
+                "pages": (len(items) + limit - 1) // limit if limit else 1,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
+
+
+@router.get(
+    "/busy/{employee_id}",
+    response_model=BusyEmployeesResponse,
+    summary="Mobil: Alohida xodim bandligi",
+    description=(
+        "Berilgan sana va vaqt oralig'i (start-end) bo'yicha muayyan xodimning bandligini qaytaradi."
+    ),
+)
+async def get_employee_busy_status(
+    employee_id: str,
+    date_str: str = Query(..., description="YYYY-MM-DD"),
+    start_time: str = Query(..., description="HH:MM"),
+    end_time: str = Query(..., description="HH:MM"),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    """Tanlangan vaqt oralig'ida muayyan xodimning bandligini tekshiradi"""
+    try:
+        # Xodimni tekshirish
+        employee = db.query(Employee).filter(
+            and_(Employee.id == employee_id, Employee.is_active == True, Employee.deleted_at.is_(None))
+        ).first()
+        if not employee:
+            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+
+        # Parse date
+        try:
+            day = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+
+        # Parse times
+        try:
+            st = datetime.strptime(start_time, "%H:%M").time()
+            et = datetime.strptime(end_time, "%H:%M").time()
+        except Exception:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Vaqt formati noto'g'ri")
+        if st >= et:
+            raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
+
+        start_dt = datetime.combine(day, st)
+        end_dt = datetime.combine(day, et)
+
+        def is_busy(emp_id: str) -> bool:
+            # Appointments overlap
+            apps = (
+                db.query(Appointment)
+                .filter(
+                    and_(
+                        Appointment.employee_id == emp_id,
+                        Appointment.application_date == day,
+                        Appointment.is_cancelled == False,
+                        Appointment.status.in_(["pending", "accepted", "done"]),
+                    )
+                )
+                .all()
+            )
+            for a in apps:
+                s = datetime.combine(day, a.application_time)
+                dur = a.duration_minutes or 30
+                e = datetime.combine(day, a.end_time) if a.end_time else s + timedelta(minutes=dur)
+                if (start_dt < e) and (end_dt > s):
+                    return True
+
+            # Busy slots overlap
+            busy_rows = (
+                db.query(BusySlot)
+                .filter(and_(BusySlot.employee_id == emp_id, BusySlot.date == day))
+                .all()
+            )
+            for b in busy_rows:
+                bs = datetime.combine(day, b.start_time)
+                be = datetime.combine(day, b.end_time)
+                if (start_dt < be) and (end_dt > bs):
+                    return True
+            return False
+
+        items: List[MobileEmployeeItem] = []
+        if is_busy(str(employee.id)):
+            full_name = (f"{employee.name} {employee.surname}" if employee.surname else (employee.name or "")).strip()
+            items.append(
+                MobileEmployeeItem(
+                    id=str(employee.id),
+                    name=full_name,
+                    avatar=getattr(employee, "avatar_url", None),
+                    workType=getattr(employee, "profession", None),
+                    rate=0.0,
+                    reviewsCount=0,
+                    works=0,
+                    perWeek=0,
+                )
+            )
+
+        return BusyEmployeesResponse(
+            success=True,
+            data=items,
+            pagination={
+                "page": 1,
+                "limit": len(items) or 1,
+                "total": len(items),
+                "pages": 1,
             },
         )
 
