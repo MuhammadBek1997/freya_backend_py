@@ -53,7 +53,7 @@ from app.schemas.user import (
     UserCityResponse,
     UserCityUpdate,
     UserAvatarUpdate,
-    UserPremiumStatusResponse
+    UserPremiumStatusResponse,
 )
 from app.models.user_premium import UserPremium
 from app.schemas.employee import EmployeeResponse
@@ -730,7 +730,9 @@ async def upload_profile_image(
     try:
         # Faqat userlar uchun ruxsat
         if getattr(current_user, "role", None) != "user":
-            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+            raise HTTPException(
+                status_code=403, detail=get_translation(language, "errors.403")
+            )
 
         # Foydalanuvchi avatarini yangilash
         current_user.avatar_url = payload.avatar_url.strip()
@@ -893,7 +895,8 @@ async def remove_favourite_salon(
 
 @router.get("/favourites", response_model=List[SalonResponse])
 async def get_favourite_salons(
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
@@ -1035,12 +1038,29 @@ async def get_employee_contacts(
             "created_at": emp.created_at,
             "updated_at": emp.updated_at,
             "deleted_at": emp.deleted_at,
-            "work_start_time": getattr(emp, 'work_start_time', None) or "08:00",
-            "work_end_time": getattr(emp, 'work_end_time', None) or "20:00",
+            "work_start_time": getattr(emp, "work_start_time", None) or "08:00",
+            "work_end_time": getattr(emp, "work_end_time", None) or "20:00",
             "salon_name": emp.salon.salon_name if emp.salon else None,
         }
         for emp in employees
     ]
+
+
+@router.get("/auto_pay/status")
+async def auto_pay_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    user_id = current_user.id
+    user = db.query(User).filter(User.id == user_id).first()
+    return {
+        "success": True,
+        "auto_pay_status": user.auto_pay_for_premium,
+        "auto_pay_card_id": user.card_for_auto_pay,
+        "message": get_translation(language, "success"),
+    }
+
 
 @router.post("/auto_pay/off")
 async def auto_pay_off(
@@ -1055,6 +1075,7 @@ async def auto_pay_off(
     db.commit()
     return {"success": True, "message": get_translation(language, "success")}
 
+
 @router.post("/auto_pay/on")
 async def auto_pay_on(
     card_id: str,
@@ -1063,7 +1084,12 @@ async def auto_pay_on(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     user_id = current_user.id
-    if db.query(PaymentCard).filter(PaymentCard.id == card_id, PaymentCard.user_id == user_id).first() is None:
+    if (
+        db.query(PaymentCard)
+        .filter(PaymentCard.id == card_id, PaymentCard.user_id == user_id)
+        .first()
+        is None
+    ):
         return {"success": False, "message": "card_not_foun"}
 
     user = db.query(User).filter(User.id == user_id).first()
@@ -1071,6 +1097,7 @@ async def auto_pay_on(
     user.card_for_auto_pay = card_id
     db.commit()
     return {"success": True, "message": get_translation(language, "success")}
+
 
 # @router.post("/payment-cards", response_model=PaymentCardResponse)
 # async def add_payment_card(
