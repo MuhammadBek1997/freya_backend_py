@@ -707,6 +707,103 @@ async def get_my_schedules_by_date(
     except Exception:
         raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
 
+# ==================== Employee work schedule (hours) ====================
+class WorkBlockItem(BaseModel):
+    start: str  # HH:MM
+    end: str    # HH:MM
+
+class EmployeeWorkScheduleDay(BaseModel):
+    date: str
+    work_blocks: List[WorkBlockItem]
+    source: str  # schedule | employee_default
+
+class EmployeeWorkScheduleResponse(BaseModel):
+    success: bool
+    employee_id: str
+    data: List[EmployeeWorkScheduleDay]
+
+@router.get(
+    "/{employee_id}/work-schedule",
+    response_model=EmployeeWorkScheduleResponse,
+    summary="Mobil: Xodim ish jadvali (ish soatlari)",
+    description="Berilgan sana bo'yicha xodimning ish jadvali (start/end bloklari). Agar schedule topilmasa, xodimning umumiy ish soatlari qaytariladi."
+)
+async def get_employee_work_schedule(
+    employee_id: str,
+    date_str: str = Query(..., description="YYYY-MM-DD formatida sana"),
+    db: Session = Depends(get_db),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    # Xodimni tekshirish
+    employee = (
+        db.query(Employee)
+        .filter(
+            and_(Employee.id == employee_id, Employee.is_active == True, Employee.deleted_at.is_(None))
+        )
+        .first()
+    )
+    if not employee:
+        raise HTTPException(status_code=404, detail=get_translation(language, "errors.404") or "Xodim topilmadi")
+
+    # Sana
+    try:
+        day = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Sana formati noto'g'ri")
+
+    # Shu sanadagi schedule bloklarini olish
+    schedules = (
+        db.query(Schedule)
+        .filter(and_(Schedule.date == day, Schedule.is_active == True))
+        .order_by(Schedule.start_time.asc())
+        .all()
+    )
+
+    def _in_emp_list(emp_list, eid: str) -> bool:
+        if not emp_list:
+            return False
+        try:
+            if isinstance(emp_list, list):
+                return any(str(x) == str(eid) for x in emp_list)
+            if isinstance(emp_list, str):
+                return str(eid) in emp_list
+        except Exception:
+            return False
+        return False
+
+    work_blocks: List[WorkBlockItem] = []
+    for sch in schedules:
+        try:
+            if _in_emp_list(sch.employee_list, employee_id):
+                if sch.start_time and sch.end_time and sch.start_time < sch.end_time:
+                    work_blocks.append(
+                        WorkBlockItem(
+                            start=sch.start_time.strftime("%H:%M"),
+                            end=sch.end_time.strftime("%H:%M"),
+                        )
+                    )
+        except Exception:
+            continue
+
+    source = "schedule"
+    if not work_blocks:
+        # Fallback: xodimning umumiy ish soatlari
+        source = "employee_default"
+        try:
+            if employee.work_start_time and employee.work_end_time:
+                st = datetime.strptime(employee.work_start_time, "%H:%M").time()
+                en = datetime.strptime(employee.work_end_time, "%H:%M").time()
+                if st < en:
+                    work_blocks.append(WorkBlockItem(start=employee.work_start_time, end=employee.work_end_time))
+        except Exception:
+            pass
+
+    return EmployeeWorkScheduleResponse(
+        success=True,
+        employee_id=str(employee.id),
+        data=[EmployeeWorkScheduleDay(date=day.isoformat(), work_blocks=work_blocks, source=source)],
+    )
+
 
 # ====== Xodim o'z jadvali: yaratish va tahrirlash (faqat o'z saloni) ======
 class MyScheduleItem(BaseModel):

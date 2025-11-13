@@ -16,6 +16,8 @@ from app.models.appointment import Appointment
 from app.models.payment_card import PaymentCard
 from app.models.service import Service
 from app.models.user import User
+from app.models.payment import ClickPayment, Payment as PaymentModel
+from app.config import settings
 from app.schemas.schedule_mobile import (
     MobileScheduleListResponse,
     MobileScheduleServiceItem,
@@ -1043,7 +1045,106 @@ async def create_appointment(
             f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
         )
 
-        # 9. Appointment yaratish
+        # 9. Oldindan to'lov talab etilsa — avval to'lovni amalga oshirish
+        #    schedule.full_pay > 0 bo'lsa, to'liq to'lov; aks holda deposit > 0 bo'lsa, deposit miqdori
+        prepay_amount = 0.0
+        try:
+            if schedule.full_pay is not None and float(schedule.full_pay) > 0:
+                prepay_amount = float(schedule.full_pay)
+            elif schedule.deposit is not None and float(schedule.deposit) > 0:
+                prepay_amount = float(schedule.deposit)
+        except Exception:
+            prepay_amount = 0.0
+
+        if prepay_amount > 0:
+            # Foydalanuvchi autentifikatsiya qilingan bo'lishi shart
+            if not current_user:
+                raise HTTPException(
+                    status_code=401,
+                    detail=get_translation(language, "errors.401") or "To'lov uchun login talab qilinadi",
+                )
+
+            # Karta majburiy va foydalanuvchiga tegishli bo'lishi kerak
+            if not appointment_data.payment_card_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Oldindan to'lov uchun karta ID majburiy",
+                )
+
+            payment_card = (
+                db.query(PaymentCard)
+                .filter(
+                    and_(
+                        PaymentCard.id == appointment_data.payment_card_id,
+                        PaymentCard.user_id == current_user.id,
+                        PaymentCard.is_active == True,
+                        PaymentCard.is_verified == True,
+                    )
+                )
+                .first()
+            )
+
+            if not payment_card:
+                raise HTTPException(
+                    status_code=404,
+                    detail=get_translation(language, "errors.404") or "To'lov kartasi topilmadi yoki tasdiqlanmagan",
+                )
+
+            # ClickPayment yozuvi yaratish
+            click_payment = ClickPayment(
+                payment_for=f"booking_{application_number}",
+                amount=str(prepay_amount),
+                status="created",
+                payment_card_id=str(payment_card.id),
+            )
+            db.add(click_payment)
+            db.commit()
+            db.refresh(click_payment)
+
+            # Token orqali to'lovni amalga oshirish
+            result = settings.click_provider.payment_with_token(
+                card_token=payment_card.card_token,
+                amount=prepay_amount,
+                merchant_trans_id=click_payment.id,
+            )
+
+            # Xatolik bo'lsa to'lovni bekor qilamiz
+            if result.get("error_code") and result.get("error_code") != 0:
+                click_payment.status = "error"
+                db.add(click_payment)
+                db.commit()
+                raise HTTPException(
+                    status_code=402,
+                    detail=(
+                        result.get("error_note")
+                        or get_translation(language, "errors.402")
+                        or "To'lov amalga oshmadi"
+                    ),
+                )
+
+            # Muvaffaqiyatli bo'lsa — ClickPayment va bizning Payment jadvaliga yozamiz
+            click_payment.status = "confirmed"
+            if result.get("payment_id"):
+                click_payment.click_paydoc_id = str(result.get("payment_id"))
+            db.add(click_payment)
+            db.commit()
+
+            # payments jadvaliga yozish (qaysi user, qaysi salon, qaysi xizmat)
+            payment_row = PaymentModel(
+                user_id=current_user.id if current_user else None,
+                employee_id=appointment_data.employee_id,
+                salon_id=appointment_data.salon_id,
+                amount=int(round(prepay_amount)),
+                payment_type="service_booking",
+                transaction_id=str(click_payment.id),
+                click_trans_id=(str(result.get("payment_id")) if result.get("payment_id") else None),
+                status="completed",
+                description=f"Prepay for {service_name} ({application_number})",
+            )
+            db.add(payment_row)
+            db.commit()
+
+        # 10. Appointment yaratish
         new_appointment = Appointment(
             application_number=application_number,
             user_name=(current_user.full_name if current_user and current_user.full_name else ""),
