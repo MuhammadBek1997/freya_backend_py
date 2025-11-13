@@ -16,6 +16,7 @@ from app.models.appointment import Appointment
 from app.models.payment_card import PaymentCard
 from app.models.service import Service
 from app.models.user import User
+from app.models.user_premium import UserPremium
 from app.models.payment import ClickPayment, Payment as PaymentModel
 from app.config import settings
 from app.schemas.schedule_mobile import (
@@ -1090,6 +1091,32 @@ async def create_appointment(
                     detail=get_translation(language, "errors.404") or "To'lov kartasi topilmadi yoki tasdiqlanmagan",
                 )
 
+            # Premium foydalanuvchi uchun 10% chegirma (faqat full_pay uchun)
+            premium_discount_applied = False
+            try:
+                now_utc = datetime.utcnow()
+                has_premium = (
+                    db.query(UserPremium)
+                    .filter(
+                        and_(
+                            UserPremium.user_id == current_user.id,
+                            UserPremium.is_active == True,
+                            UserPremium.end_date > now_utc,
+                        )
+                    )
+                    .first()
+                )
+                # Chegirma faqat full_pay bo'lsa qo'llanadi
+                is_full_pay = (
+                    getattr(schedule, "full_pay", None) is not None
+                    and float(schedule.full_pay) > 0
+                )
+                if has_premium and is_full_pay:
+                    premium_discount_applied = True
+                    prepay_amount = max(0.0, float(schedule.full_pay) * 0.9)
+            except Exception:
+                pass
+
             # ClickPayment yozuvi yaratish
             click_payment = ClickPayment(
                 payment_for=f"booking_{application_number}",
@@ -1139,7 +1166,10 @@ async def create_appointment(
                 transaction_id=str(click_payment.id),
                 click_trans_id=(str(result.get("payment_id")) if result.get("payment_id") else None),
                 status="completed",
-                description=f"Prepay for {service_name} ({application_number})",
+                description=(
+                    f"Prepay for {service_name} ({application_number})"
+                    + (" with 10% premium discount" if premium_discount_applied else "")
+                ),
             )
             db.add(payment_row)
             db.commit()
