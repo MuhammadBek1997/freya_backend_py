@@ -10,6 +10,7 @@ from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models import Appointment, Schedule, User, Employee, Salon, Admin
+from app.models.schedule import ScheduleBook as ScheduleBookModel
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -484,11 +485,30 @@ async def get_appointments_by_salon_id(
         Appointment.application_date.desc(),
         Appointment.application_time.desc()
     ).offset(offset).limit(limit).all()
+
+    bookings_query = db.query(ScheduleBookModel).filter(ScheduleBookModel.salon_id == salon_id)
+    if date_filter:
+        bookings_query = bookings_query.filter(ScheduleBookModel.time == date_filter)
+    if employee_id:
+        bookings_query = bookings_query.filter(ScheduleBookModel.employee_id == str(employee_id))
+    bookings = bookings_query.order_by(ScheduleBookModel.time.desc()).all()
     
     return {
         "success": True,
         "message": get_translation(language, "success"),
         "data": appointments,
+        "bookings": [
+            {
+                "id": str(b.id),
+                "salon_id": str(b.salon_id),
+                "full_name": b.full_name,
+                "phone": b.phone,
+                "time": b.time.isoformat() if b.time else None,
+                "employee_id": str(b.employee_id) if b.employee_id else None,
+                "created_at": b.created_at.isoformat() if getattr(b, "created_at", None) else None,
+            }
+            for b in bookings
+        ],
         "salon": {
             "id": salon.id,
             "salon_name": salon.salon_name
