@@ -1120,7 +1120,8 @@ async def create_appointment(
             # ClickPayment yozuvi yaratish
             click_payment = ClickPayment(
                 payment_for=f"booking_{application_number}",
-                amount=str(prepay_amount),
+                # amount=str(prepay_amount),
+                amount=1000,
                 status="created",
                 payment_card_id=str(payment_card.id),
             )
