@@ -9,7 +9,7 @@ from fastapi import (
     Form,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from sqlalchemy import func
 from typing import List, Optional, Union
 import os
