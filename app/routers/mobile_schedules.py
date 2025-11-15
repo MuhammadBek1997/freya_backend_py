@@ -1041,6 +1041,25 @@ async def create_appointment(
                     detail=get_translation(language, "errors.409") or "Bu vaqtda allaqachon appointment mavjud",
                 )
 
+            from app.models.busy_slot import BusySlot
+            busy_hit = (
+                db.query(BusySlot)
+                .filter(
+                    and_(
+                        BusySlot.employee_id == appointment_data.employee_id,
+                        BusySlot.date == resolved_date,
+                        BusySlot.start_time <= selected_time,
+                        BusySlot.end_time > selected_time,
+                    )
+                )
+                .first()
+            )
+            if busy_hit:
+                raise HTTPException(
+                    status_code=409,
+                    detail=get_translation(language, "errors.409") or "Bu vaqt xodim band",
+                )
+
         # 8. Application number yaratish
         application_number = (
             f"APP-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8].upper()}"
@@ -1120,8 +1139,8 @@ async def create_appointment(
             # ClickPayment yozuvi yaratish
             click_payment = ClickPayment(
                 payment_for=f"booking_{application_number}",
-                # amount=str(prepay_amount),
-                amount=1000,
+                amount=str(prepay_amount),
+                # amount=1000,
                 status="created",
                 payment_card_id=str(payment_card.id),
             )

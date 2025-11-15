@@ -10,6 +10,7 @@ from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models import Appointment, Schedule, User, Employee, Salon, Admin
+from app.models.busy_slot import BusySlot
 from app.models.schedule import ScheduleBook as ScheduleBookModel
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
@@ -117,7 +118,7 @@ async def create_appointment(
                 detail=get_translation(language, "errors.400")
             )
 
-    # Проверка на двойное бронирование: тот же сотрудник, дата и время, не отменён
+    # Проверка занятости: существующая запись или busy slot
     if employee_id:
         conflict = (
             db.query(Appointment)
@@ -127,11 +128,30 @@ async def create_appointment(
                     Appointment.application_date == appointment_data.application_date,
                     Appointment.application_time == appointment_data.application_time,
                     Appointment.is_cancelled == False,
+                    Appointment.status.in_(["pending", "accepted", "done"]),
                 )
             )
             .first()
         )
         if conflict:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=get_translation(language, "errors.409")
+            )
+
+        busy = (
+            db.query(BusySlot)
+            .filter(
+                and_(
+                    BusySlot.employee_id == employee_id,
+                    BusySlot.date == appointment_data.application_date,
+                    BusySlot.start_time <= appointment_data.application_time,
+                    BusySlot.end_time > appointment_data.application_time,
+                )
+            )
+            .first()
+        )
+        if busy:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=get_translation(language, "errors.409")

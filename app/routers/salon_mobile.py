@@ -24,6 +24,7 @@ from app.models.appointment import Appointment
 from app.models.user_favourite_salon import UserFavouriteSalon
 from app.models.user import User
 from app.auth.dependencies import get_current_user_optional
+from app.models.user_premium import UserPremium
 
 router = APIRouter(prefix="/mobile/salons", tags=["Mobile Salons"])
 
@@ -356,7 +357,7 @@ def build_pagination_metadata(total: int, page: int, limit: int) -> dict:
 
 # ==================== Builder Functions ====================
 
-def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_id: Optional[str]) -> MobileSalonItem:
+def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_id: Optional[str], is_premium: bool = False) -> MobileSalonItem:
     """Build mobile salon list item."""
     description = get_localized_field(salon, "description", language) or ""
     photos = getattr(salon, "photos", None) or []
@@ -384,6 +385,18 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
 
     rate = float(salon.salon_rating) if salon.salon_rating is not None else 0.0
     news = compose_news_tags(salon)
+    try:
+        if is_premium:
+            lang = (language or '').lower()
+            if lang.startswith('uz'):
+                premium_news = "Sizda 10 % chegirma bor"
+            elif lang.startswith('ru'):
+                premium_news = "У вас есть 10 % скидка"
+            else:
+                premium_news = "You have a 10% discount"
+            news = [premium_news] + news
+    except Exception:
+        pass
     is_fav = is_favourite_salon(db, str(salon.id), user_id)
     
     return MobileSalonItem(
@@ -409,6 +422,7 @@ def build_mobile_detail(
     user_id: Optional[str],
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
+    is_premium: bool = False,
 ) -> MobileSalonDetailResponse:
     """Build detailed mobile salon response."""
     description = get_localized_field(salon, "description", language) or ""
@@ -432,6 +446,18 @@ def build_mobile_detail(
     
     # Metadata
     news = compose_news_tags(salon)
+    try:
+        if is_premium:
+            lang = (language or '').lower()
+            if lang.startswith('uz'):
+                premium_news = "Sizda 10 % chegirma bor"
+            elif lang.startswith('ru'):
+                premium_news = "У вас есть 10 % скидка"
+            else:
+                premium_news = "You have a 10% discount"
+            news = [premium_news] + news
+    except Exception:
+        pass
     is_fav = is_favourite_salon(db, str(salon.id), user_id)
     
     # Employee images
@@ -553,7 +579,25 @@ async def get_all_salons(
         salons = query.order_by(Salon.created_at.desc()).offset(offset).limit(limit).all()
         
         user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
-        items = [build_mobile_item(s, language, db, user_id_for_favorite) for s in salons]
+        is_premium = False
+        try:
+            if current_user and getattr(current_user, "role", "") == "user":
+                now_utc = datetime.utcnow()
+                has_premium = (
+                    db.query(UserPremium)
+                    .filter(
+                        and_(
+                            UserPremium.user_id == current_user.id,
+                            UserPremium.is_active == True,
+                            UserPremium.end_date > now_utc,
+                        )
+                    )
+                    .first()
+                )
+                is_premium = bool(has_premium)
+        except Exception:
+            pass
+        items = [build_mobile_item(s, language, db, user_id_for_favorite, is_premium) for s in salons]
         
         return MobileSalonListResponse(
             success=True,
@@ -688,9 +732,27 @@ async def filter_salons(
         
         # Build response
         user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
+        is_premium = False
+        try:
+            if current_user and getattr(current_user, "role", "") == "user":
+                now_utc = datetime.utcnow()
+                has_premium = (
+                    db.query(UserPremium)
+                    .filter(
+                        and_(
+                            UserPremium.user_id == current_user.id,
+                            UserPremium.is_active == True,
+                            UserPremium.end_date > now_utc,
+                        )
+                    )
+                    .first()
+                )
+                is_premium = bool(has_premium)
+        except Exception:
+            pass
         return {
             "success": True,
-            "data": [build_mobile_item(s, language, db, user_id_for_favorite) for s in salons],
+            "data": [build_mobile_item(s, language, db, user_id_for_favorite, is_premium) for s in salons],
             "pagination": build_pagination_metadata(total, page, limit),
         }
         
@@ -878,7 +940,25 @@ async def get_salon_by_id(
             )
         
         user_id_for_favorite = resolve_favorite_user_id(current_user, userId)
-        return build_mobile_detail(salon, language, db, user_id_for_favorite, latitude, longitude)
+        is_premium = False
+        try:
+            if current_user and getattr(current_user, "role", "") == "user":
+                now_utc = datetime.utcnow()
+                has_premium = (
+                    db.query(UserPremium)
+                    .filter(
+                        and_(
+                            UserPremium.user_id == current_user.id,
+                            UserPremium.is_active == True,
+                            UserPremium.end_date > now_utc,
+                        )
+                    )
+                    .first()
+                )
+                is_premium = bool(has_premium)
+        except Exception:
+            pass
+        return build_mobile_detail(salon, language, db, user_id_for_favorite, latitude, longitude, is_premium)
     except HTTPException:
         raise
     except Exception as e:
