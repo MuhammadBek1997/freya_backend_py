@@ -451,11 +451,11 @@ def build_mobile_detail(
         if is_premium:
             lang = (language or '').lower()
             if lang.startswith('uz'):
-                premium_news = "Sizda 10 % chegirma bor"
+                premium_news = "Premium chegirma - 10 %"
             elif lang.startswith('ru'):
-                premium_news = "У вас есть 10 % скидка"
+                premium_news = "Премиум скидка - 10 %"
             else:
-                premium_news = "You have a 10% discount"
+                premium_news = "Premium discount - 10%"
             news = [premium_news] + news
     except Exception:
         pass
