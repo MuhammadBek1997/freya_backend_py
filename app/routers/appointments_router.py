@@ -10,6 +10,7 @@ from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models import Appointment, Schedule, User, Employee, Salon, Admin
+from app.models.notification import Notification
 from app.models.busy_slot import BusySlot
 from app.models.schedule import ScheduleBook as ScheduleBookModel
 
@@ -177,6 +178,36 @@ async def create_appointment(
     db.add(new_appointment)
     db.commit()
     db.refresh(new_appointment)
+
+    try:
+        if isinstance(current_user, User):
+            lang = (language or '').lower()
+            if lang.startswith('uz'):
+                title = "Appointment yaratildi"
+                message = "Salonga appointment yaratdingiz"
+            elif lang.startswith('ru'):
+                title = "Запись создана"
+                message = "Вы создали запись в салон"
+            else:
+                title = "Appointment created"
+                message = "You created a salon appointment"
+            notif = Notification(
+                user_id=str(current_user.id),
+                title=title,
+                message=message,
+                type="success",
+                data={
+                    "appointment_id": str(new_appointment.id),
+                    "salon_id": str(salon_id),
+                    "employee_id": str(employee_id) if employee_id else None,
+                    "date": appointment_data.application_date.isoformat(),
+                    "time": appointment_data.application_time.strftime("%H:%M"),
+                },
+            )
+            db.add(notif)
+            db.commit()
+    except Exception:
+        pass
     
     return {
         "success": True,

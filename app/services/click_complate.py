@@ -13,6 +13,7 @@ from app.models.payment_card import PaymentCard
 from app.models.user import User
 from app.models.employee import EmployeePostLimit
 from app.models.user_premium import UserPremium
+from app.models.notification import Notification
 from app.services.Click import PaymentStatus
 
 
@@ -276,6 +277,18 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
                 int(latest_premium.duration_months or 0) + months
             )
             db.commit()
+            try:
+                notif = Notification(
+                    user_id=str(user_id),
+                    title="Premium aktivlashtirildi",
+                    message=f"Premium {months} oyga uzaytirildi",
+                    type="success",
+                    data={"months": months},
+                )
+                db.add(notif)
+                db.commit()
+            except Exception:
+                pass
             logger.info(
                 f"Extended existing premium for user {user_id} by {months} month(s). New expiry: {latest_premium.end_date}"
             )
@@ -290,6 +303,18 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
             int(active_premiums[0].duration_months or 0) + months
         )
         db.commit()
+        try:
+            notif = Notification(
+                user_id=str(user_id),
+                title="Premium aktivlashtirildi",
+                message=f"Premium {months} oyga uzaytirildi",
+                type="success",
+                data={"months": months},
+            )
+            db.add(notif)
+            db.commit()
+        except Exception:
+            pass
         logger.info(
             f"Extended existing premium for user {user_id} by {months} month(s). New expiry: {active_premiums[0].end_date}"
         )
@@ -311,6 +336,18 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
     )
     db.add(new_premium)
     db.commit()
+    try:
+        notif = Notification(
+            user_id=str(user_id),
+            title="Premium aktivlashtirildi",
+            message=f"Premium {months} oyga faollashtirildi",
+            type="success",
+            data={"months": months},
+        )
+        db.add(notif)
+        db.commit()
+    except Exception:
+        pass
     logger.info(
         f"Activated premium for user {user_id} for {months} month(s). Expires: {new_premium.end_date}"
     )

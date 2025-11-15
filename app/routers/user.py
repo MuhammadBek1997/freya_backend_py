@@ -10,6 +10,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional, Union
 import os
 import uuid
@@ -56,6 +57,7 @@ from app.schemas.user import (
     UserPremiumStatusResponse,
 )
 from app.models.user_premium import UserPremium
+from app.models.payment import Payment as PaymentModel
 from app.schemas.employee import EmployeeResponse
 from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.auth.jwt_utils import JWTUtils
@@ -1357,3 +1359,54 @@ def _name_by_lang(item: dict, lang: str) -> str:
     if lang not in ("uz", "ru", "en"):
         lang = "uz"
     return item.get(lang) or item.get("uz") or ""
+@router.get("/payments")
+async def get_user_payments(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    type_filter: Optional[str] = Query(None, alias="type"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    offset = (page - 1) * limit
+    query = db.query(PaymentModel).filter(PaymentModel.user_id == str(current_user.id))
+    count_query = db.query(func.count(PaymentModel.id)).filter(PaymentModel.user_id == str(current_user.id))
+
+    if status_filter:
+        query = query.filter(PaymentModel.status == status_filter)
+        count_query = count_query.filter(PaymentModel.status == status_filter)
+    if type_filter:
+        query = query.filter(PaymentModel.payment_type == type_filter)
+        count_query = count_query.filter(PaymentModel.payment_type == type_filter)
+
+    total = count_query.scalar()
+    payments = query.order_by(PaymentModel.created_at.desc()).offset(offset).limit(limit).all()
+
+    data = [
+        {
+            "id": str(p.id),
+            "amount": int(p.amount) if p.amount is not None else 0,
+            "status": p.status,
+            "type": p.payment_type,
+            "transaction_id": p.transaction_id,
+            "click_trans_id": p.click_trans_id,
+            "description": p.description,
+            "employee_id": str(p.employee_id) if getattr(p, "employee_id", None) else None,
+            "salon_id": str(p.salon_id) if getattr(p, "salon_id", None) else None,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+        for p in payments
+    ]
+
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": data,
+        "pagination": {
+            "page": page,
+            "limit": limit,
+            "total": total,
+            "pages": (total + limit - 1) // limit,
+        },
+    }

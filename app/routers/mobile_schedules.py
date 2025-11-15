@@ -18,6 +18,7 @@ from app.models.service import Service
 from app.models.user import User
 from app.models.user_premium import UserPremium
 from app.models.payment import ClickPayment, Payment as PaymentModel
+from app.models.notification import Notification
 from app.config import settings
 from app.schemas.schedule_mobile import (
     MobileScheduleListResponse,
@@ -1215,6 +1216,35 @@ async def create_appointment(
         db.add(new_appointment)
         db.commit()
         db.refresh(new_appointment)
+        try:
+            if current_user:
+                note_lang = (language or '').lower()
+                if note_lang.startswith('uz'):
+                    title = "Appointment yaratildi"
+                    message = "Salonga appointment yaratdingiz"
+                elif note_lang.startswith('ru'):
+                    title = "Запись создана"
+                    message = "Вы создали запись в салон"
+                else:
+                    title = "Appointment created"
+                    message = "You created a salon appointment"
+                notif = Notification(
+                    user_id=str(current_user.id),
+                    title=title,
+                    message=message,
+                    type="success",
+                    data={
+                        "appointment_id": str(new_appointment.id),
+                        "salon_id": appointment_data.salon_id,
+                        "employee_id": appointment_data.employee_id,
+                        "date": resolved_date.isoformat(),
+                        "time": selected_time.strftime("%H:%M"),
+                    },
+                )
+                db.add(notif)
+                db.commit()
+        except Exception:
+            pass
 
         booked_q = []
         if current_user and current_user.phone:
