@@ -410,6 +410,7 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
         reviews=0,
         news=news,
         isFavorite=is_fav,
+        isPrivate=bool(getattr(salon, "private_salon", False)),
         latitude=lat_out,
         longitude=lng_out,
     )
