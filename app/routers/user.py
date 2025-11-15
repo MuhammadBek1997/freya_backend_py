@@ -7,9 +7,10 @@ from fastapi import (
     UploadFile,
     File,
     Form,
+    Query,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session, Query
+from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional, Union
 import os
