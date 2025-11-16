@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import Optional, List, Dict, Any, Union
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
@@ -93,11 +93,17 @@ async def book_schedule(
             detail=get_translation(language, "errors.404")
         )
     
+    dt = booking_data.time
+    date_part = dt.date()
+    time_part = dt.time()
+    end_dt = datetime.combine(date_part, time_part) + timedelta(minutes=30)
     new_booking = ScheduleBookModel(
         salon_id=booking_data.salon_id,
         full_name=booking_data.full_name,
         phone=booking_data.phone,
-        time=booking_data.time,
+        time=date_part,
+        start_time=time_part,
+        end_time=end_dt.time(),
         employee_id=booking_data.employee_id
     )
     
@@ -114,6 +120,8 @@ async def book_schedule(
             "full_name": new_booking.full_name,
             "phone": new_booking.phone,
             "time": new_booking.time.isoformat(),
+            "start_time": new_booking.start_time.strftime("%H:%M") if getattr(new_booking, "start_time", None) else None,
+            "end_time": new_booking.end_time.strftime("%H:%M") if getattr(new_booking, "end_time", None) else None,
             "employee_id": str(new_booking.employee_id) if new_booking.employee_id else None,
             "created_at": new_booking.created_at.isoformat() if new_booking.created_at else None
         }
@@ -150,6 +158,8 @@ async def get_bookings(
                 "full_name": b.full_name,
                 "phone": b.phone,
                 "time": b.time.isoformat(),
+                "start_time": b.start_time.strftime("%H:%M") if getattr(b, "start_time", None) else None,
+                "end_time": b.end_time.strftime("%H:%M") if getattr(b, "end_time", None) else None,
                 "employee_id": str(b.employee_id) if b.employee_id else None,
                 "created_at": b.created_at.isoformat() if b.created_at else None
             }
@@ -184,6 +194,8 @@ async def get_booking_by_id(
             "full_name": booking.full_name,
             "phone": booking.phone,
             "time": booking.time.isoformat(),
+            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
+            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
             "created_at": booking.created_at.isoformat() if booking.created_at else None
         }
@@ -208,9 +220,15 @@ async def update_booking(
             detail=get_translation(language, "errors.404")
         )
     
+    dt = booking_data.time
+    date_part = dt.date()
+    time_part = dt.time()
+    end_dt = datetime.combine(date_part, time_part) + timedelta(minutes=30)
     booking.full_name = booking_data.full_name
     booking.phone = booking_data.phone
-    booking.time = booking_data.time
+    booking.time = date_part
+    booking.start_time = time_part
+    booking.end_time = end_dt.time()
     booking.employee_id = booking_data.employee_id
     
     db.commit()
@@ -225,6 +243,8 @@ async def update_booking(
             "full_name": booking.full_name,
             "phone": booking.phone,
             "time": booking.time.isoformat(),
+            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
+            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
             "created_at": booking.created_at.isoformat() if booking.created_at else None
         }

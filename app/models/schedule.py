@@ -31,6 +31,8 @@ class ScheduleBook(BaseModel):
     full_name = Column(String(200), nullable=False)
     phone = Column(String(20), nullable=False)
     time = Column(Date, nullable=False)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
     employee_id = Column(String(36), ForeignKey("employees.id"), nullable=True)
     
     # Relationships

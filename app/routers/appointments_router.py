@@ -673,6 +673,8 @@ async def get_appointments_by_salon_id(
                 "full_name": b.full_name,
                 "phone": b.phone,
                 "time": b.time.isoformat() if b.time else None,
+                "start_time": b.start_time.strftime("%H:%M") if getattr(b, "start_time", None) else None,
+                "end_time": b.end_time.strftime("%H:%M") if getattr(b, "end_time", None) else None,
                 "employee_id": str(b.employee_id) if b.employee_id else None,
                 "created_at": b.created_at.isoformat() if getattr(b, "created_at", None) else None,
             }
