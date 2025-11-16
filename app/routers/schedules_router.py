@@ -11,6 +11,10 @@ from app.models.user import User
 from app.database import get_db
 from app.models import Schedule, Salon
 from app.models.schedule import ScheduleBook as ScheduleBookModel
+from app.models.busy_slot import BusySlot
+from app.models.employee import Employee
+from app.models.appointment import Appointment
+from sqlalchemy import and_
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -97,6 +101,44 @@ async def book_schedule(
     date_part = dt.date()
     time_part = dt.time()
     end_dt = datetime.combine(date_part, time_part) + timedelta(minutes=30)
+
+    # If employee_id provided, prevent conflicts and create BusySlot
+    if booking_data.employee_id:
+        # Validate employee belongs to salon
+        emp = db.query(Employee).filter(Employee.id == booking_data.employee_id).first()
+        if not emp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+
+        # Check appointments overlap
+        apps = (
+            db.query(Appointment)
+            .filter(
+                and_(
+                    Appointment.employee_id == booking_data.employee_id,
+                    Appointment.application_date == date_part,
+                    Appointment.is_cancelled == False,
+                    Appointment.status.in_(["pending", "accepted", "done"]),
+                )
+            )
+            .all()
+        )
+        for a in apps:
+            s_dt = datetime.combine(date_part, a.application_time)
+            e_dt = datetime.combine(date_part, a.end_time) if getattr(a, "end_time", None) else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            if (datetime.combine(date_part, time_part) < e_dt) and (end_dt > s_dt):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+
+        # Check existing busy slots overlap
+        bs_rows = (
+            db.query(BusySlot)
+            .filter(and_(BusySlot.employee_id == booking_data.employee_id, BusySlot.date == date_part))
+            .all()
+        )
+        for bs in bs_rows:
+            bs_s = datetime.combine(date_part, bs.start_time)
+            bs_e = datetime.combine(date_part, bs.end_time)
+            if (datetime.combine(date_part, time_part) < bs_e) and (end_dt > bs_s):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
     new_booking = ScheduleBookModel(
         salon_id=booking_data.salon_id,
         full_name=booking_data.full_name,
@@ -108,6 +150,16 @@ async def book_schedule(
     )
     
     db.add(new_booking)
+    # Create busy slot to block future bookings/appointments for this interval
+    if booking_data.employee_id:
+        bs = BusySlot(
+            employee_id=booking_data.employee_id,
+            date=date_part,
+            start_time=time_part,
+            end_time=end_dt.time(),
+            reason="booking"
+        )
+        db.add(bs)
     db.commit()
     db.refresh(new_booking)
     
@@ -224,6 +276,43 @@ async def update_booking(
     date_part = dt.date()
     time_part = dt.time()
     end_dt = datetime.combine(date_part, time_part) + timedelta(minutes=30)
+    booking_full_prev_date = booking.time
+    booking_full_prev_start = booking.start_time
+    booking_full_prev_end = booking.end_time
+
+    # If employee_id provided, prevent conflicts (same logic as create)
+    if booking_data.employee_id:
+        apps = (
+            db.query(Appointment)
+            .filter(
+                and_(
+                    Appointment.employee_id == booking_data.employee_id,
+                    Appointment.application_date == date_part,
+                    Appointment.is_cancelled == False,
+                    Appointment.status.in_(["pending", "accepted", "done"]),
+                )
+            )
+            .all()
+        )
+        for a in apps:
+            s_dt = datetime.combine(date_part, a.application_time)
+            e_dt = datetime.combine(date_part, a.end_time) if getattr(a, "end_time", None) else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            if (datetime.combine(date_part, time_part) < e_dt) and (end_dt > s_dt):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+
+        bs_rows = (
+            db.query(BusySlot)
+            .filter(and_(BusySlot.employee_id == booking_data.employee_id, BusySlot.date == date_part))
+            .all()
+        )
+        for bs in bs_rows:
+            bs_s = datetime.combine(date_part, bs.start_time)
+            bs_e = datetime.combine(date_part, bs.end_time)
+            if (datetime.combine(date_part, time_part) < bs_e) and (end_dt > bs_s):
+                # allow updating the same slot if it exactly matches previous
+                if not (booking_full_prev_date == bs.date and booking_full_prev_start == bs.start_time and booking_full_prev_end == bs.end_time):
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+
     booking.full_name = booking_data.full_name
     booking.phone = booking_data.phone
     booking.time = date_part
@@ -231,6 +320,29 @@ async def update_booking(
     booking.end_time = end_dt.time()
     booking.employee_id = booking_data.employee_id
     
+    # Update related busy slot: find previous and update or create new
+    if booking.employee_id:
+        prev_slot = db.query(BusySlot).filter(and_(
+            BusySlot.employee_id == booking.employee_id,
+            BusySlot.date == booking_full_prev_date,
+            BusySlot.start_time == booking_full_prev_start,
+            BusySlot.end_time == booking_full_prev_end,
+        )).first()
+        if prev_slot:
+            prev_slot.date = date_part
+            prev_slot.start_time = time_part
+            prev_slot.end_time = end_dt.time()
+            prev_slot.reason = "booking"
+        else:
+            bs = BusySlot(
+                employee_id=booking.employee_id,
+                date=date_part,
+                start_time=time_part,
+                end_time=end_dt.time(),
+                reason="booking"
+            )
+            db.add(bs)
+
     db.commit()
     db.refresh(booking)
     
@@ -268,6 +380,20 @@ async def delete_booking(
             detail=get_translation(language, "errors.404")
         )
     
+    # Delete related busy slot
+    try:
+        if booking.employee_id and booking.start_time and booking.end_time:
+            bs = db.query(BusySlot).filter(and_(
+                BusySlot.employee_id == booking.employee_id,
+                BusySlot.date == booking.time,
+                BusySlot.start_time == booking.start_time,
+                BusySlot.end_time == booking.end_time,
+            )).first()
+            if bs:
+                db.delete(bs)
+    except Exception:
+        pass
+
     db.delete(booking)
     db.commit()
     

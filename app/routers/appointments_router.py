@@ -379,10 +379,13 @@ async def update_appointment_status(
     current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Обновить статус заявки (только для сотрудников)"""
+    """Обновить статус заявки (для сотрудников и админов)"""
     
-    # Faqat xodim (employee)ga ruxsat, admin/superadmin/userga taqiqlanadi
-    if getattr(current_user, "role", None) != "employee":
+    # Ruxsat etilgan rollar: employee, admin, private_admin, superadmin
+    role = str(getattr(current_user, "role", "") or "").lower()
+    allowed_roles = {"employee", "admin", "private_admin", "superadmin"}
+    is_admin_or_employee = (role in allowed_roles) or isinstance(current_user, Admin)
+    if not is_admin_or_employee:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=get_translation(language, "errors.403")
