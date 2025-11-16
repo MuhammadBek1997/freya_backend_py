@@ -120,6 +120,25 @@ async def create_appointment(
                 detail=get_translation(language, "errors.400")
             )
 
+    # Agar employee_id mavjud bo'lsa, xodimning ish vaqtlariga mosligini tekshirish
+    if employee_id:
+        try:
+            emp = db.query(Employee).filter(Employee.id == employee_id).first()
+            if emp and emp.work_start_time and emp.work_end_time:
+                from datetime import datetime as dtmod
+                ws = dtmod.strptime(emp.work_start_time, "%H:%M").time()
+                we = dtmod.strptime(emp.work_end_time, "%H:%M").time()
+                if not (ws < we and ws <= appointment_data.application_time <= we):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=get_translation(language, "errors.400")
+                    )
+        except Exception:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=get_translation(language, "errors.400")
+            )
+
     # Проверка занятости: существующая запись или busy slot
     if employee_id:
         conflict = (

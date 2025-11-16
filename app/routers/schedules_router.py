@@ -104,8 +104,25 @@ async def book_schedule(
 
     # If employee_id provided, prevent conflicts and create BusySlot
     if booking_data.employee_id:
-        # Validate employee belongs to salon
+        # Check employee working hours window
         emp = db.query(Employee).filter(Employee.id == booking_data.employee_id).first()
+        if emp:
+            try:
+                if emp.work_start_time and emp.work_end_time:
+                    ws = datetime.strptime(emp.work_start_time, "%H:%M").time()
+                    we = datetime.strptime(emp.work_end_time, "%H:%M").time()
+                    if not (ws < we and ws <= time_part and end_dt.time() <= we):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=get_translation(language, "errors.400")
+                        )
+            except Exception:
+                # If parsing fails, treat as invalid window
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=get_translation(language, "errors.400")
+                )
+        # Validate employee belongs to salon
         if not emp:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
@@ -282,6 +299,23 @@ async def update_booking(
 
     # If employee_id provided, prevent conflicts (same logic as create)
     if booking_data.employee_id:
+        # Check employee working hours window
+        emp = db.query(Employee).filter(Employee.id == booking_data.employee_id).first()
+        if emp:
+            try:
+                if emp.work_start_time and emp.work_end_time:
+                    ws = datetime.strptime(emp.work_start_time, "%H:%M").time()
+                    we = datetime.strptime(emp.work_end_time, "%H:%M").time()
+                    if not (ws < we and ws <= time_part and end_dt.time() <= we):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=get_translation(language, "errors.400")
+                        )
+            except Exception:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=get_translation(language, "errors.400")
+                )
         apps = (
             db.query(Appointment)
             .filter(
