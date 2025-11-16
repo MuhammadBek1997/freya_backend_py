@@ -399,9 +399,60 @@ async def update_appointment_status(
     appointment.status = status_data.status
     if status_data.notes:
         appointment.notes = status_data.notes
-    
+
+    # Update boolean flags to reflect status
+    if status_data.status == "accepted":
+        appointment.is_confirmed = True
+        appointment.is_cancelled = False
+    elif status_data.status == "done":
+        appointment.is_completed = True
+        appointment.is_cancelled = False
+    elif status_data.status == "cancelled":
+        appointment.is_cancelled = True
+
     db.commit()
     db.refresh(appointment)
+
+    # Notify user to leave a comment when appointment is accepted or done
+    try:
+        if appointment.user_id and status_data.status in ("accepted", "done"):
+            lang = (language or '').lower()
+            if lang.startswith('uz'):
+                title = "Sharh qoldiring"
+                message = "Salonni baholash va izoh yozish uchun so'rov"
+            elif lang.startswith('ru'):
+                title = "Оставьте отзыв"
+                message = "Запрос на оценку салона и комментарий"
+            else:
+                title = "Leave a review"
+                message = "Request to rate the salon and leave a comment"
+            # Resolve salon_id via employee if available
+            salon_id_val = None
+            try:
+                if appointment.employee_id:
+                    emp = db.query(Employee).filter(Employee.id == appointment.employee_id).first()
+                    if emp and getattr(emp, "salon_id", None):
+                        salon_id_val = str(emp.salon_id)
+            except Exception:
+                salon_id_val = None
+
+            notif = Notification(
+                user_id=str(appointment.user_id),
+                title=title,
+                message=message,
+                type="info",
+                data={
+                    "kind": "request_comment",
+                    "appointment_id": str(appointment.id),
+                    "salon_id": salon_id_val,
+                    "employee_id": str(appointment.employee_id) if appointment.employee_id else None,
+                    "status": status_data.status,
+                },
+            )
+            db.add(notif)
+            db.commit()
+    except Exception:
+        pass
     
     return {
         "success": True,
