@@ -10,6 +10,7 @@ from app.auth.dependencies import get_current_user, get_current_user_optional
 from app.database import get_db
 from app.i18nMini import get_translation
 from app.models import Appointment, Schedule, User, Employee, Salon, Admin
+from app.models.payment import Payment as PaymentModel
 from app.models.notification import Notification
 from app.models.busy_slot import BusySlot
 from app.models.schedule import ScheduleBook as ScheduleBookModel
@@ -253,11 +254,50 @@ async def get_all_appointments(
     # Получаем данные
     total = count_query.scalar()
     appointments = query.order_by(Appointment.created_at.desc()).offset(offset).limit(limit).all()
-    
+
+    def _serialize(a: Appointment) -> dict:
+        is_paid = False
+        paid_amount = None
+        try:
+            p = (
+                db.query(PaymentModel)
+                .filter(
+                    PaymentModel.status == "completed",
+                    PaymentModel.payment_type == "service_booking",
+                    PaymentModel.description.ilike(f"%({a.application_number})%"),
+                )
+                .first()
+            )
+            if p:
+                is_paid = True
+                paid_amount = p.amount
+        except Exception:
+            is_paid = False
+            paid_amount = None
+        return {
+            "id": str(a.id),
+            "application_number": a.application_number,
+            "user_id": str(a.user_id) if a.user_id else None,
+            "user_name": a.user_name,
+            "phone_number": a.phone_number,
+            "application_date": a.application_date,
+            "application_time": a.application_time,
+            "schedule_id": str(getattr(a, "schedule_id", None)) if getattr(a, "schedule_id", None) else None,
+            "employee_id": str(a.employee_id) if a.employee_id else None,
+            "service_name": a.service_name,
+            "service_price": float(a.service_price) if a.service_price is not None else None,
+            "status": a.status,
+            "notes": a.notes,
+            "created_at": a.created_at.isoformat() if getattr(a, "created_at", None) else None,
+            "updated_at": a.updated_at.isoformat() if getattr(a, "updated_at", None) else None,
+            "is_paid": is_paid,
+            "paid_amount": paid_amount,
+        }
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": appointments,
+        "data": [_serialize(a) for a in appointments],
         "pagination": {
             "page": page,
             "limit": limit,
@@ -284,10 +324,49 @@ async def get_appointment_by_id(
             detail=get_translation(language, "errors.404")
         )
     
+    def _serialize(a: Appointment) -> dict:
+        is_paid = False
+        paid_amount = None
+        try:
+            p = (
+                db.query(PaymentModel)
+                .filter(
+                    PaymentModel.status == "completed",
+                    PaymentModel.payment_type == "service_booking",
+                    PaymentModel.description.ilike(f"%({a.application_number})%"),
+                )
+                .first()
+            )
+            if p:
+                is_paid = True
+                paid_amount = p.amount
+        except Exception:
+            is_paid = False
+            paid_amount = None
+        return {
+            "id": str(a.id),
+            "application_number": a.application_number,
+            "user_id": str(a.user_id) if a.user_id else None,
+            "user_name": a.user_name,
+            "phone_number": a.phone_number,
+            "application_date": a.application_date,
+            "application_time": a.application_time,
+            "schedule_id": str(getattr(a, "schedule_id", None)) if getattr(a, "schedule_id", None) else None,
+            "employee_id": str(a.employee_id) if a.employee_id else None,
+            "service_name": a.service_name,
+            "service_price": float(a.service_price) if a.service_price is not None else None,
+            "status": a.status,
+            "notes": a.notes,
+            "created_at": a.created_at.isoformat() if getattr(a, "created_at", None) else None,
+            "updated_at": a.updated_at.isoformat() if getattr(a, "updated_at", None) else None,
+            "is_paid": is_paid,
+            "paid_amount": paid_amount,
+        }
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": appointment
+        "data": _serialize(appointment)
     }
 
 
@@ -537,6 +616,45 @@ async def get_appointments_by_salon_id(
         Appointment.application_time.desc()
     ).offset(offset).limit(limit).all()
 
+    def _serialize(a: Appointment) -> dict:
+        is_paid = False
+        paid_amount = None
+        try:
+            p = (
+                db.query(PaymentModel)
+                .filter(
+                    PaymentModel.status == "completed",
+                    PaymentModel.payment_type == "service_booking",
+                    PaymentModel.description.ilike(f"%({a.application_number})%"),
+                )
+                .first()
+            )
+            if p:
+                is_paid = True
+                paid_amount = p.amount
+        except Exception:
+            is_paid = False
+            paid_amount = None
+        return {
+            "id": str(a.id),
+            "application_number": a.application_number,
+            "user_id": str(a.user_id) if a.user_id else None,
+            "user_name": a.user_name,
+            "phone_number": a.phone_number,
+            "application_date": a.application_date,
+            "application_time": a.application_time,
+            "schedule_id": str(getattr(a, "schedule_id", None)) if getattr(a, "schedule_id", None) else None,
+            "employee_id": str(a.employee_id) if a.employee_id else None,
+            "service_name": a.service_name,
+            "service_price": float(a.service_price) if a.service_price is not None else None,
+            "status": a.status,
+            "notes": a.notes,
+            "created_at": a.created_at.isoformat() if getattr(a, "created_at", None) else None,
+            "updated_at": a.updated_at.isoformat() if getattr(a, "updated_at", None) else None,
+            "is_paid": is_paid,
+            "paid_amount": paid_amount,
+        }
+
     bookings_query = db.query(ScheduleBookModel).filter(ScheduleBookModel.salon_id == salon_id)
     if date_filter:
         bookings_query = bookings_query.filter(ScheduleBookModel.time == date_filter)
@@ -547,7 +665,7 @@ async def get_appointments_by_salon_id(
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": appointments,
+        "data": [_serialize(a) for a in appointments],
         "bookings": [
             {
                 "id": str(b.id),
