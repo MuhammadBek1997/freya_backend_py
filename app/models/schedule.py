@@ -34,6 +34,7 @@ class ScheduleBook(BaseModel):
     start_time = Column(Time, nullable=True)
     end_time = Column(Time, nullable=True)
     employee_id = Column(String(36), ForeignKey("employees.id"), nullable=True)
+    booking_number = Column(String(50), unique=True, nullable=True)
     
     # Relationships
     salon = relationship("Salon", back_populates="schedule_books")

@@ -41,6 +41,7 @@ class ScheduleBookSchema(BaseModel):
     phone: str
     time: datetime
     employee_id: Optional[str] = None
+    booking_number: Optional[str] = None
 
 class ScheduleUpdate(BaseModel):
     salon_id: Optional[str] = None
@@ -156,6 +157,8 @@ async def book_schedule(
             bs_e = datetime.combine(date_part, bs.end_time)
             if (datetime.combine(date_part, time_part) < bs_e) and (end_dt > bs_s):
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+    booking_number = booking_data.booking_number or _generate_booking_number(db, date_part)
+
     new_booking = ScheduleBookModel(
         salon_id=booking_data.salon_id,
         full_name=booking_data.full_name,
@@ -163,7 +166,8 @@ async def book_schedule(
         time=date_part,
         start_time=time_part,
         end_time=end_dt.time(),
-        employee_id=booking_data.employee_id
+        employee_id=booking_data.employee_id,
+        booking_number=booking_number
     )
     
     db.add(new_booking)
@@ -192,6 +196,7 @@ async def book_schedule(
             "start_time": new_booking.start_time.strftime("%H:%M") if getattr(new_booking, "start_time", None) else None,
             "end_time": new_booking.end_time.strftime("%H:%M") if getattr(new_booking, "end_time", None) else None,
             "employee_id": str(new_booking.employee_id) if new_booking.employee_id else None,
+            "booking_number": new_booking.booking_number,
             "created_at": new_booking.created_at.isoformat() if new_booking.created_at else None
         }
     }
@@ -230,6 +235,7 @@ async def get_bookings(
                 "start_time": b.start_time.strftime("%H:%M") if getattr(b, "start_time", None) else None,
                 "end_time": b.end_time.strftime("%H:%M") if getattr(b, "end_time", None) else None,
                 "employee_id": str(b.employee_id) if b.employee_id else None,
+                "booking_number": getattr(b, "booking_number", None),
                 "created_at": b.created_at.isoformat() if b.created_at else None
             }
             for b in bookings
@@ -266,6 +272,7 @@ async def get_booking_by_id(
             "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
             "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "booking_number": getattr(booking, "booking_number", None),
             "created_at": booking.created_at.isoformat() if booking.created_at else None
         }
     }
@@ -377,6 +384,11 @@ async def update_booking(
             )
             db.add(bs)
 
+    if not getattr(booking, "booking_number", None):
+        try:
+            booking.booking_number = _generate_booking_number(db, date_part)
+        except Exception:
+            pass
     db.commit()
     db.refresh(booking)
     
@@ -392,6 +404,7 @@ async def update_booking(
             "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
             "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "booking_number": getattr(booking, "booking_number", None),
             "created_at": booking.created_at.isoformat() if booking.created_at else None
         }
     }
@@ -728,3 +741,63 @@ async def delete_schedule(
         "message": get_translation(language, "success"),
         "data": schedule_data
     }
+def _generate_booking_number(db: Session, day: date) -> str:
+    import secrets
+    base = f"BOOK-{day.strftime('%Y%m%d')}"
+    while True:
+        suffix = secrets.token_hex(4).upper()
+        number = f"{base}-{suffix}"
+        exists = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == number).first()
+        if not exists:
+            return number
+@router.get("/book/number/{booking_number}")
+async def get_booking_by_number(
+    booking_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()
+    if not booking:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+    return {
+        "success": True,
+        "message": get_translation(language, "success"),
+        "data": {
+            "id": str(booking.id),
+            "salon_id": str(booking.salon_id),
+            "full_name": booking.full_name,
+            "phone": booking.phone,
+            "time": booking.time.isoformat(),
+            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
+            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
+            "employee_id": str(booking.employee_id) if booking.employee_id else None,
+            "booking_number": booking.booking_number,
+        }
+    }
+
+@router.delete("/book/number/{booking_number}")
+async def delete_booking_by_number(
+    booking_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()
+    if not booking:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+    try:
+        if booking.employee_id and booking.start_time and booking.end_time:
+            bs = db.query(BusySlot).filter(and_(
+                BusySlot.employee_id == booking.employee_id,
+                BusySlot.date == booking.time,
+                BusySlot.start_time == booking.start_time,
+                BusySlot.end_time == booking.end_time,
+            )).first()
+            if bs:
+                db.delete(bs)
+    except Exception:
+        pass
+    db.delete(booking)
+    db.commit()
+    return {"success": True, "message": get_translation(language, "success")}
