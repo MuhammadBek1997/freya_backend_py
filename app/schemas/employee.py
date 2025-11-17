@@ -44,6 +44,7 @@ class EmployeeUpdate(BaseModel):
     profession: Optional[str] = None
     work_start_time: Optional[str] = None  # HH:MM
     work_end_time: Optional[str] = None    # HH:MM
+    avatar_url: Optional[str] = None
 
     @validator('work_start_time')
     def validate_update_work_start_time(cls, v):
@@ -63,6 +64,17 @@ class EmployeeUpdate(BaseModel):
         import re
         if not re.match(r"^([01]\d|2[0-3]):([0-5]\d)$", v):
             raise ValueError("work_end_time noto'g'ri formatda (HH:MM)")
+        return v
+
+    @validator('avatar_url')
+    def validate_update_avatar_url(cls, v):
+        if v is None or v == '':
+            return None
+        v = v.strip()
+        if len(v) > 500:
+            raise ValueError('URL uzunligi 500 belgidan oshmasligi kerak')
+        if not (v.startswith('http://') or v.startswith('https://')):
+            raise ValueError("URL noto'g'ri formatda (http yoki https)")
         return v
 
 class EmployeeAvatarUpdate(BaseModel):
