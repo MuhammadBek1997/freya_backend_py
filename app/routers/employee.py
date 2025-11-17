@@ -592,7 +592,7 @@ async def update_employee(
     employee_id: str,
     employee_data: EmployeeUpdate,
     db: Session = Depends(get_db),
-    current_admin = Depends(get_current_admin),
+    current_user = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Update employee"""
@@ -605,6 +605,11 @@ async def update_employee(
                 detail=get_translation(language, "errors.404")
             )
         
+        # Authorization: employee can update only his own data; admins can update any
+        role = getattr(current_user, "role", None)
+        if role == "employee" and str(current_user.id) != str(employee_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=get_translation(language, "errors.403"))
+
         # Check if email already exists for other employees
         if employee_data.email:
             duplicate = db.query(Employee).filter(
@@ -639,9 +644,9 @@ async def update_employee(
         update_data = employee_data.dict(exclude_unset=True)
         for field, value in update_data.items():
             setattr(employee, field, value)
-        
+
         db.commit()
-        
+
         return SuccessResponse(
             success=True,
             message=get_translation(language, "auth.userUpdated"),
