@@ -2,7 +2,7 @@ from typing import List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, asc, desc
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 
 from app.database import get_db
@@ -13,6 +13,7 @@ from app.models.employee import Employee
 from app.models.salon import Salon
 from app.models.user_chat import UserChat
 from app.models.message import Message
+from app.routers.ws_chat import manager, _now_local_iso
 
 
 router = APIRouter(prefix="/messages", tags=["messages"])
@@ -282,6 +283,53 @@ async def send_message(
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
+
+    try:
+        room_id = str(chat.id)
+        created_local = (
+            new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
+            if getattr(new_message, "created_at", None) else _now_local_iso()
+        )
+        await_payload = {
+            "event": "message",
+            "room_id": room_id,
+            "message": {
+                "id": str(new_message.id),
+                "sender_id": str(new_message.sender_id),
+                "sender_type": "user",
+                "receiver_id": receiver_id,
+                "receiver_type": receiver_type,
+                "message_text": message_text,
+                "message_type": message_type,
+                "file_url": file_url,
+                "is_read": False,
+                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at_local": created_local,
+            },
+        }
+        await manager.broadcast(room_id, await_payload)
+
+        unread_count = db.query(Message).filter(
+            Message.user_chat_id == chat.id,
+            Message.receiver_id == receiver_id,
+            Message.is_read == False,
+        ).count()
+        await manager.broadcast(room_id, {
+            "event": "notification",
+            "room_id": room_id,
+            "kind": "chat_message",
+            "receiver_type": receiver_type,
+            "title": "Yangi xabar",
+            "title_ru": "Новое сообщение",
+            "title_en": "New message",
+            "message": message_text,
+            "to_user_id": receiver_id if receiver_type == "user" else None,
+            "to_employee_id": receiver_id if receiver_type == "employee" else None,
+            "unread_count": unread_count,
+            "time": _now_local_iso(),
+        })
+    except Exception:
+        pass
 
     return {
         "success": True,
@@ -602,6 +650,51 @@ async def employee_send_message(
     db.commit()
     db.refresh(new_message)
 
+    try:
+        room_id = str(chat.id)
+        created_local = (
+            new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
+            if getattr(new_message, "created_at", None) else _now_local_iso()
+        )
+        await manager.broadcast(room_id, {
+            "event": "message",
+            "room_id": room_id,
+            "message": {
+                "id": str(new_message.id),
+                "sender_id": str(new_message.sender_id),
+                "sender_type": "employee",
+                "receiver_id": receiver_id,
+                "receiver_type": "user",
+                "message_text": message_text,
+                "message_type": message_type,
+                "file_url": file_url,
+                "is_read": False,
+                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at_local": created_local,
+            }
+        })
+        unread_count = db.query(Message).filter(
+            Message.user_chat_id == chat.id,
+            Message.receiver_id == receiver_id,
+            Message.is_read == False,
+        ).count()
+        await manager.broadcast(room_id, {
+            "event": "notification",
+            "room_id": room_id,
+            "kind": "chat_message",
+            "receiver_type": "user",
+            "title": "Yangi xabar",
+            "title_ru": "Новое сообщение",
+            "title_en": "New message",
+            "message": message_text,
+            "to_user_id": receiver_id,
+            "to_employee_id": None,
+            "unread_count": unread_count,
+            "time": _now_local_iso(),
+        })
+    except Exception:
+        pass
+
     return {
         "success": True,
         "message": get_translation(language, "messages.sent"),
@@ -868,6 +961,51 @@ async def admin_send_message(
     db.add(new_message)
     db.commit()
     db.refresh(new_message)
+
+    try:
+        room_id = str(chat.id)
+        created_local = (
+            new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
+            if getattr(new_message, "created_at", None) else _now_local_iso()
+        )
+        await manager.broadcast(room_id, {
+            "event": "message",
+            "room_id": room_id,
+            "message": {
+                "id": str(new_message.id),
+                "sender_id": str(new_message.sender_id),
+                "sender_type": "salon",
+                "receiver_id": receiver_id,
+                "receiver_type": "user",
+                "message_text": message_text,
+                "message_type": message_type,
+                "file_url": file_url,
+                "is_read": False,
+                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at_local": created_local,
+            }
+        })
+        unread_count = db.query(Message).filter(
+            Message.user_chat_id == chat.id,
+            Message.receiver_id == receiver_id,
+            Message.is_read == False,
+        ).count()
+        await manager.broadcast(room_id, {
+            "event": "notification",
+            "room_id": room_id,
+            "kind": "chat_message",
+            "receiver_type": "user",
+            "title": "Yangi xabar",
+            "title_ru": "Новое сообщение",
+            "title_en": "New message",
+            "message": message_text,
+            "to_user_id": receiver_id,
+            "to_employee_id": None,
+            "unread_count": unread_count,
+            "time": _now_local_iso(),
+        })
+    except Exception:
+        pass
 
     return {
         "success": True,
