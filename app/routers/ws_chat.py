@@ -10,6 +10,7 @@ from app.database import SessionLocal
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.salon import Salon
+from app.models.admin import Admin
 from app.models.user_chat import UserChat
 from app.models.message import Message
 from app.models.notification import Notification
@@ -116,13 +117,13 @@ async def ws_chat_info():
                 "payload": {
                     "event": "message",
                     "room_id": "<chat_id>",
-                    "message": {
-                        "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee",
-                        "receiver_id": "<id>", "receiver_type": "user|employee|salon",
-                        "message_text": "...", "message_type": "text|file|...",
-                        "file_url": None, "is_read": False, "created_at": "<ISO>", "created_at_local": "<ISO+05:00>"
-                    }
-                }
+            "message": {
+                "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee|salon",
+                "receiver_id": "<id>", "receiver_type": "user|employee|salon",
+                "message_text": "...", "message_type": "text|file|...",
+                "file_url": None, "is_read": False, "created_at": "<ISO>", "created_at_local": "<ISO+05:00>"
+            }
+        }
             },
             "read": {
                 "desc": "O'qilgan deb belgilash broadcast",
@@ -137,7 +138,7 @@ async def ws_chat_info():
                     "room_id": "<chat_id>",
                     "items": [
                         {
-                            "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee",
+                            "id": "<msg_id>", "sender_id": "<id>", "sender_type": "user|employee|salon",
                             "receiver_id": "<id>", "receiver_type": "user|employee|salon",
                             "message_text": "...", "message_type": "text|file|...",
                             "file_url": None, "is_read": False, "created_at": "<ISO>", "created_at_local": "<ISO+05:00>"
@@ -152,7 +153,7 @@ async def ws_chat_info():
                     "event": "notification",
                     "room_id": "<chat_id>",
                     "kind": "chat_message",
-                    "receiver_type": "user|employee",
+                    "receiver_type": "user|employee|salon",
                     "title": "Yangi xabar",
                     "title_ru": "Новое сообщение",
                     "title_en": "New message",
@@ -177,6 +178,7 @@ async def ws_chat_info():
             "user_to_employee": "ws://<host>/api/ws/chat?token=<USER_JWT>&receiver_id=<EMP_ID>&receiver_type=employee",
             "user_to_salon": "ws://<host>/api/ws/chat?token=<USER_JWT>&receiver_id=<SALON_ID>&receiver_type=salon",
             "employee_to_user_existing": "ws://<host>/api/ws/chat?token=<EMP_JWT>&receiver_id=<USER_ID>&receiver_type=user",
+            "admin_to_user_existing": "ws://<host>/api/ws/chat?token=<ADMIN_JWT>&receiver_id=<USER_ID>&receiver_type=user",
             "send_message": "ws.send(JSON.stringify({ message_text: 'Salom!', message_type: 'text' }))",
             "mark_read": "ws.send(JSON.stringify({ event: 'mark_read' }))",
             "handle_notification_js": "ws.onmessage = (ev) => { const msg = JSON.parse(ev.data); if (msg.event === 'notification') { const title = (uiLang==='ru'? msg.title_ru : uiLang==='en' ? msg.title_en : msg.title); const toMe = (msg.receiver_type==='user' ? msg.to_user_id === myUserId : msg.to_employee_id === myEmployeeId); if (toMe) { showToast(title, msg.message); updateBadge(msg.unread_count); } } };",
@@ -287,7 +289,26 @@ def _get_or_create_chat(db, current_id: str, current_role: str, receiver_id: str
                 return None
             return chat
 
-    # Admin/private_admin not supported in this minimal WS chat
+    elif current_role == "admin":
+        # Admin (salon) faqat user_salon mavjud chatiga ulanadi
+        if receiver_type == "user":
+            admin = db.query(Admin).filter(Admin.id == current_id, Admin.is_active == True).first()
+            if not admin or not getattr(admin, "salon_id", None):
+                return None
+            chat = (
+                db.query(UserChat)
+                .filter(
+                    UserChat.user_id == receiver_id,
+                    UserChat.salon_id == str(admin.salon_id),
+                    UserChat.chat_type == "user_salon",
+                )
+                .first()
+            )
+            if not chat:
+                return None
+            return chat
+
+    # Other roles not supported in this minimal WS chat
     return None
 
 
@@ -319,7 +340,7 @@ async def websocket_chat(websocket: WebSocket):
 
     current_id = str(payload.get("id"))
     current_role = str(payload.get("role"))
-    if not current_id or current_role not in {"user", "employee"}:
+    if not current_id or current_role not in {"user", "employee", "admin"}:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -457,11 +478,14 @@ async def websocket_chat(websocket: WebSocket):
             message_type = parsed.get("message_type") or "text"
             file_url = parsed.get("file_url")
 
+            # Sender type normalization: admin -> salon
+            sender_type_eff = "salon" if current_role == "admin" else current_role
+
             # Persist message
             new_message = Message(
                 user_chat_id=chat.id,
                 sender_id=current_id,
-                sender_type=current_role,
+                sender_type=sender_type_eff,
                 receiver_id=receiver_id,
                 receiver_type=receiver_type,
                 message_text=message_text,
@@ -484,7 +508,7 @@ async def websocket_chat(websocket: WebSocket):
                 "message": {
                     "id": str(new_message.id),
                     "sender_id": current_id,
-                    "sender_type": current_role,
+                    "sender_type": sender_type_eff,
                     "receiver_id": receiver_id,
                     "receiver_type": receiver_type,
                     "message_text": message_text,
