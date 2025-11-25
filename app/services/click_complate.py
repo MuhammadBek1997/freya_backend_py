@@ -2,6 +2,7 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import logging
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from app.config import settings
 
@@ -123,7 +124,7 @@ def deactivate_expired_premiums(db: Session) -> int:
             db.query(UserPremium.user_id)
             .filter(UserPremium.is_active == True)
             .group_by(UserPremium.user_id)
-            .having(db.func.count(UserPremium.id) > 1)
+            .having(func.count(UserPremium.id) > 1)
             .all()
         )
 
