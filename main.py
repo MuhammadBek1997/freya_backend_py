@@ -135,7 +135,7 @@ app = FastAPI(
     servers=[
         {"url": "http://localhost:8000", "description": "Development server"},
         {
-            "url": "https://freya-salon-backend-cc373ce6622a.herokuapp.com",
+            "url": "https://api.freyapp.uz",
             "description": "Production server",
         },
     ],
@@ -150,8 +150,8 @@ origins = [
     "https://freya-admin-frontend.vercel.app",
     "https://freya-admin-frontend-git-main-muhammadbekdev.vercel.app",
     "https://freya-admin-frontend-muhammadbekdev.vercel.app",
-    "https://freya-salon-backend-cc373ce6622a.herokuapp.com",
-    "https://freya-salon-backend.herokuapp.com",
+    "https://api.freyapp.uz",
+    # "https://freya-salon-backend.herokuapp.com",
 ]
 
 app.add_middleware(
@@ -171,8 +171,9 @@ if os.getenv("NODE_ENV") == "production":
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=[
-            "freya-salon-backend-cc373ce6622a.herokuapp.com",
-            "*.herokuapp.com",
+            # "freya-salon-backend-cc373ce6622a.herokuapp.com",
+            "https://api.freyapp.uz",
+            # "*.herokuapp.com",
         ],
     )
 
