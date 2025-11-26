@@ -172,7 +172,7 @@ if os.getenv("NODE_ENV") == "production":
         TrustedHostMiddleware,
         allowed_hosts=[
             # "freya-salon-backend-cc373ce6622a.herokuapp.com",
-            "https://api.freyapp.uz",
+            "api.freyapp.uz",
             # "*.herokuapp.com",
         ],
     )
