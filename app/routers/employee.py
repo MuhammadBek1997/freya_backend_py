@@ -147,6 +147,7 @@ def add_multilingual_fields(employee):
     return employee
 
 @router.get("/", response_model=EmployeeListResponse)
+@router.get("", response_model=EmployeeListResponse)
 async def get_all_employees(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -486,6 +487,7 @@ async def get_employee_by_id(
         )
 
 @router.post("/", response_model=SuccessResponse)
+@router.post("", response_model=SuccessResponse)
 async def create_employee(
     employee_data: EmployeeCreate,
     db: Session = Depends(get_db),
