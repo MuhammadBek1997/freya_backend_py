@@ -6,6 +6,7 @@ from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import os
 from dotenv import load_dotenv
@@ -142,6 +143,12 @@ app = FastAPI(
     debug=True
 )
 
+# Disable automatic slash redirects to avoid 307 scheme changes behind proxies
+try:
+    app.router.redirect_slashes = False
+except Exception:
+    pass
+
 # CORS configuration
 origins = [
     "http://localhost:3000",
@@ -239,6 +246,14 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "freya-backend"}
+
+# Global exception handlers to ensure JSON responses
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    try:
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    except Exception:
+        return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 if __name__ == "__main__":

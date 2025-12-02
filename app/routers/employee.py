@@ -306,6 +306,7 @@ async def set_default_work_hours_bulk(
         raise HTTPException(status_code=500, detail=get_translation(language, "errors.500"))
 
 @router.get("/salon/{salon_id}", response_model=EmployeeListResponse)
+@router.get("/salon/{salon_id}/", response_model=EmployeeListResponse)
 async def get_employees_by_salon_id(
     salon_id: str,
     page: int = Query(1, ge=1),
