@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.openapi.utils import get_openapi
@@ -134,10 +136,7 @@ app = FastAPI(
     },
     servers=[
         {"url": "http://localhost:8000", "description": "Development server"},
-        {
-            "url": "https://api.freyapp.uz",
-            "description": "Production server",
-        },
+        {"url": "https://api.freyapp.uz", "description": "Production server"},
     ],
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
     debug=True
@@ -147,11 +146,12 @@ app = FastAPI(
 origins = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "https://www.freyapp.uz",
+    "https://freyapp.uz",
+    "https://api.freyapp.uz",
     "https://freya-admin-frontend.vercel.app",
     "https://freya-admin-frontend-git-main-muhammadbekdev.vercel.app",
     "https://freya-admin-frontend-muhammadbekdev.vercel.app",
-    "https://api.freyapp.uz",
-    # "https://freya-salon-backend.herokuapp.com",
 ]
 
 app.add_middleware(
@@ -166,14 +166,20 @@ app.add_middleware(
 app.add_middleware(CorsProxyMiddleware)
 app.add_middleware(LanguageMiddleware)
 
+# Respect X-Forwarded-* headers from reverse proxy and enforce HTTPS
+app.add_middleware(ProxyHeadersMiddleware)
+app.add_middleware(HTTPSRedirectMiddleware)
+
 # Add trusted host middleware for production
 if os.getenv("NODE_ENV") == "production":
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=[
-            # "freya-salon-backend-cc373ce6622a.herokuapp.com",
             "api.freyapp.uz",
-            # "*.herokuapp.com",
+            "freyapp.uz",
+            "www.freyapp.uz",
+            "localhost",
+            "127.0.0.1",
         ],
     )
 
