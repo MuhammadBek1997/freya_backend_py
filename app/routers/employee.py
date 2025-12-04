@@ -319,16 +319,16 @@ async def get_employees_by_salon_id(
     print(f"Received salon_id: {salon_id}")
     try:
         # Check if salon exists
-    salon = db.query(Salon).where(Salon.id == str(salon_id)).first()
-    if not salon:
-        raise HTTPException(
-            status_code=404,
-            detail=get_translation(language, "errors.404")
-        )
-    try:
-        print(f"Salon found: {salon.salon_name}")
-    except Exception:
-        print("Salon found but salon_name missing")
+        salon = db.query(Salon).where(Salon.id == str(salon_id)).first()
+        if not salon:
+            raise HTTPException(
+                status_code=404,
+                detail=get_translation(language, "errors.404")
+            )
+        try:
+            print(f"Salon found: {salon.salon_name}")
+        except Exception:
+            print("Salon found but salon_name missing")
         
         offset = (page - 1) * limit
         
