@@ -144,10 +144,10 @@ app = FastAPI(
 )
 
 # Disable automatic slash redirects to avoid 307 scheme changes behind proxies
-try:
-    app.router.redirect_slashes = False
-except Exception:
-    pass
+# try:
+#     app.router.redirect_slashes = False
+# except Exception:
+#     pass
 
 # CORS configuration
 origins = [
