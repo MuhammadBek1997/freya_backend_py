@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from starlette.middleware.proxy_headers import ProxyHeadersMiddleware
+# from starlette.middleware.proxy import ProxyHeadersMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -174,7 +174,7 @@ app.add_middleware(CorsProxyMiddleware)
 app.add_middleware(LanguageMiddleware)
 
 # Respect X-Forwarded-* headers from reverse proxy and enforce HTTPS
-app.add_middleware(ProxyHeadersMiddleware)
+# app.add_middleware(ProxyHeadersMiddleware)
 app.add_middleware(HTTPSRedirectMiddleware)
 
 # Add trusted host middleware for production
