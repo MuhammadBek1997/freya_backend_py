@@ -175,7 +175,7 @@ app.add_middleware(LanguageMiddleware)
 
 # Respect X-Forwarded-* headers from reverse proxy and enforce HTTPS
 # app.add_middleware(ProxyHeadersMiddleware)
-app.add_middleware(HTTPSRedirectMiddleware)
+# app.add_middleware(HTTPSRedirectMiddleware)
 
 # Add trusted host middleware for production
 if os.getenv("NODE_ENV") == "production":
