@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from app.auth.dependencies import get_current_user
 from app.i18nMini import get_translation
 from app.models.user import User
+from app.models.admin import Admin
 from app.database import get_db
 from app.models import Schedule, Salon
 from app.models.schedule import ScheduleBook as ScheduleBookModel
@@ -86,7 +87,7 @@ class ScheduleResponse(BaseModel):
 async def book_schedule(
     booking_data: ScheduleBookSchema,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Забронировать время в расписании"""
@@ -206,7 +207,7 @@ async def book_schedule(
 async def get_bookings(
     salon_id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить все бронирования для конкретного салона"""
@@ -247,7 +248,7 @@ async def get_bookings(
 async def get_booking_by_id(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить информацию о конкретном бронировании"""
@@ -283,7 +284,7 @@ async def update_booking(
     id: str,
     booking_data: ScheduleBookSchema,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить бронирование"""
@@ -414,7 +415,7 @@ async def update_booking(
 async def delete_booking(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить бронирование"""
@@ -602,7 +603,7 @@ async def get_all_schedules(
 async def create_schedule(
     schedule_data: ScheduleCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Создать новое расписание"""
@@ -675,7 +676,7 @@ async def update_schedule(
     id: str,
     update_data: ScheduleUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить расписание"""
@@ -714,7 +715,7 @@ async def update_schedule(
 async def delete_schedule(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить расписание"""
@@ -754,7 +755,7 @@ def _generate_booking_number(db: Session, day: date) -> str:
 async def get_booking_by_number(
     booking_number: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()
@@ -780,7 +781,7 @@ async def get_booking_by_number(
 async def delete_booking_by_number(
     booking_number: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()

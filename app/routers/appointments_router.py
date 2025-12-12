@@ -526,7 +526,7 @@ async def update_appointment(
     id: str,
     update_data: AppointmentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить заявку (только свою)"""
@@ -610,7 +610,7 @@ async def cancel_appointment(
 async def delete_appointment(
     id: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить заявку (только свою)"""
