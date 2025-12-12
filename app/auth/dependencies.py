@@ -35,7 +35,7 @@ async def get_current_user(
             )
         
         # Check based on role
-        if role in ['superadmin', 'admin', 'private_admin']:
+        if role in ['superadmin', 'admin', 'private_admin', 'salon_admin', 'private_salon_admin']:
             user = db.query(Admin).filter(
                 Admin.id == user_id,
                 Admin.is_active == True
@@ -102,7 +102,7 @@ async def get_current_admin(
         user_id = payload.get("id")
         role = payload.get("role")
         
-        if not user_id or role not in ['admin', 'superadmin', 'private_admin']:
+        if not user_id or role not in ['admin', 'superadmin', 'private_admin', 'salon_admin', 'private_salon_admin']:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Admin huquqi talab qilinadi"
