@@ -22,7 +22,7 @@ from app.routers.photos import router as photos_router
 from app.routers.messages import router as messages_router
 
 # from app.routers.sms import router as sms_router
-from app.routers.translation import router as translation_router
+# from app.routers.translation import router as translation_router
 from app.routers.user import router as user_router
 from app.routers.employee import router as employee_router
 from app.routers.salon import router as salon_router
@@ -200,7 +200,7 @@ app.include_router(salon_router, prefix="/api")
 app.include_router(appointment_router, prefix="/api")
 app.include_router(schedule_router, prefix="/api")
 # app.include_router(sms_router, prefix="/api")
-app.include_router(translation_router, prefix="/api")
+# app.include_router(translation_router, prefix="/api")
 app.include_router(photos_router, prefix="/api")
 app.include_router(mobile_router, prefix="/api")
 app.include_router(mobile_defaults_router, prefix="/api")
