@@ -1,7 +1,17 @@
 """
 Admin routes
 """
-from fastapi import APIRouter, Depends, HTTPException, Header, status, Query, UploadFile, File
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Header,
+    status,
+    Query,
+    UploadFile,
+    File,
+)
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, asc
 from typing import List, Optional, Union
@@ -19,7 +29,7 @@ from app.schemas.admin import (
     VerifySMSRequest,
     SMSResponse,
     SalonUpdateRequest,
-    SalonPhotoUploadResponse
+    SalonPhotoUploadResponse,
 )
 from app.auth import get_current_admin
 from app.middleware import get_language
@@ -28,6 +38,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
+
 
 @router.post("/salon/top", response_model=SalonTopResponse)
 async def set_salon_top(
@@ -40,12 +51,12 @@ async def set_salon_top(
     Salonni top qilish yoki top'dan chiqarish
     """
     try:
-        
+
         # Admin ekanligini tekshirish
-        if current_admin.role not in ['admin', 'superadmin']:
+        if current_admin.role not in ["admin", "superadmin"]:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=get_translation(language, "errors.403")
+                detail=get_translation(language, "errors.403"),
             )
 
         # Salon mavjudligini tekshirish
@@ -53,7 +64,7 @@ async def set_salon_top(
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_translation(language, "errors.404")
+                detail=get_translation(language, "errors.404"),
             )
 
         if request.isTop:
@@ -62,13 +73,17 @@ async def set_salon_top(
 
             # Salon is_top ni true qilish
             salon.is_top = True
-            
+
             # Avvalgi active top historyni tugatish
-            active_histories = db.query(SalonTopHistory).filter(
-                SalonTopHistory.salon_id == request.salonId,
-                SalonTopHistory.is_active == True
-            ).all()
-            
+            active_histories = (
+                db.query(SalonTopHistory)
+                .filter(
+                    SalonTopHistory.salon_id == request.salonId,
+                    SalonTopHistory.is_active == True,
+                )
+                .all()
+            )
+
             for history in active_histories:
                 history.is_active = False
                 history.end_date = datetime.now()
@@ -80,7 +95,7 @@ async def set_salon_top(
                 start_date=datetime.now(),
                 action="top",
                 end_date=end_date,
-                is_active=True
+                is_active=True,
             )
             db.add(new_history)
 
@@ -88,25 +103,31 @@ async def set_salon_top(
 
             return SalonTopResponse(
                 success=True,
-                message=get_translation(language, "admin.makeTop").format(name=salon.salon_name, duration=request.duration),
+                message=get_translation(language, "admin.makeTop").format(
+                    name=salon.salon_name, duration=request.duration
+                ),
                 data={
                     "salon_id": request.salonId,
                     "salon_name": salon.salon_name,
                     "is_top": True,
                     "duration": request.duration,
-                    "end_date": end_date.isoformat()
-                }
+                    "end_date": end_date.isoformat(),
+                },
             )
         else:
             # Salon top'dan chiqarish
             salon.is_top = False
-            
+
             # Active top historyni tugatish
-            active_histories = db.query(SalonTopHistory).filter(
-                SalonTopHistory.salon_id == request.salonId,
-                SalonTopHistory.is_active == True
-            ).all()
-            
+            active_histories = (
+                db.query(SalonTopHistory)
+                .filter(
+                    SalonTopHistory.salon_id == request.salonId,
+                    SalonTopHistory.is_active == True,
+                )
+                .all()
+            )
+
             for history in active_histories:
                 history.is_active = False
                 history.end_date = datetime.now()
@@ -116,7 +137,7 @@ async def set_salon_top(
                 salon_id=request.salonId,
                 admin_id=current_admin.id,
                 action="untop",
-                is_active=False
+                is_active=False,
             )
             db.add(new_history)
 
@@ -124,12 +145,14 @@ async def set_salon_top(
 
             return SalonTopResponse(
                 success=True,
-                message=get_translation(language, "admin.removeTop").format(name=salon.salon_name),
+                message=get_translation(language, "admin.removeTop").format(
+                    name=salon.salon_name
+                ),
                 data={
                     "salon_id": request.salonId,
                     "salon_name": salon.salon_name,
-                    "is_top": False
-                }
+                    "is_top": False,
+                },
             )
 
     except HTTPException:
@@ -139,7 +162,7 @@ async def set_salon_top(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
@@ -153,10 +176,12 @@ async def get_top_salons(
     Top salonlar ro'yxatini olish
     """
     try:
-        salons = db.query(Salon).filter(
-            Salon.is_top == True,
-            Salon.is_active == True
-        ).order_by(desc(Salon.updated_at)).all()
+        salons = (
+            db.query(Salon)
+            .filter(Salon.is_top == True, Salon.is_active == True)
+            .order_by(desc(Salon.updated_at))
+            .all()
+        )
 
         return [
             SalonListResponse(
@@ -169,7 +194,7 @@ async def get_top_salons(
                 is_top=salon.is_top,
                 rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
                 created_at=salon.created_at.isoformat(),
-                updated_at=salon.updated_at.isoformat()
+                updated_at=salon.updated_at.isoformat(),
             )
             for salon in salons
         ]
@@ -178,11 +203,13 @@ async def get_top_salons(
         logger.error(f"Top salonlar olish xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
-@router.get("/salon/{salon_id}/top-history", response_model=List[SalonTopHistoryResponse])
+@router.get(
+    "/salon/{salon_id}/top-history", response_model=List[SalonTopHistoryResponse]
+)
 async def get_salon_top_history(
     salon_id: str,
     db: Session = Depends(get_db),
@@ -193,9 +220,12 @@ async def get_salon_top_history(
     Salon top tarixini olish
     """
     try:
-        histories = db.query(SalonTopHistory).filter(
-            SalonTopHistory.salon_id == salon_id
-        ).order_by(desc(SalonTopHistory.created_at)).all()
+        histories = (
+            db.query(SalonTopHistory)
+            .filter(SalonTopHistory.salon_id == salon_id)
+            .order_by(desc(SalonTopHistory.created_at))
+            .all()
+        )
 
         return [
             SalonTopHistoryResponse(
@@ -206,7 +236,7 @@ async def get_salon_top_history(
                 start_date=history.start_date.isoformat(),
                 end_date=history.end_date.isoformat() if history.end_date else None,
                 is_active=history.is_active,
-                created_at=history.created_at.isoformat()
+                created_at=history.created_at.isoformat(),
             )
             for history in histories
         ]
@@ -215,7 +245,7 @@ async def get_salon_top_history(
         logger.error(f"Salon top tarixi olish xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
@@ -239,19 +269,21 @@ async def get_all_salons(
         # Filtrlar
         if search:
             query = query.filter(
-                Salon.salon_name.ilike(f"%{search}%") |
-                Salon.address_uz.ilike(f"%{search}%")
+                Salon.salon_name.ilike(f"%{search}%")
+                | Salon.address_uz.ilike(f"%{search}%")
             )
-        
+
         if is_top is not None:
             query = query.filter(Salon.is_top == is_top)
-            
+
         if is_active is not None:
             query = query.filter(Salon.is_active == is_active)
 
         # Pagination
         offset = (page - 1) * limit
-        salons = query.order_by(desc(Salon.created_at)).offset(offset).limit(limit).all()
+        salons = (
+            query.order_by(desc(Salon.created_at)).offset(offset).limit(limit).all()
+        )
 
         return [
             SalonListResponse(
@@ -264,7 +296,7 @@ async def get_all_salons(
                 is_top=salon.is_top,
                 rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
                 created_at=salon.created_at.isoformat(),
-                updated_at=salon.updated_at.isoformat()
+                updated_at=salon.updated_at.isoformat(),
             )
             for salon in salons
         ]
@@ -273,11 +305,8 @@ async def get_all_salons(
         logger.error(f"Salonlar ro'yxati olish xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
-
-
-
 
 
 @router.get("/my-salon", response_model=SalonDetailResponse)
@@ -290,31 +319,33 @@ async def get_my_salon(
     Admin'ning o'z salonini olish
     """
     try:
-        
+
         if not current_admin.salon_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_translation(language, "errors.404")
+                detail=get_translation(language, "errors.404"),
             )
 
         salon = db.query(Salon).filter(Salon.id == current_admin.salon_id).first()
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=get_translation(language, "errors.404")
+                detail=get_translation(language, "errors.404"),
             )
 
         # Salon xodimlarini olish
-        employees = db.query(Employee).filter(
-            Employee.salon_id == salon.id,
-            Employee.is_active == True
-        ).all()
+        employees = (
+            db.query(Employee)
+            .filter(Employee.salon_id == salon.id, Employee.is_active == True)
+            .all()
+        )
 
         # Salon xizmatlarini olish
-        services = db.query(Service).filter(
-            Service.salon_id == salon.id,
-            Service.is_active == True
-        ).all()
+        services = (
+            db.query(Service)
+            .filter(Service.salon_id == salon.id, Service.is_active == True)
+            .all()
+        )
 
         return SalonDetailResponse(
             id=str(salon.id),
@@ -325,7 +356,12 @@ async def get_my_salon(
             logo=salon.logo or "",
             salon_types=salon.salon_types or [],
             salon_comfort=salon.salon_comfort or [],
-            description=(salon.description_uz or salon.description_ru or salon.description_en or ""),
+            description=(
+                salon.description_uz
+                or salon.description_ru
+                or salon.description_en
+                or ""
+            ),
             is_active=salon.is_active,
             is_top=salon.is_top,
             rating=float(salon.salon_rating) if salon.salon_rating else 0.0,
@@ -335,7 +371,7 @@ async def get_my_salon(
                     "id": str(service.id),
                     "name": service.name,
                     "price": float(service.price),
-                    "duration": service.duration
+                    "duration": service.duration,
                 }
                 for service in services
             ],
@@ -344,12 +380,12 @@ async def get_my_salon(
                     "id": str(employee.id),
                     "full_name": f"{employee.name} {employee.surname or ''}".strip(),
                     "phone": employee.phone,
-                    "role": employee.role
+                    "role": employee.role,
                 }
                 for employee in employees
             ],
             created_at=salon.created_at.isoformat(),
-            updated_at=salon.updated_at.isoformat()
+            updated_at=salon.updated_at.isoformat(),
         )
 
     except HTTPException:
@@ -358,7 +394,7 @@ async def get_my_salon(
         logger.error(f"Salon ma'lumotlari olish xatosi: {error}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
@@ -374,11 +410,12 @@ async def upload_admin_avatar(
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_translation(language, "errors.400")
+                detail=get_translation(language, "errors.400"),
             )
 
         # uploads/admin_avatars ichiga saqlaymiz
         import os, uuid
+
         base_dir = os.getcwd()
         upload_dir = os.path.join(base_dir, "uploads", "admin_avatars")
         os.makedirs(upload_dir, exist_ok=True)
@@ -408,7 +445,7 @@ async def upload_admin_avatar(
                 "success": True,
                 "message": get_translation(language, "success"),
                 "avatar_url": avatar_url,
-                "note": "Admin jadvalida avatar_url ustuni mavjud bo‘lmasa, migratsiya kerak"
+                "note": "Admin jadvalida avatar_url ustuni mavjud bo‘lmasa, migratsiya kerak",
             }
 
         return {
@@ -423,7 +460,7 @@ async def upload_admin_avatar(
         logger.error(f"Admin avatar yuklash xatosi: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
@@ -440,23 +477,34 @@ async def upload_employee_avatar_by_admin(
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_translation(language, "errors.400")
+                detail=get_translation(language, "errors.400"),
             )
 
-        employee = db.query(Employee).filter(
-            Employee.id == employee_id,
-            Employee.is_active == True,
-            Employee.deleted_at.is_(None)
-        ).first()
+        employee = (
+            db.query(Employee)
+            .filter(
+                Employee.id == employee_id,
+                Employee.is_active == True,
+                Employee.deleted_at.is_(None),
+            )
+            .first()
+        )
 
         if not employee:
-            raise HTTPException(status_code=404, detail=get_translation(language, "errors.404"))
+            raise HTTPException(
+                status_code=404, detail=get_translation(language, "errors.404")
+            )
 
         # Admin faqat o‘z salonidagi xodim uchun ruxsat
-        if not current_admin.salon_id or str(employee.salon_id) != str(current_admin.salon_id):
-            raise HTTPException(status_code=403, detail=get_translation(language, "errors.403"))
+        if not current_admin.salon_id or str(employee.salon_id) != str(
+            current_admin.salon_id
+        ):
+            raise HTTPException(
+                status_code=403, detail=get_translation(language, "errors.403")
+            )
 
         import os, uuid
+
         base_dir = os.getcwd()
         upload_dir = os.path.join(base_dir, "uploads", "employee_avatars")
         os.makedirs(upload_dir, exist_ok=True)
@@ -479,10 +527,7 @@ async def upload_employee_avatar_by_admin(
         return {
             "success": True,
             "message": get_translation(language, "success"),
-            "data": {
-                "employee_id": str(employee.id),
-                "avatar_url": avatar_url
-            }
+            "data": {"employee_id": str(employee.id), "avatar_url": avatar_url},
         }
     except HTTPException:
         raise
@@ -491,7 +536,7 @@ async def upload_employee_avatar_by_admin(
         logger.error(f"Employee avatar yuklash xatosi: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=get_translation(language, "errors.500")
+            detail=get_translation(language, "errors.500"),
         )
 
 
@@ -506,12 +551,12 @@ async def upload_employee_avatar_by_admin(
 #     SMS yuborish (admin uchun)
 #     """
 #     try:
-#      
-        
+#
+
 #         # TODO: SMS service integration
 #         # sms_service = SMSService()
 #         # result = await sms_service.send_sms(request.phone, request.message)
-        
+
 #         # Hozircha mock response
 #         return SMSResponse(
 #             success=True,
@@ -525,7 +570,7 @@ async def upload_employee_avatar_by_admin(
 
 #     except Exception as error:
 #         logger.error(f"SMS yuborish xatosi: {error}")
-#      
+#
 #         raise HTTPException(
 #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             detail=t("SMS yuborishda xatolik yuz berdi")
@@ -543,15 +588,15 @@ async def upload_employee_avatar_by_admin(
 #     SMS kodni tasdiqlash (admin uchun)
 #     """
 #     try:
-#      
-        
+#
+
 #         # TODO: SMS verification logic
 #         # sms_service = SMSService()
 #         # is_valid = await sms_service.verify_code(request.phone, request.code)
-        
+
 #         # Hozircha mock verification
 #         is_valid = request.code == "123456"  # Mock code
-        
+
 #         if is_valid:
 #             return SMSResponse(
 #                 success=True,
@@ -572,7 +617,7 @@ async def upload_employee_avatar_by_admin(
 #         raise
 #     except Exception as error:
 #         logger.error(f"SMS tasdiqlash xatosi: {error}")
-#      
+#
 #         raise HTTPException(
 #             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #             detail=t("SMS tasdiqlashda xatolik yuz berdi")

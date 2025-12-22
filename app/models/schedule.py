@@ -19,6 +19,9 @@ class Schedule(BaseModel):
     full_pay = Column(DECIMAL(10,2))
     deposit = Column(DECIMAL(10,2))
     is_active = Column(Boolean, default=True)
+
+    whole_day = Column(Boolean, default=False)  # Yangi maydon: butun kunlik ish
+    service_duration = Column(Integer, default=60)  # Yangi maydon: xizmat davomiyligi (daqiqa)
     
     # Relationships
     salon = relationship("Salon", back_populates="schedules")

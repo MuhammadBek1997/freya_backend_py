@@ -36,6 +36,10 @@ class ScheduleCreate(BaseModel):
     deposit: Optional[float] = None
     is_active: bool = True
 
+    whole_day: Optional[bool] = False
+    service_duration: Optional[int] = 0
+
+
 class ScheduleBookSchema(BaseModel):
     salon_id: str
     full_name: str
@@ -43,6 +47,7 @@ class ScheduleBookSchema(BaseModel):
     time: datetime
     employee_id: Optional[str] = None
     booking_number: Optional[str] = None
+
 
 class ScheduleUpdate(BaseModel):
     salon_id: Optional[str] = None
@@ -58,6 +63,10 @@ class ScheduleUpdate(BaseModel):
     full_pay: Optional[float] = None
     deposit: Optional[float] = None
     is_active: Optional[bool] = None
+
+    whole_day: Optional[bool] = False
+    service_duration: Optional[int] = 0
+
 
 class ScheduleResponse(BaseModel):
     id: str
@@ -83,6 +92,7 @@ class ScheduleResponse(BaseModel):
 
 # ===== BOOKING ENDPOINTS (ANIQ ROUTE'LAR BIRINCHI) =====
 
+
 @router.post("/book", status_code=status.HTTP_201_CREATED)
 async def book_schedule(
     booking_data: ScheduleBookSchema,
@@ -91,14 +101,14 @@ async def book_schedule(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Забронировать время в расписании"""
-    
+
     salon = db.query(Salon).filter(Salon.id == booking_data.salon_id).first()
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     dt = booking_data.time
     date_part = dt.date()
     time_part = dt.time()
@@ -116,17 +126,20 @@ async def book_schedule(
                     if not (ws < we and ws <= time_part and end_dt.time() <= we):
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=get_translation(language, "errors.400")
+                            detail=get_translation(language, "errors.400"),
                         )
             except Exception:
                 # If parsing fails, treat as invalid window
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_translation(language, "errors.400")
+                    detail=get_translation(language, "errors.400"),
                 )
         # Validate employee belongs to salon
         if not emp:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=get_translation(language, "errors.404"),
+            )
 
         # Check appointments overlap
         apps = (
@@ -143,22 +156,39 @@ async def book_schedule(
         )
         for a in apps:
             s_dt = datetime.combine(date_part, a.application_time)
-            e_dt = datetime.combine(date_part, a.end_time) if getattr(a, "end_time", None) else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            e_dt = (
+                datetime.combine(date_part, a.end_time)
+                if getattr(a, "end_time", None)
+                else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            )
             if (datetime.combine(date_part, time_part) < e_dt) and (end_dt > s_dt):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=get_translation(language, "errors.409"),
+                )
 
         # Check existing busy slots overlap
         bs_rows = (
             db.query(BusySlot)
-            .filter(and_(BusySlot.employee_id == booking_data.employee_id, BusySlot.date == date_part))
+            .filter(
+                and_(
+                    BusySlot.employee_id == booking_data.employee_id,
+                    BusySlot.date == date_part,
+                )
+            )
             .all()
         )
         for bs in bs_rows:
             bs_s = datetime.combine(date_part, bs.start_time)
             bs_e = datetime.combine(date_part, bs.end_time)
             if (datetime.combine(date_part, time_part) < bs_e) and (end_dt > bs_s):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
-    booking_number = booking_data.booking_number or _generate_booking_number(db, date_part)
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=get_translation(language, "errors.409"),
+                )
+    booking_number = booking_data.booking_number or _generate_booking_number(
+        db, date_part
+    )
 
     new_booking = ScheduleBookModel(
         salon_id=booking_data.salon_id,
@@ -168,9 +198,9 @@ async def book_schedule(
         start_time=time_part,
         end_time=end_dt.time(),
         employee_id=booking_data.employee_id,
-        booking_number=booking_number
+        booking_number=booking_number,
     )
-    
+
     db.add(new_booking)
     # Create busy slot to block future bookings/appointments for this interval
     if booking_data.employee_id:
@@ -179,12 +209,12 @@ async def book_schedule(
             date=date_part,
             start_time=time_part,
             end_time=end_dt.time(),
-            reason="booking"
+            reason="booking",
         )
         db.add(bs)
     db.commit()
     db.refresh(new_booking)
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -194,12 +224,24 @@ async def book_schedule(
             "full_name": new_booking.full_name,
             "phone": new_booking.phone,
             "time": new_booking.time.isoformat(),
-            "start_time": new_booking.start_time.strftime("%H:%M") if getattr(new_booking, "start_time", None) else None,
-            "end_time": new_booking.end_time.strftime("%H:%M") if getattr(new_booking, "end_time", None) else None,
-            "employee_id": str(new_booking.employee_id) if new_booking.employee_id else None,
+            "start_time": (
+                new_booking.start_time.strftime("%H:%M")
+                if getattr(new_booking, "start_time", None)
+                else None
+            ),
+            "end_time": (
+                new_booking.end_time.strftime("%H:%M")
+                if getattr(new_booking, "end_time", None)
+                else None
+            ),
+            "employee_id": (
+                str(new_booking.employee_id) if new_booking.employee_id else None
+            ),
             "booking_number": new_booking.booking_number,
-            "created_at": new_booking.created_at.isoformat() if new_booking.created_at else None
-        }
+            "created_at": (
+                new_booking.created_at.isoformat() if new_booking.created_at else None
+            ),
+        },
     }
 
 
@@ -211,18 +253,18 @@ async def get_bookings(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить все бронирования для конкретного салона"""
-    
+
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
-    bookings = db.query(ScheduleBookModel).filter(
-        ScheduleBookModel.salon_id == salon_id
-    ).all()
-    
+
+    bookings = (
+        db.query(ScheduleBookModel).filter(ScheduleBookModel.salon_id == salon_id).all()
+    )
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -233,14 +275,22 @@ async def get_bookings(
                 "full_name": b.full_name,
                 "phone": b.phone,
                 "time": b.time.isoformat(),
-                "start_time": b.start_time.strftime("%H:%M") if getattr(b, "start_time", None) else None,
-                "end_time": b.end_time.strftime("%H:%M") if getattr(b, "end_time", None) else None,
+                "start_time": (
+                    b.start_time.strftime("%H:%M")
+                    if getattr(b, "start_time", None)
+                    else None
+                ),
+                "end_time": (
+                    b.end_time.strftime("%H:%M")
+                    if getattr(b, "end_time", None)
+                    else None
+                ),
                 "employee_id": str(b.employee_id) if b.employee_id else None,
                 "booking_number": getattr(b, "booking_number", None),
-                "created_at": b.created_at.isoformat() if b.created_at else None
+                "created_at": b.created_at.isoformat() if b.created_at else None,
             }
             for b in bookings
-        ]
+        ],
     }
 
 
@@ -252,15 +302,15 @@ async def get_booking_by_id(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить информацию о конкретном бронировании"""
-    
+
     booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
-    
+
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -270,12 +320,22 @@ async def get_booking_by_id(
             "full_name": booking.full_name,
             "phone": booking.phone,
             "time": booking.time.isoformat(),
-            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
-            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
+            "start_time": (
+                booking.start_time.strftime("%H:%M")
+                if getattr(booking, "start_time", None)
+                else None
+            ),
+            "end_time": (
+                booking.end_time.strftime("%H:%M")
+                if getattr(booking, "end_time", None)
+                else None
+            ),
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
             "booking_number": getattr(booking, "booking_number", None),
-            "created_at": booking.created_at.isoformat() if booking.created_at else None
-        }
+            "created_at": (
+                booking.created_at.isoformat() if booking.created_at else None
+            ),
+        },
     }
 
 
@@ -288,15 +348,15 @@ async def update_booking(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить бронирование"""
-    
+
     booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
-    
+
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     dt = booking_data.time
     date_part = dt.date()
     time_part = dt.time()
@@ -317,12 +377,12 @@ async def update_booking(
                     if not (ws < we and ws <= time_part and end_dt.time() <= we):
                         raise HTTPException(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=get_translation(language, "errors.400")
+                            detail=get_translation(language, "errors.400"),
                         )
             except Exception:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=get_translation(language, "errors.400")
+                    detail=get_translation(language, "errors.400"),
                 )
         apps = (
             db.query(Appointment)
@@ -338,13 +398,25 @@ async def update_booking(
         )
         for a in apps:
             s_dt = datetime.combine(date_part, a.application_time)
-            e_dt = datetime.combine(date_part, a.end_time) if getattr(a, "end_time", None) else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            e_dt = (
+                datetime.combine(date_part, a.end_time)
+                if getattr(a, "end_time", None)
+                else s_dt + timedelta(minutes=(a.duration_minutes or 30))
+            )
             if (datetime.combine(date_part, time_part) < e_dt) and (end_dt > s_dt):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=get_translation(language, "errors.409"),
+                )
 
         bs_rows = (
             db.query(BusySlot)
-            .filter(and_(BusySlot.employee_id == booking_data.employee_id, BusySlot.date == date_part))
+            .filter(
+                and_(
+                    BusySlot.employee_id == booking_data.employee_id,
+                    BusySlot.date == date_part,
+                )
+            )
             .all()
         )
         for bs in bs_rows:
@@ -352,8 +424,15 @@ async def update_booking(
             bs_e = datetime.combine(date_part, bs.end_time)
             if (datetime.combine(date_part, time_part) < bs_e) and (end_dt > bs_s):
                 # allow updating the same slot if it exactly matches previous
-                if not (booking_full_prev_date == bs.date and booking_full_prev_start == bs.start_time and booking_full_prev_end == bs.end_time):
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=get_translation(language, "errors.409"))
+                if not (
+                    booking_full_prev_date == bs.date
+                    and booking_full_prev_start == bs.start_time
+                    and booking_full_prev_end == bs.end_time
+                ):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=get_translation(language, "errors.409"),
+                    )
 
     booking.full_name = booking_data.full_name
     booking.phone = booking_data.phone
@@ -361,15 +440,21 @@ async def update_booking(
     booking.start_time = time_part
     booking.end_time = end_dt.time()
     booking.employee_id = booking_data.employee_id
-    
+
     # Update related busy slot: find previous and update or create new
     if booking.employee_id:
-        prev_slot = db.query(BusySlot).filter(and_(
-            BusySlot.employee_id == booking.employee_id,
-            BusySlot.date == booking_full_prev_date,
-            BusySlot.start_time == booking_full_prev_start,
-            BusySlot.end_time == booking_full_prev_end,
-        )).first()
+        prev_slot = (
+            db.query(BusySlot)
+            .filter(
+                and_(
+                    BusySlot.employee_id == booking.employee_id,
+                    BusySlot.date == booking_full_prev_date,
+                    BusySlot.start_time == booking_full_prev_start,
+                    BusySlot.end_time == booking_full_prev_end,
+                )
+            )
+            .first()
+        )
         if prev_slot:
             prev_slot.date = date_part
             prev_slot.start_time = time_part
@@ -381,7 +466,7 @@ async def update_booking(
                 date=date_part,
                 start_time=time_part,
                 end_time=end_dt.time(),
-                reason="booking"
+                reason="booking",
             )
             db.add(bs)
 
@@ -392,7 +477,7 @@ async def update_booking(
             pass
     db.commit()
     db.refresh(booking)
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -402,12 +487,22 @@ async def update_booking(
             "full_name": booking.full_name,
             "phone": booking.phone,
             "time": booking.time.isoformat(),
-            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
-            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
+            "start_time": (
+                booking.start_time.strftime("%H:%M")
+                if getattr(booking, "start_time", None)
+                else None
+            ),
+            "end_time": (
+                booking.end_time.strftime("%H:%M")
+                if getattr(booking, "end_time", None)
+                else None
+            ),
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
             "booking_number": getattr(booking, "booking_number", None),
-            "created_at": booking.created_at.isoformat() if booking.created_at else None
-        }
+            "created_at": (
+                booking.created_at.isoformat() if booking.created_at else None
+            ),
+        },
     }
 
 
@@ -419,24 +514,30 @@ async def delete_booking(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить бронирование"""
-    
+
     booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.id == id).first()
-    
+
     if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     # Delete related busy slot
     try:
         if booking.employee_id and booking.start_time and booking.end_time:
-            bs = db.query(BusySlot).filter(and_(
-                BusySlot.employee_id == booking.employee_id,
-                BusySlot.date == booking.time,
-                BusySlot.start_time == booking.start_time,
-                BusySlot.end_time == booking.end_time,
-            )).first()
+            bs = (
+                db.query(BusySlot)
+                .filter(
+                    and_(
+                        BusySlot.employee_id == booking.employee_id,
+                        BusySlot.date == booking.time,
+                        BusySlot.start_time == booking.start_time,
+                        BusySlot.end_time == booking.end_time,
+                    )
+                )
+                .first()
+            )
             if bs:
                 db.delete(bs)
     except Exception:
@@ -444,14 +545,12 @@ async def delete_booking(
 
     db.delete(booking)
     db.commit()
-    
-    return {
-        "success": True,
-        "message": get_translation(language, "success")
-    }
+
+    return {"success": True, "message": get_translation(language, "success")}
 
 
 # ===== GROUPED/SPECIAL ENDPOINTS =====
+
 
 @router.get("/grouped/by-date")
 async def get_schedules_grouped_by_date(
@@ -459,15 +558,17 @@ async def get_schedules_grouped_by_date(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить расписания, сгруппированные по дням недели"""
-    
+
     schedules = db.query(Schedule).order_by(Schedule.date, Schedule.created_at).all()
-    
+
     weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
     grouped_by_date: Dict[str, List[Dict[str, Any]]] = {}
-    
+
     for schedule in schedules:
-        day_of_week = weekdays[schedule.date.weekday() + 1 if schedule.date.weekday() < 6 else 0]
-        
+        day_of_week = weekdays[
+            schedule.date.weekday() + 1 if schedule.date.weekday() < 6 else 0
+        ]
+
         schedule_item = {
             "id": schedule.id,
             "salon_id": schedule.salon_id,
@@ -482,27 +583,35 @@ async def get_schedules_grouped_by_date(
             "deposit": schedule.deposit,
             "is_active": schedule.is_active,
             "dayOfWeek": day_of_week,
-            "start_time": (schedule.start_time.strftime("%H:%M") if getattr(schedule, "start_time", None) else "09:00"),
-            "end_time": (schedule.end_time.strftime("%H:%M") if getattr(schedule, "end_time", None) else "18:00"),
+            "start_time": (
+                schedule.start_time.strftime("%H:%M")
+                if getattr(schedule, "start_time", None)
+                else "09:00"
+            ),
+            "end_time": (
+                schedule.end_time.strftime("%H:%M")
+                if getattr(schedule, "end_time", None)
+                else "18:00"
+            ),
             "created_at": str(schedule.created_at) if schedule.created_at else None,
-            "updated_at": str(schedule.updated_at) if schedule.updated_at else None
+            "updated_at": str(schedule.updated_at) if schedule.updated_at else None,
         }
-        
+
         if day_of_week not in grouped_by_date:
             grouped_by_date[day_of_week] = []
         grouped_by_date[day_of_week].append(schedule_item)
-    
+
     ordered_weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     day_list_items = [
         grouped_by_date[day]
         for day in ordered_weekdays
         if day in grouped_by_date and len(grouped_by_date[day]) > 0
     ]
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": day_list_items
+        "data": day_list_items,
     }
 
 
@@ -517,48 +626,53 @@ async def get_schedules_by_salon(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить расписания конкретного салона"""
-    
+
     salon = db.query(Salon).filter(Salon.id == salon_id).first()
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     offset = (page - 1) * limit
-    
+
     query = db.query(Schedule).filter(Schedule.salon_id == salon_id)
-    count_query = db.query(func.count(Schedule.id)).filter(Schedule.salon_id == salon_id)
-    
+    count_query = db.query(func.count(Schedule.id)).filter(
+        Schedule.salon_id == salon_id
+    )
+
     if date_filter:
         query = query.filter(Schedule.date == date_filter)
         count_query = count_query.filter(Schedule.date == date_filter)
-    
+
     if is_active is not None:
         query = query.filter(Schedule.is_active == is_active)
         count_query = count_query.filter(Schedule.is_active == is_active)
-    
+
     total = count_query.scalar()
-    schedules = query.order_by(Schedule.date.desc(), Schedule.created_at.desc()).offset(offset).limit(limit).all()
-    
+    schedules = (
+        query.order_by(Schedule.date.desc(), Schedule.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
         "data": schedules,
-        "salon": {
-            "id": salon.id,
-            "salon_name": salon.salon_name
-        },
+        "salon": {"id": salon.id, "salon_name": salon.salon_name},
         "pagination": {
             "page": page,
             "limit": limit,
             "total": total,
-            "pages": (total + limit - 1) // limit
-        }
+            "pages": (total + limit - 1) // limit,
+        },
     }
 
 
 # ===== GENERAL SCHEDULE ENDPOINTS (UMUMIY ROUTE'LAR OXIRIDA) =====
+
 
 @router.get("/")
 async def get_all_schedules(
@@ -569,23 +683,24 @@ async def get_all_schedules(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить список всех расписаний с пагинацией и поиском"""
-    
+
     offset = (page - 1) * limit
-    
+
     query = db.query(Schedule)
     count_query = db.query(func.count(Schedule.id))
-    
+
     if search:
         search_filter = or_(
-            Schedule.name.ilike(f"%{search}%"),
-            Schedule.title.ilike(f"%{search}%")
+            Schedule.name.ilike(f"%{search}%"), Schedule.title.ilike(f"%{search}%")
         )
         query = query.filter(search_filter)
         count_query = count_query.filter(search_filter)
-    
+
     total = count_query.scalar()
-    schedules = query.order_by(Schedule.created_at.desc()).offset(offset).limit(limit).all()
-    
+    schedules = (
+        query.order_by(Schedule.created_at.desc()).offset(offset).limit(limit).all()
+    )
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -594,8 +709,8 @@ async def get_all_schedules(
             "page": page,
             "limit": limit,
             "total": total,
-            "pages": (total + limit - 1) // limit
-        }
+            "pages": (total + limit - 1) // limit,
+        },
     }
 
 
@@ -607,18 +722,18 @@ async def create_schedule(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Создать новое расписание"""
-    
+
     salon = db.query(Salon).filter(Salon.id == schedule_data.salon_id).first()
     if not salon:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     if schedule_data.start_time >= schedule_data.end_time:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Start time must be earlier than end time"
+            detail="Start time must be earlier than end time",
         )
 
     new_schedule = Schedule(
@@ -634,17 +749,20 @@ async def create_schedule(
         price=schedule_data.price,
         full_pay=schedule_data.full_pay,
         deposit=schedule_data.deposit,
-        is_active=schedule_data.is_active
+        is_active=schedule_data.is_active,
+
+        whole_day=schedule_data.whole_day,
+        service_duration=schedule_data.service_duration,
     )
-    
+
     db.add(new_schedule)
     db.commit()
     db.refresh(new_schedule)
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": new_schedule
+        "data": new_schedule,
     }
 
 
@@ -655,19 +773,19 @@ async def get_schedule_by_id(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Получить информацию о конкретном расписании"""
-    
+
     schedule = db.query(Schedule).filter(Schedule.id == id).first()
-    
+
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": schedule
+        "data": schedule,
     }
 
 
@@ -680,34 +798,34 @@ async def update_schedule(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Обновить расписание"""
-    
+
     schedule = db.query(Schedule).filter(Schedule.id == id).first()
-    
+
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     if update_data.start_time is not None and update_data.end_time is not None:
         if update_data.start_time >= update_data.end_time:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Start time must be earlier than end time"
+                detail="Start time must be earlier than end time",
             )
 
     update_dict = update_data.model_dump(exclude_unset=True)
-    
+
     for key, value in update_dict.items():
         setattr(schedule, key, value)
-    
+
     db.commit()
     db.refresh(schedule)
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": schedule
+        "data": schedule,
     }
 
 
@@ -719,38 +837,47 @@ async def delete_schedule(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Удалить расписание"""
-    
+
     schedule = db.query(Schedule).filter(Schedule.id == id).first()
-    
+
     if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=get_translation(language, "errors.404")
+            detail=get_translation(language, "errors.404"),
         )
-    
+
     schedule_data = {
         "id": schedule.id,
         "name": schedule.name,
-        "salon_id": schedule.salon_id
+        "salon_id": schedule.salon_id,
     }
-    
+
     db.delete(schedule)
     db.commit()
-    
+
     return {
         "success": True,
         "message": get_translation(language, "success"),
-        "data": schedule_data
+        "data": schedule_data,
     }
+
+
 def _generate_booking_number(db: Session, day: date) -> str:
     import secrets
+
     base = f"BOOK-{day.strftime('%Y%m%d')}"
     while True:
         suffix = secrets.token_hex(4).upper()
         number = f"{base}-{suffix}"
-        exists = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == number).first()
+        exists = (
+            db.query(ScheduleBookModel)
+            .filter(ScheduleBookModel.booking_number == number)
+            .first()
+        )
         if not exists:
             return number
+
+
 @router.get("/book/number/{booking_number}")
 async def get_booking_by_number(
     booking_number: str,
@@ -758,9 +885,16 @@ async def get_booking_by_number(
     current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()
+    booking = (
+        db.query(ScheduleBookModel)
+        .filter(ScheduleBookModel.booking_number == booking_number)
+        .first()
+    )
     if not booking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
     return {
         "success": True,
         "message": get_translation(language, "success"),
@@ -770,12 +904,21 @@ async def get_booking_by_number(
             "full_name": booking.full_name,
             "phone": booking.phone,
             "time": booking.time.isoformat(),
-            "start_time": booking.start_time.strftime("%H:%M") if getattr(booking, "start_time", None) else None,
-            "end_time": booking.end_time.strftime("%H:%M") if getattr(booking, "end_time", None) else None,
+            "start_time": (
+                booking.start_time.strftime("%H:%M")
+                if getattr(booking, "start_time", None)
+                else None
+            ),
+            "end_time": (
+                booking.end_time.strftime("%H:%M")
+                if getattr(booking, "end_time", None)
+                else None
+            ),
             "employee_id": str(booking.employee_id) if booking.employee_id else None,
             "booking_number": booking.booking_number,
-        }
+        },
     }
+
 
 @router.delete("/book/number/{booking_number}")
 async def delete_booking_by_number(
@@ -784,17 +927,30 @@ async def delete_booking_by_number(
     current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    booking = db.query(ScheduleBookModel).filter(ScheduleBookModel.booking_number == booking_number).first()
+    booking = (
+        db.query(ScheduleBookModel)
+        .filter(ScheduleBookModel.booking_number == booking_number)
+        .first()
+    )
     if not booking:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=get_translation(language, "errors.404"),
+        )
     try:
         if booking.employee_id and booking.start_time and booking.end_time:
-            bs = db.query(BusySlot).filter(and_(
-                BusySlot.employee_id == booking.employee_id,
-                BusySlot.date == booking.time,
-                BusySlot.start_time == booking.start_time,
-                BusySlot.end_time == booking.end_time,
-            )).first()
+            bs = (
+                db.query(BusySlot)
+                .filter(
+                    and_(
+                        BusySlot.employee_id == booking.employee_id,
+                        BusySlot.date == booking.time,
+                        BusySlot.start_time == booking.start_time,
+                        BusySlot.end_time == booking.end_time,
+                    )
+                )
+                .first()
+            )
             if bs:
                 db.delete(bs)
     except Exception:

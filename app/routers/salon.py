@@ -11,7 +11,7 @@ import uuid
 
 from app.database import get_db
 from app.i18nMini import get_translation
-from app.models.salon import Salon, SalonRatings
+from app.models.salon import Salon, SalonRatings, SalonWorks
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.appointment import Appointment
@@ -42,6 +42,10 @@ from app.services.translation_service import translation_service
 
 router = APIRouter(prefix="/salons", tags=["Salons"])
 
+class SalonWorkCreate(BaseModel):
+    work_photo: Optional[str] = None
+    work_name: str
+
 class MultilangField(BaseModel):
     uz: Optional[str] = None
     ru: Optional[str] = None
@@ -69,6 +73,7 @@ class SalonModel(BaseModel):
     isTop: bool = False
     is_favorite: bool = False
 
+
 class PaginatedSalonResponse(BaseModel):
     success: bool
     data: List[SalonModel]
@@ -87,8 +92,11 @@ class AdminForBotCreate(BaseModel):
 
 class CombinedBotCreateRequest(BaseModel):
     """Telegram bot orqali salon va adminni birgalikda yaratish uchun schema"""
+
     salon: SalonCreate
     admin: AdminForBotCreate
+
+
 # Default values
 DEFAULT_SALON_TYPES = [
     {"type": "beauty_salon", "selected": True},
@@ -349,7 +357,9 @@ async def create_salon(
         )
 
 
-@router.post("/bot/create", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/bot/create", response_model=StandardResponse, status_code=status.HTTP_201_CREATED
+)
 async def bot_create_salon(
     salon_data: SalonCreate,
     db: Session = Depends(get_db),
@@ -543,7 +553,11 @@ async def bot_create_salon(
         )
 
 
-@router.post("/bot/create-with-admin", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/bot/create-with-admin",
+    response_model=StandardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def bot_create_salon_with_admin(
     request: CombinedBotCreateRequest,
     db: Session = Depends(get_db),
@@ -692,11 +706,13 @@ async def bot_create_salon_with_admin(
 
         # --- Admin tekshiruvlari ---
         # Username mavjudligini tekshirish
-        existing_admin = db.query(Admin).filter(Admin.username == admin_req.username).first()
+        existing_admin = (
+            db.query(Admin).filter(Admin.username == admin_req.username).first()
+        )
         if existing_admin:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_translation(language, "auth.userExists")
+                detail=get_translation(language, "auth.userExists"),
             )
 
         # Email mavjudligini tekshirish
@@ -704,11 +720,13 @@ async def bot_create_salon_with_admin(
         if existing_email:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=get_translation(language, "auth.emailExists")
+                detail=get_translation(language, "auth.emailExists"),
             )
 
         password_hash = JWTUtils.hash_password(admin_req.password)
-        role = admin_req.role if admin_req.role in ["admin", "private_admin"] else "admin"
+        role = (
+            admin_req.role if admin_req.role in ["admin", "private_admin"] else "admin"
+        )
 
         # --- Transaksiya: salon va adminni saqlash ---
         # Yangi salon
@@ -748,7 +766,7 @@ async def bot_create_salon_with_admin(
                 full_name=admin_req.full_name,
                 role=role,
                 salon_id=new_salon.id,
-                is_active=True
+                is_active=True,
             )
 
             db.add(new_admin)
@@ -770,7 +788,9 @@ async def bot_create_salon_with_admin(
                     "logo": new_salon.logo,
                     "is_active": new_salon.is_active,
                     "created_at": (
-                        new_salon.created_at.isoformat() if new_salon.created_at else None
+                        new_salon.created_at.isoformat()
+                        if new_salon.created_at
+                        else None
                     ),
                 },
                 "admin": {
@@ -779,8 +799,8 @@ async def bot_create_salon_with_admin(
                     "email": new_admin.email,
                     "full_name": new_admin.full_name,
                     "role": new_admin.role,
-                    "salon_id": new_admin.salon_id
-                }
+                    "salon_id": new_admin.salon_id,
+                },
             },
         )
 
@@ -793,10 +813,13 @@ async def bot_create_salon_with_admin(
             detail=get_translation(language, "errors.500"),
         )
 
-@router.get("/", response_model=SalonListResponse)
 
-
-@router.post("/bot/registration-log", response_model=StandardResponse, status_code=status.HTTP_201_CREATED)
+# @router.get("/", response_model=SalonListResponse)
+@router.post(
+    "/bot/registration-log",
+    response_model=StandardResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def bot_registration_log(
     payload: BotRegistrationLogCreate,
     db: Session = Depends(get_db),
@@ -852,7 +875,12 @@ async def bot_registration_log(
             detail=get_translation(language, "errors.500"),
         )
 
-@router.post("/bot/registration-find", response_model=StandardResponse, status_code=status.HTTP_200_OK)
+
+@router.post(
+    "/bot/registration-find",
+    response_model=StandardResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def bot_registration_find(
     payload: BotRegistrationLogFilter,
     db: Session = Depends(get_db),
@@ -916,6 +944,8 @@ async def bot_registration_find(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500"),
         )
+
+
 async def get_all_salons(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -953,7 +983,7 @@ async def get_all_salons(
             if isDiscount:
                 query = query.filter(
                     Salon.salon_sale.isnot(None),
-                    func.JSON_CONTAINS_PATH(Salon.salon_sale, 'one', '$.amount')
+                    func.JSON_CONTAINS_PATH(Salon.salon_sale, "one", "$.amount"),
                 )
         # Private salon filter
         if is_private != "":
@@ -1053,7 +1083,9 @@ async def get_all_active_salons(
     is_favourite: Optional[bool] = False,
     is_top: Optional[bool] = Query(None, description="Salonni eng yaxshi olish"),
     is_new: Optional[bool] = Query(None, description="Salonni yangi olish"),
-    distance: Optional[float] = Query(None, ge=0.1, le=100, description="Salonlardan eng yaqinlikligini olish"),
+    distance: Optional[float] = Query(
+        None, ge=0.1, le=100, description="Salonlardan eng yaqinlikligini olish"
+    ),
 ):
     offset = (page - 1) * limit
     total = db.query(func.count(Salon.id)).filter(Salon.is_active == True).count()
@@ -1089,12 +1121,16 @@ async def get_all_active_salons(
                 salon_lat = float(salon.location["lat"])
                 salon_lng = float(salon.location["lng"])
 
-                distance = calculate_distance(curent_user.latitude, curent_user.longitude, salon_lat, salon_lng)
+                distance = calculate_distance(
+                    curent_user.latitude, curent_user.longitude, salon_lat, salon_lng
+                )
 
                 if distance <= distance:
                     result.append(salon)
         salons_query = db.query(Salon).filter(Salon.id.in_(s.id for s in result))
-    salons = salons_query.order_by(desc(Salon.created_at)).offset(offset).limit(limit).all()
+    salons = (
+        salons_query.order_by(desc(Salon.created_at)).offset(offset).limit(limit).all()
+    )
 
     result = []
     for salon in salons:
@@ -1176,6 +1212,7 @@ async def get_all_active_salons(
         "total": total,
     }
 
+
 @router.post("/rate", response_model=StandardResponse)
 async def rate_salon(
     salon_id: str = Query(..., description="Salom IDsi"),
@@ -1187,7 +1224,11 @@ async def rate_salon(
     """Salonni baholash"""
     try:
         # Validate salon existence
-        salon = db.query(Salon).filter(Salon.id == salon_id, Salon.is_active == True).first()
+        salon = (
+            db.query(Salon)
+            .filter(Salon.id == salon_id, Salon.is_active == True)
+            .first()
+        )
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1232,6 +1273,7 @@ async def rate_salon(
             detail=get_translation(language, "errors.500"),
         )
 
+
 @router.post("/unrate", response_model=StandardResponse)
 async def unrate_salon(
     salon_id: str = Query(..., description="Salom IDsi"),
@@ -1242,7 +1284,11 @@ async def unrate_salon(
     """Salonni bahosini olib tashlash"""
     try:
         # Validate salon existence
-        salon = db.query(Salon).filter(Salon.id == salon_id, Salon.is_active == True).first()
+        salon = (
+            db.query(Salon)
+            .filter(Salon.id == salon_id, Salon.is_active == True)
+            .first()
+        )
         if not salon:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1268,7 +1314,9 @@ async def unrate_salon(
         db.delete(existing_rating)
         db.commit()
 
-        return StandardResponse(success=True, message=get_translation(language, "success"))
+        return StandardResponse(
+            success=True, message=get_translation(language, "success")
+        )
 
     except HTTPException:
         raise
@@ -1278,6 +1326,7 @@ async def unrate_salon(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=get_translation(language, "errors.500"),
         )
+
 
 @router.get("/{salon_id}", response_model=SalonResponse)
 async def get_salon_by_id(
@@ -1900,6 +1949,137 @@ async def delete_salon_photo(
                 "photos": updated_photos,
                 "deleted_photo_index": photo_data.photo_index,
                 "remaining_photos_count": len(updated_photos),
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+
+
+
+@router.get("/works/{salon_id}", response_model=StandardResponse)
+async def get_salon_works(
+    salon_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    try:
+        salon = db.query(Salon).filter(Salon.id == salon_id).first()
+
+        if not salon:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=get_translation(language, "errors.404"),
+            )
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "salon_id": salon_id,
+                "works": salon.works,
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+@router.post("/works/{salon_id}", response_model=StandardResponse)
+async def add_salon_work(
+    salon_id: str,
+    work_data: SalonWorkCreate,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    try:
+        salon = db.query(Salon).filter(Salon.id == salon_id).first()
+
+        if not salon:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=get_translation(language, "errors.404"),
+            )
+
+        new_work = SalonWorks(
+            salon_id=salon_id,
+            work_photo=work_data.work_photo,
+            work_name=work_data.work_name,
+        )
+        db.add(new_work)
+        db.commit()
+        db.refresh(new_work)
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "salon_id": salon_id,
+                "work": {
+                    "id": str(new_work.id),
+                    "work_photo": new_work.work_photo,
+                    "work_name": new_work.work_name,
+                },
+            },
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=get_translation(language, "errors.500"),
+        )
+    
+@router.delete("/works/{salon_id}/{work_id}", response_model=StandardResponse)
+async def delete_salon_work(
+    salon_id: str,
+    work_id: str,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_admin),
+    language: Union[str, None] = Header(None, alias="X-User-language"),
+):
+    try:
+        salon = db.query(Salon).filter(Salon.id == salon_id).first()
+
+        if not salon:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=get_translation(language, "errors.404"),
+            )
+
+        work = db.query(SalonWorks).filter(
+            SalonWorks.id == work_id, SalonWorks.salon_id == salon_id
+        ).first()
+
+        if not work:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=get_translation(language, "errors.404"),
+            )
+
+        db.delete(work)
+        db.commit()
+
+        return StandardResponse(
+            success=True,
+            message=get_translation(language, "success"),
+            data={
+                "salon_id": salon_id,
+                "deleted_work_id": work_id,
             },
         )
 

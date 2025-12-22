@@ -45,6 +45,8 @@ class Salon(BaseModel):
     comments = relationship("SalonComment", back_populates="salon", cascade="all, delete-orphan")
     ratings = relationship("SalonRatings", back_populates="salon")
 
+    works = relationship("SalonWorks", back_populates="salon")
+
 class SalonRatings(BaseModel):
     __tablename__ = "salon_ratings"
     
@@ -54,3 +56,13 @@ class SalonRatings(BaseModel):
 
     salon = relationship("Salon", back_populates="ratings")
     user = relationship("User", back_populates="salon_ratings")
+
+
+class SalonWorks(BaseModel):
+    __tablename__ = "salon_works"
+    
+    salon_id = Column(String(36), ForeignKey("salons.id"), nullable=False)
+    work_photo = Column(String(500), nullable=True)
+    work_name = Column(String(200))
+
+    salon = relationship("Salon", back_populates="works")
