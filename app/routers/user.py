@@ -60,7 +60,7 @@ from app.schemas.user import (
 from app.models.user_premium import UserPremium
 from app.models.payment import Payment as PaymentModel
 from app.schemas.employee import EmployeeResponse
-from app.auth.dependencies import get_current_user, get_current_user_optional
+from app.auth.dependencies import get_current_user, get_current_user_optional, get_current_user_only
 from app.auth.jwt_utils import JWTUtils
 from app.config import settings
 
@@ -509,19 +509,53 @@ async def verify_phone_change(
 
 @router.delete("/delete", response_model=dict)
 async def delete_user(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_only),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """
-    Foydalanuvchi hisobini o'chirish
+    Foydalanuvchi hisobini o'chirish (anonymizatsiya)
+    - Salon bilan bog'liq ma'lumotlar (yozilishlar, xabarlar, to'lovlar) saqlanadi
+    - Shaxsiy ma'lumotlar o'chiriladi yoki anonymizatsiya qilinadi
     """
-    # Delete related data
+    # 1) Shaxsiy va to'g'ridan-to'g'ri identifikatsiya qiluvchi ma'lumotlarni tozalash
+    #    Eslatma: phone nullable=False, shuning uchun uni sun'iy qiymatga o'zgartiramiz
+    anonym_phone = "+998 00 000 00 00"
+    anonym_username = f"deleted_user_{current_user.id}"
+
+    # Kartalar — PII: to'liq o'chiramiz (to'lov yozuvlari saqlanadi)
     db.query(PaymentCard).filter(PaymentCard.user_id == current_user.id).delete()
 
-    # Delete user
-    db.delete(current_user)
+    # Userning maydonlarini anonymizatsiya qilish
+    current_user.phone = anonym_phone
+    current_user.email = None
+    current_user.password_hash = JWTUtils.hash_password(secrets.token_urlsafe(32))
+    current_user.avatar_url = None
+    current_user.full_name = "O'chirilgan foydalanuvchi"
+    current_user.first_name = None
+    current_user.last_name = None
+    current_user.username = anonym_username
+    current_user.verification_code = None
+    current_user.verification_expires_at = None
+    current_user.is_verified = False
+    current_user.is_active = False
+    current_user.phone_verified = False
+    current_user.latitude = None
+    current_user.longitude = None
+    current_user.location_permission = False
+    current_user.address = None
+    current_user.city = None
+    current_user.city_id = None
+    current_user.country = None
+    current_user.auto_pay_for_premium = False
+    current_user.card_for_auto_pay = None
+    current_user.updated_at = datetime.utcnow()
+
+    # 2) Bog'liq salon ma'lumotlari (appointments, chats, payments, favourites, ratings) o'z holicha qoladi
+    #    Hech qaysi join/foreign-key o'chirilmaydi
+
     db.commit()
+    db.refresh(current_user)
 
     return {"success": True, "message": get_translation(language, "auth.userDeleted")}
 
