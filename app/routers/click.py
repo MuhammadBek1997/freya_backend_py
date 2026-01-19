@@ -247,6 +247,7 @@ def delete_card_token(
 
     # Kartani bazadan o'chirish
     db.delete(card)
+    db.commit()
 
     # Agar default karta o'chirilsa, qolganlardan birini default qilamiz
     if was_default:
@@ -260,7 +261,6 @@ def delete_card_token(
             remaining.is_default = True
             db.add(remaining)
 
-    db.commit()
 
     return {"success": True}
 
