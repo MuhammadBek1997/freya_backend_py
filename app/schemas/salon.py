@@ -252,7 +252,7 @@ class MobileSalonItem(BaseModel):
 
 # Bot Registration Log Create Schema (alohida jadval uchun)
 class BotRegistrationLogCreate(BaseModel):
-    phone: str
+    phone: Optional[str] = None
     telegram_id: Optional[str] = None
     stir: Optional[str] = None
     salon_id: Optional[str] = None
