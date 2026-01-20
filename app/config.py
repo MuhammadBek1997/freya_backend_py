@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
 
-    AMOUNT_FOR_PREMIUM: Optional[Union[str, int, bool, None]] = 1000 # so'm
+    AMOUNT_FOR_PREMIUM: Optional[Union[str, int, bool, None]] = 19900 # so'm
     AMOUNT_FOR_PER_POST: Optional[Union[str, int, bool, None]] = 1500 # so'm
     click_provider: ClassVar[ClickPaymentProvider]  = ClickPaymentProvider(
         merchant_id="44558",
