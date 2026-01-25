@@ -137,7 +137,8 @@ app = FastAPI(
     },
     servers=[
         {"url": "http://localhost:8000", "description": "Development server"},
-        {"url": "https://api.freyapp.uz", "description": "Production server"},
+        {"url": "https://freya-2aff07996d13.herokuapp.com", "description": "Heroku Production server"},
+        {"url": "https://api.freyapp.uz", "description": "Production server (legacy)"},
     ],
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
     debug=True
@@ -156,6 +157,7 @@ origins = [
     "https://www.freyapp.uz",
     "https://freyapp.uz",
     "https://api.freyapp.uz",
+    "https://freya-2aff07996d13.herokuapp.com",
     "https://freya-admin-frontend.vercel.app",
     "https://freya-admin-frontend-git-main-muhammadbekdev.vercel.app",
     "https://freya-admin-frontend-muhammadbekdev.vercel.app",
@@ -185,6 +187,8 @@ if os.getenv("NODE_ENV") == "production":
             "api.freyapp.uz",
             "freyapp.uz",
             "www.freyapp.uz",
+            "freya-2aff07996d13.herokuapp.com",
+            "*.herokuapp.com",
             "localhost",
             "127.0.0.1",
         ],
