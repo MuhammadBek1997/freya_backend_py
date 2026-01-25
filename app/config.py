@@ -1,22 +1,23 @@
 import os
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import ClassVar, Optional, Union
 
 from app.services.Click import ClickPaymentProvider
 
 
-def _get_database_url():
-    """Fix Heroku postgres:// to postgresql:// for SQLAlchemy compatibility"""
-    url = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-    return url
-
-
 class Settings(BaseSettings):
     # Database
     # Fallback to local SQLite for fresh setups; override with DATABASE_URL in .env
-    database_url: str = _get_database_url()
+    database_url: str = "sqlite:///./dev.db"
+
+    @field_validator('database_url', mode='before')
+    @classmethod
+    def fix_postgres_url(cls, v):
+        """Fix Heroku postgres:// to postgresql:// for SQLAlchemy compatibility"""
+        if isinstance(v, str) and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql://", 1)
+        return v
 
     # JWT
     secret_key: str = "gj589tujfj39if094fkvmi3jtju359im3u8hf1qsiodacr89rf3rijwcm3uwi"
