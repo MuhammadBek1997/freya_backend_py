@@ -29,9 +29,12 @@ def upgrade() -> None:
 
     # Only process appointments table if it exists
     if 'appointments' in table_names:
-        # Drop foreign key constraint only for MySQL (SQLite doesn't support this)
+        # Drop foreign key constraint (skip for SQLite, handle missing constraint)
         if conn.dialect.name != 'sqlite':
-            op.drop_constraint('appointments_ibfk_2', 'appointments', type_='foreignkey')
+            try:
+                op.drop_constraint('appointments_ibfk_2', 'appointments', type_='foreignkey')
+            except Exception:
+                pass  # Constraint may not exist
 
         columns = [col['name'] for col in inspector.get_columns('appointments')]
         if 'schedule_id' in columns:
@@ -52,7 +55,10 @@ def downgrade() -> None:
             op.add_column('appointments', sa.Column('schedule_id', sa.String(length=36), nullable=True))
 
         if conn.dialect.name != 'sqlite':
-            op.create_foreign_key('appointments_ibfk_2', 'appointments', 'schedules', ['schedule_id'], ['id'])
+            try:
+                op.create_foreign_key('appointments_ibfk_2', 'appointments', 'schedules', ['schedule_id'], ['id'])
+            except Exception:
+                pass
 
     if 'notifs' not in table_names:
         op.create_table('notifs',
