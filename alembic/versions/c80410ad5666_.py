@@ -29,12 +29,12 @@ def upgrade() -> None:
 
     # Only process appointments table if it exists
     if 'appointments' in table_names:
-        # Drop foreign key constraint (skip for SQLite, handle missing constraint)
+        # Drop foreign key constraint if it exists (skip for SQLite)
         if conn.dialect.name != 'sqlite':
-            try:
+            fks = inspector.get_foreign_keys('appointments')
+            fk_names = [fk['name'] for fk in fks if fk.get('name')]
+            if 'appointments_ibfk_2' in fk_names:
                 op.drop_constraint('appointments_ibfk_2', 'appointments', type_='foreignkey')
-            except Exception:
-                pass  # Constraint may not exist
 
         columns = [col['name'] for col in inspector.get_columns('appointments')]
         if 'schedule_id' in columns:
@@ -54,11 +54,11 @@ def downgrade() -> None:
         if 'schedule_id' not in columns:
             op.add_column('appointments', sa.Column('schedule_id', sa.String(length=36), nullable=True))
 
-        if conn.dialect.name != 'sqlite':
-            try:
+        if conn.dialect.name != 'sqlite' and 'schedules' in table_names:
+            fks = inspector.get_foreign_keys('appointments')
+            fk_names = [fk['name'] for fk in fks if fk.get('name')]
+            if 'appointments_ibfk_2' not in fk_names:
                 op.create_foreign_key('appointments_ibfk_2', 'appointments', 'schedules', ['schedule_id'], ['id'])
-            except Exception:
-                pass
 
     if 'notifs' not in table_names:
         op.create_table('notifs',
