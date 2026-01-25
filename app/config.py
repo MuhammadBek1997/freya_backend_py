@@ -5,13 +5,18 @@ from typing import ClassVar, Optional, Union
 from app.services.Click import ClickPaymentProvider
 
 
+def _get_database_url():
+    """Fix Heroku postgres:// to postgresql:// for SQLAlchemy compatibility"""
+    url = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+
 class Settings(BaseSettings):
     # Database
     # Fallback to local SQLite for fresh setups; override with DATABASE_URL in .env
-    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
-    # Fix for Heroku: translate legacy scheme to SQLAlchemy-compatible
-    if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
+    database_url: str = _get_database_url()
 
     # JWT
     secret_key: str = "gj589tujfj39if094fkvmi3jtju359im3u8hf1qsiodacr89rf3rijwcm3uwi"
