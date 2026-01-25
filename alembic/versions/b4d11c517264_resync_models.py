@@ -24,9 +24,15 @@ def upgrade() -> None:
     table_names = inspector.get_table_names()
     is_sqlite = conn.dialect.name == 'sqlite'
 
-    # Foreign key constraint - skip for SQLite
-    if not is_sqlite and 'appointments' in table_names:
-        op.create_foreign_key(None, 'appointments', 'employees', ['employee_id'], ['id'])
+    # Foreign key constraint - skip for SQLite, check tables exist
+    if not is_sqlite and 'appointments' in table_names and 'employees' in table_names:
+        # Check if FK already exists
+        fks = inspector.get_foreign_keys('appointments')
+        has_employee_fk = any(fk.get('referred_table') == 'employees' for fk in fks)
+        if not has_employee_fk:
+            columns = [col['name'] for col in inspector.get_columns('appointments')]
+            if 'employee_id' in columns:
+                op.create_foreign_key(None, 'appointments', 'employees', ['employee_id'], ['id'])
 
     # payment_cards operations - only if table exists
     if 'payment_cards' in table_names:
@@ -44,11 +50,20 @@ def upgrade() -> None:
 
         # These operations are not supported in SQLite
         if not is_sqlite:
-            try:
+            # Drop index only if it exists
+            indexes = inspector.get_indexes('payment_cards')
+            index_names = [idx['name'] for idx in indexes if idx.get('name')]
+            if 'user_id' in index_names:
                 op.drop_index('user_id', table_name='payment_cards')
-            except:
-                pass
-            op.create_unique_constraint(None, 'payment_cards', ['card_token'])
+
+            # Create unique constraint only if card_token column exists and constraint doesn't exist
+            unique_constraints = inspector.get_unique_constraints('payment_cards')
+            has_card_token_unique = any('card_token' in uc.get('column_names', []) for uc in unique_constraints)
+            if not has_card_token_unique and 'card_token' in columns or 'card_token' not in columns:
+                # Refresh columns after potential add
+                columns = [col['name'] for col in inspector.get_columns('payment_cards')]
+                if 'card_token' in columns:
+                    op.create_unique_constraint('uq_payment_cards_card_token', 'payment_cards', ['card_token'])
 
             # Drop old columns
             for col in ['expiry_month', 'card_holder_name', 'phone_number', 'last_four_digits', 'expiry_year', 'card_type', 'card_number_encrypted']:
@@ -68,37 +83,46 @@ def downgrade() -> None:
         columns = [col['name'] for col in inspector.get_columns('payment_cards')]
 
         if not is_sqlite:
-            if 'card_number_encrypted' not in columns:
-                op.add_column('payment_cards', sa.Column('card_number_encrypted', sa.String(length=255), nullable=True))
-            if 'card_type' not in columns:
-                op.add_column('payment_cards', sa.Column('card_type', sa.String(length=20), nullable=True))
-            if 'expiry_year' not in columns:
-                op.add_column('payment_cards', sa.Column('expiry_year', sa.Integer(), nullable=True))
-            if 'last_four_digits' not in columns:
-                op.add_column('payment_cards', sa.Column('last_four_digits', sa.String(length=4), nullable=True))
-            if 'phone_number' not in columns:
-                op.add_column('payment_cards', sa.Column('phone_number', sa.String(length=20), nullable=True))
-            if 'card_holder_name' not in columns:
-                op.add_column('payment_cards', sa.Column('card_holder_name', sa.String(length=100), nullable=True))
-            if 'expiry_month' not in columns:
-                op.add_column('payment_cards', sa.Column('expiry_month', sa.Integer(), nullable=True))
+            # Add old columns back
+            for col_name, col_type in [
+                ('card_number_encrypted', sa.String(length=255)),
+                ('card_type', sa.String(length=20)),
+                ('expiry_year', sa.Integer()),
+                ('last_four_digits', sa.String(length=4)),
+                ('phone_number', sa.String(length=20)),
+                ('card_holder_name', sa.String(length=100)),
+                ('expiry_month', sa.Integer())
+            ]:
+                if col_name not in columns:
+                    op.add_column('payment_cards', sa.Column(col_name, col_type, nullable=True))
 
-            try:
-                op.drop_constraint(None, 'payment_cards', type_='unique')
-            except:
-                pass
-            op.create_index('user_id', 'payment_cards', ['user_id', 'card_number_encrypted'], unique=True)
+            # Drop unique constraint if exists
+            unique_constraints = inspector.get_unique_constraints('payment_cards')
+            for uc in unique_constraints:
+                if 'card_token' in uc.get('column_names', []):
+                    op.drop_constraint(uc['name'], 'payment_cards', type_='unique')
+                    break
 
+            # Create index if not exists
+            indexes = inspector.get_indexes('payment_cards')
+            index_names = [idx['name'] for idx in indexes if idx.get('name')]
+            if 'user_id' not in index_names:
+                # Refresh columns
+                columns = [col['name'] for col in inspector.get_columns('payment_cards')]
+                if 'user_id' in columns and 'card_number_encrypted' in columns:
+                    op.create_index('user_id', 'payment_cards', ['user_id', 'card_number_encrypted'], unique=True)
+
+        # Drop new columns
+        columns = [col['name'] for col in inspector.get_columns('payment_cards')]
         for col in ['is_verified', 'expiry_at', 'card_number', 'card_token']:
             if col in columns:
-                try:
-                    op.drop_column('payment_cards', col)
-                except:
-                    pass
+                op.drop_column('payment_cards', col)
 
+    # Drop FK from appointments if exists
     if not is_sqlite and 'appointments' in table_names:
-        try:
-            op.drop_constraint(None, 'appointments', type_='foreignkey')
-        except:
-            pass
+        fks = inspector.get_foreign_keys('appointments')
+        for fk in fks:
+            if fk.get('referred_table') == 'employees' and fk.get('name'):
+                op.drop_constraint(fk['name'], 'appointments', type_='foreignkey')
+                break
     # ### end Alembic commands ###
