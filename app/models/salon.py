@@ -29,7 +29,14 @@ class Salon(BaseModel):
     orientation_uz = Column(Text)  # 0: portrait, 1: landscape
     orientation_ru = Column(Text)  # 0: portrait, 1: landscape
     orientation_en = Column(Text)  # 0: portrait, 1: landscape
-    
+
+    # Working schedule
+    work_hours = Column(String(50))  # "8:00 - 22:00"
+    work_days = Column(String(100))  # "Понедельник - Суббота"
+
+    # Note/Additionals (Примечание)
+    note = Column(Text)
+
     # Relationships
     employees = relationship("Employee", back_populates="salon", cascade="all, delete-orphan")
     schedules = relationship("Schedule", back_populates="salon", cascade="all, delete-orphan")

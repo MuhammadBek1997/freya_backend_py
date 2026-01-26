@@ -53,6 +53,18 @@ class SalonDetailResponse(BaseModel):
     employees: List[dict] = []
     created_at: str
     updated_at: str
+    # Yangi maydonlar
+    work_hours: Optional[str] = None
+    work_days: Optional[str] = None
+    note: Optional[str] = None
+    description_uz: Optional[str] = None
+    description_ru: Optional[str] = None
+    description_en: Optional[str] = None
+    salon_phone: Optional[str] = None
+    salon_add_phone: Optional[str] = None
+    salon_instagram: Optional[str] = None
+    location: Optional[dict] = None
+    salon_sale: Optional[dict] = None
 
 
 class SalonTopHistoryResponse(BaseModel):

@@ -388,6 +388,18 @@ async def get_my_salon(
             ],
             created_at=salon.created_at.isoformat(),
             updated_at=salon.updated_at.isoformat(),
+            # Yangi maydonlar
+            work_hours=getattr(salon, 'work_hours', None),
+            work_days=getattr(salon, 'work_days', None),
+            note=getattr(salon, 'note', None),
+            description_uz=salon.description_uz,
+            description_ru=salon.description_ru,
+            description_en=salon.description_en,
+            salon_phone=salon.salon_phone,
+            salon_add_phone=None,  # Model'da yo'q
+            salon_instagram=salon.salon_instagram,
+            location=salon.location,
+            salon_sale=salon.salon_sale,
         )
 
     except HTTPException:
