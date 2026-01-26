@@ -33,7 +33,9 @@ from app.schemas.admin import (
 )
 from app.auth import get_current_admin
 from app.middleware import get_language
+from imgbb_utils import upload_file_to_imgbb
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -386,6 +388,18 @@ async def get_my_salon(
             ],
             created_at=salon.created_at.isoformat(),
             updated_at=salon.updated_at.isoformat(),
+            # Yangi maydonlar
+            work_hours=getattr(salon, 'work_hours', None),
+            work_days=getattr(salon, 'work_days', None),
+            note=getattr(salon, 'note', None),
+            description_uz=salon.description_uz,
+            description_ru=salon.description_ru,
+            description_en=salon.description_en,
+            salon_phone=salon.salon_phone,
+            salon_add_phone=None,  # Model'da yo'q
+            salon_instagram=salon.salon_instagram,
+            location=salon.location,
+            salon_sale=salon.salon_sale,
         )
 
     except HTTPException:
@@ -405,7 +419,7 @@ async def upload_admin_avatar(
     current_admin: Admin = Depends(get_current_admin),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Admin profil rasmini yuklash (avatar)."""
+    """Admin profil rasmini yuklash (avatar) - imgbb orqali."""
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(
@@ -413,39 +427,27 @@ async def upload_admin_avatar(
                 detail=get_translation(language, "errors.400"),
             )
 
-        # uploads/admin_avatars ichiga saqlaymiz
-        import os, uuid
-
-        base_dir = os.getcwd()
-        upload_dir = os.path.join(base_dir, "uploads", "admin_avatars")
-        os.makedirs(upload_dir, exist_ok=True)
-
-        # unique filename
+        import os
         _, ext = os.path.splitext(file.filename or "avatar.jpg")
         if not ext:
             ext = ".jpg"
-        safe_name = f"{current_admin.id}_{uuid.uuid4().hex}{ext}"
-        save_path = os.path.join(upload_dir, safe_name)
+        safe_name = f"admin_{current_admin.id}_{uuid.uuid4().hex}{ext}"
 
+        # ImgBB ga yuklash
         content = await file.read()
-        with open(save_path, "wb") as out:
-            out.write(content)
+        avatar_url = upload_file_to_imgbb(content, safe_name)
 
-        # URL ni yaratamiz (static mount bilan uyg‘un): /uploads/admin_avatars/<file>
-        avatar_url = f"/uploads/admin_avatars/{safe_name}"
-
-        # Admin modelida avatar_url bo‘lmasa, commit xato bo‘lishi mumkin.
+        # Admin modelida avatar_url saqlash
         try:
             setattr(current_admin, "avatar_url", avatar_url)
             db.commit()
         except Exception:
             db.rollback()
-            # Agar ustun mavjud bo‘lmasa, faqat URLni qaytaramiz
             return {
                 "success": True,
                 "message": get_translation(language, "success"),
                 "avatar_url": avatar_url,
-                "note": "Admin jadvalida avatar_url ustuni mavjud bo‘lmasa, migratsiya kerak",
+                "note": "Admin jadvalida avatar_url ustuni mavjud bo'lmasa, migratsiya kerak",
             }
 
         return {
@@ -472,7 +474,7 @@ async def upload_employee_avatar_by_admin(
     current_admin: Admin = Depends(get_current_admin),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Admin o‘z salonidagi xodim uchun avatar yuklaydi."""
+    """Admin o'z salonidagi xodim uchun avatar yuklaydi - imgbb orqali."""
     try:
         if not file.content_type or not file.content_type.startswith("image/"):
             raise HTTPException(
@@ -495,7 +497,7 @@ async def upload_employee_avatar_by_admin(
                 status_code=404, detail=get_translation(language, "errors.404")
             )
 
-        # Admin faqat o‘z salonidagi xodim uchun ruxsat
+        # Admin faqat o'z salonidagi xodim uchun ruxsat
         if not current_admin.salon_id or str(employee.salon_id) != str(
             current_admin.salon_id
         ):
@@ -503,23 +505,16 @@ async def upload_employee_avatar_by_admin(
                 status_code=403, detail=get_translation(language, "errors.403")
             )
 
-        import os, uuid
-
-        base_dir = os.getcwd()
-        upload_dir = os.path.join(base_dir, "uploads", "employee_avatars")
-        os.makedirs(upload_dir, exist_ok=True)
-
+        import os
         _, ext = os.path.splitext(file.filename or "avatar.jpg")
         if not ext:
             ext = ".jpg"
-        safe_name = f"{employee.id}_{uuid.uuid4().hex}{ext}"
-        save_path = os.path.join(upload_dir, safe_name)
+        safe_name = f"employee_{employee.id}_{uuid.uuid4().hex}{ext}"
 
+        # ImgBB ga yuklash
         content = await file.read()
-        with open(save_path, "wb") as out:
-            out.write(content)
+        avatar_url = upload_file_to_imgbb(content, safe_name)
 
-        avatar_url = f"/uploads/employee_avatars/{safe_name}"
         employee.avatar_url = avatar_url
         db.commit()
         db.refresh(employee)

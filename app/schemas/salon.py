@@ -96,6 +96,10 @@ class SalonUpdate(BaseModel):
     orientation_en: Optional[str] = None
     photos: Optional[List[str]] = None  # Base64 formatdagi rasmlar massivi
     logo: Optional[str] = None  # Base64 formatdagi logo rasmi
+    # Yangi maydonlar
+    work_hours: Optional[str] = None  # "8:00 - 22:00"
+    work_days: Optional[str] = None  # "Понедельник - Суббота"
+    note: Optional[str] = None  # Примечание
 
 
 # Salon Response Schema
