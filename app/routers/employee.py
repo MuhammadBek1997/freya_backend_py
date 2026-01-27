@@ -834,9 +834,10 @@ async def add_employee_post(
         db.commit()
         db.refresh(new_post)
         
-        # Add media files
-        if post_data.media:
-            for file_path in post_data.media:
+        # Add media files (support both media and media_files from frontend)
+        media_list = post_data.all_media
+        if media_list:
+            for file_path in media_list:
                 media = PostMedia(
                     post_id=new_post.id,
                     file_path=file_path

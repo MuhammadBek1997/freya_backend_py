@@ -180,6 +180,12 @@ class EmployeePostCreate(BaseModel):
     title: str
     description: str
     media: Optional[List[str]] = []
+    media_files: Optional[List[str]] = []  # Frontend sends media_files
+
+    @property
+    def all_media(self) -> List[str]:
+        """Return media from either field"""
+        return self.media_files if self.media_files else (self.media or [])
 
 class EmployeePostResponse(BaseModel):
     id: str
