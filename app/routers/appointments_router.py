@@ -179,11 +179,16 @@ async def create_appointment(
             )
     
     # Создание заявки
+    # Agar user tizimda ro'yxatdan o'tgan bo'lsa, uning full_name'ini ishlat
+    user_name_to_save = appointment_data.user_name
+    if isinstance(current_user, User) and current_user.full_name:
+        user_name_to_save = current_user.full_name
+
     new_appointment = Appointment(
         application_number=application_number,
         # user_id faqat oddiy foydalanuvchi bo'lsa yoziladi
         user_id=(current_user.id if isinstance(current_user, User) else None),
-        user_name=appointment_data.user_name,
+        user_name=user_name_to_save,
         phone_number=appointment_data.phone_number,
         application_date=appointment_data.application_date,
         application_time=appointment_data.application_time,
@@ -293,11 +298,22 @@ async def get_all_appointments(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
@@ -362,11 +378,22 @@ async def get_appointment_by_id(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
@@ -708,11 +735,22 @@ async def get_appointments_by_salon_id(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
