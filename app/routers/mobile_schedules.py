@@ -43,6 +43,8 @@ class MobileAppointmentCreate(BaseModel):
     service_id: Optional[str] = None
     application_date: Optional[date] = Field(None, alias="date")
     application_time: time = Field(alias="time")
+    user_name: str = Field(..., description="Mijoz to'liq ismi", min_length=1)
+    phone_number: Optional[str] = None
 
     @field_validator("application_time", mode="before")
     def _validate_hhmm_time(cls, v):
@@ -54,8 +56,6 @@ class MobileAppointmentCreate(BaseModel):
             from datetime import datetime as _dt
             return _dt.strptime(v, "%H:%M").time()
         return v
-    # user_name: Optional[str] = None
-    # phone_number: Optional[str] = None
     only_card: bool = False
     payment_card_id: Optional[str] = None  # only_card=True bo'lsa majburiy
     # notes: Optional[str] = None
@@ -1196,10 +1196,47 @@ async def create_appointment(
             db.commit()
 
         # 10. Appointment yaratish
+        # Mijoz ismini olish prioritet:
+        # 1. Agar login qilgan bo'lsa - User.full_name > User.first_name + last_name > User.username
+        # 2. Aks holda - mobil dasturdan jo'natilgan user_name
+        user_name_to_save = appointment_data.user_name
+        user_id_to_save = None
+        phone_to_save = appointment_data.phone_number or ""
+
+        if current_user:
+            user_id_to_save = current_user.id
+            try:
+                user_from_db = db.query(User).filter(User.id == current_user.id).first()
+                if user_from_db:
+                    # 1-prioritet: full_name
+                    if user_from_db.full_name:
+                        user_name_to_save = user_from_db.full_name
+                    # 2-prioritet: first_name + last_name
+                    elif user_from_db.first_name or user_from_db.last_name:
+                        parts = []
+                        if user_from_db.first_name:
+                            parts.append(user_from_db.first_name)
+                        if user_from_db.last_name:
+                            parts.append(user_from_db.last_name)
+                        user_name_to_save = " ".join(parts)
+                    # 3-prioritet: username
+                    elif user_from_db.username:
+                        user_name_to_save = user_from_db.username
+                    # Phone
+                    if user_from_db.phone:
+                        phone_to_save = user_from_db.phone
+            except Exception:
+                # Agar database xatolik bersa, current_user dan olishga harakat qilamiz
+                if getattr(current_user, 'full_name', None):
+                    user_name_to_save = current_user.full_name
+                if getattr(current_user, 'phone', None):
+                    phone_to_save = current_user.phone
+
         new_appointment = Appointment(
             application_number=application_number,
-            user_name=(current_user.full_name if current_user and current_user.full_name else ""),
-            phone_number=(current_user.phone if current_user and current_user.phone else ""),
+            user_id=user_id_to_save,
+            user_name=user_name_to_save,
+            phone_number=phone_to_save,
             application_date=resolved_date,
             application_time=selected_time,
             end_time=selected_end_time,
