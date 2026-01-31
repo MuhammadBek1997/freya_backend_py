@@ -43,8 +43,8 @@ class MobileAppointmentCreate(BaseModel):
     service_id: Optional[str] = None
     application_date: Optional[date] = Field(None, alias="date")
     application_time: time = Field(alias="time")
-    user_name: str = Field(..., description="Mijoz to'liq ismi", min_length=1)
-    phone_number: Optional[str] = None
+    user_name: Optional[str] = Field(None, description="Mijoz to'liq ismi (token yo'q bo'lsa majburiy)", min_length=1)
+    phone_number: Optional[str] = Field(None, description="Telefon raqam (token yo'q bo'lsa majburiy)")
 
     @field_validator("application_time", mode="before")
     def _validate_hhmm_time(cls, v):
@@ -840,6 +840,14 @@ async def create_appointment(
                 status_code=404,
                 detail=get_translation(language, "errors.404") or "Salon topilmadi",
             )
+
+        # Agar token yo'q bo'lsa (guest user), user_name va phone_number majburiy
+        if not current_user:
+            if not appointment_data.user_name or not appointment_data.user_name.strip():
+                raise HTTPException(
+                    status_code=400,
+                    detail=get_translation(language, "errors.400") or "Token yo'q bo'lsa, mijoz ismi majburiy",
+                )
 
         # 2. Schedule mavjudligini tekshirish
         schedule = (
