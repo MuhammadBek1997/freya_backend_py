@@ -21,7 +21,7 @@ router = APIRouter(prefix="/appointments", tags=["appointments"])
 # Pydantic схемы
 class AppointmentCreate(BaseModel):
     schedule_id: str
-    user_name: str
+    user_name: str = Field(..., description="Mijoz to'liq ismi", min_length=1)
     phone_number: str
     application_date: date
     application_time: time
@@ -195,11 +195,43 @@ async def create_appointment(
                 )
     
     # Создание заявки
+    # Mijoz ismini olish prioritet:
+    # 1. Agar login qilgan bo'lsa - User.full_name > User.first_name + last_name > User.username
+    # 2. Aks holda - mobil dasturdan jo'natilgan user_name
+    user_name_to_save = appointment_data.user_name
+    user_id_to_save = None
+
+    if isinstance(current_user, User):
+        # Login qilgan user - User jadvalidan to'liq ma'lumotni olamiz
+        user_id_to_save = current_user.id
+        try:
+            user_from_db = db.query(User).filter(User.id == current_user.id).first()
+            if user_from_db:
+                # 1-prioritet: full_name
+                if user_from_db.full_name:
+                    user_name_to_save = user_from_db.full_name
+                # 2-prioritet: first_name + last_name
+                elif user_from_db.first_name or user_from_db.last_name:
+                    parts = []
+                    if user_from_db.first_name:
+                        parts.append(user_from_db.first_name)
+                    if user_from_db.last_name:
+                        parts.append(user_from_db.last_name)
+                    user_name_to_save = " ".join(parts)
+                # 3-prioritet: username
+                elif user_from_db.username:
+                    user_name_to_save = user_from_db.username
+                # Agar hech narsa bo'lmasa - mobil dasturdan jo'natilgan ism qoladi
+        except Exception:
+            # Agar database xatolik bersa, current_user dan olishga harakat qilamiz
+            if getattr(current_user, 'full_name', None):
+                user_name_to_save = current_user.full_name
+            # Aks holda - mobil dasturdan jo'natilgan user_name qoladi
+
     new_appointment = Appointment(
         application_number=application_number,
-        # user_id faqat oddiy foydalanuvchi bo'lsa yoziladi
-        user_id=(current_user.id if isinstance(current_user, User) else None),
-        user_name=appointment_data.user_name,
+        user_id=user_id_to_save,
+        user_name=user_name_to_save,
         phone_number=appointment_data.phone_number,
         application_date=appointment_data.application_date,
         application_time=appointment_data.application_time,
@@ -311,11 +343,22 @@ async def get_all_appointments(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
@@ -380,11 +423,22 @@ async def get_appointment_by_id(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
@@ -726,11 +780,22 @@ async def get_appointments_by_salon_id(
         except Exception:
             is_paid = False
             paid_amount = None
+
+        # User jadvalidan ism olish
+        display_name = a.user_name
+        if a.user_id:
+            try:
+                user = db.query(User).filter(User.id == a.user_id).first()
+                if user and user.full_name:
+                    display_name = user.full_name
+            except Exception:
+                pass
+
         return {
             "id": str(a.id),
             "application_number": a.application_number,
             "user_id": str(a.user_id) if a.user_id else None,
-            "user_name": a.user_name,
+            "user_name": display_name,
             "phone_number": a.phone_number,
             "application_date": a.application_date,
             "application_time": a.application_time,
