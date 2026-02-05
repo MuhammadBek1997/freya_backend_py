@@ -7,7 +7,7 @@ class MobileEmployeeItem(BaseModel):
     name: Optional[str] = None
     reviewsCount: Optional[int] = 0
     rate: Optional[Union[float, int]] = 0.0
-    workType: Optional[str] = None
+    workType: Optional[Union[str, List[str]]] = None
     avatar: Optional[str] = None
     works: Optional[int] = 0
     perWeek: Optional[int] = 0

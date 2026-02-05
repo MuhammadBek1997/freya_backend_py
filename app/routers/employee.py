@@ -181,7 +181,7 @@ async def get_all_employees(
             search_filter = or_(
                 Employee.name.ilike(f"%{search}%"),
                 Employee.surname.ilike(f"%{search}%"),
-                Employee.profession.ilike(f"%{search}%")
+                sa.cast(Employee.profession, sa.String).ilike(f"%{search}%")
             )
             query = query.filter(search_filter)
         

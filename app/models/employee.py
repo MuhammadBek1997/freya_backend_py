@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Text, Integer, DECIMAL, DateTime, ForeignKey
+from sqlalchemy import Column, String, Boolean, Text, Integer, DECIMAL, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from .base import BaseModel
 from .salon import Salon
@@ -13,7 +13,7 @@ class Employee(BaseModel):
     phone = Column(String(20), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     role = Column(String(100))
-    profession = Column(String(100))
+    profession = Column(JSON, default=list)
     username = Column(String(50), unique=True)
     employee_password = Column(String(255), nullable=False)
     avatar_url = Column(String(500))
