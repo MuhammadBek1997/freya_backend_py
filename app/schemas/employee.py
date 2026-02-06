@@ -10,7 +10,7 @@ class EmployeeCreate(BaseModel):
     employee_email: EmailStr
     role: str
     username: str
-    profession: str
+    profession: List[str]
     employee_password: str
     work_start_time: Optional[str] = None  # HH:MM
     work_end_time: Optional[str] = None    # HH:MM
@@ -41,7 +41,7 @@ class EmployeeUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
     username: Optional[str] = None
-    profession: Optional[str] = None
+    profession: Optional[List[str]] = None
     work_start_time: Optional[str] = None  # HH:MM
     work_end_time: Optional[str] = None    # HH:MM
     avatar_url: Optional[str] = None
@@ -100,7 +100,7 @@ class EmployeeResponse(BaseModel):
     email: Optional[str] = None
     role: Optional[str] = None
     username: Optional[str] = None
-    profession: Optional[str] = None
+    profession: Optional[List[str]] = None
     bio: Optional[str] = None
     specialization: Optional[str] = None
     avatar_url: Optional[str] = None
@@ -119,9 +119,9 @@ class EmployeeResponse(BaseModel):
     surname_uz: Optional[str] = None
     surname_en: Optional[str] = None
     surname_ru: Optional[str] = None
-    profession_uz: Optional[str] = None
-    profession_en: Optional[str] = None
-    profession_ru: Optional[str] = None
+    profession_uz: Optional[List[str]] = None
+    profession_en: Optional[List[str]] = None
+    profession_ru: Optional[List[str]] = None
     bio_uz: Optional[str] = None
     bio_en: Optional[str] = None
     bio_ru: Optional[str] = None
@@ -135,6 +135,22 @@ class EmployeeResponse(BaseModel):
     # Yakunlangan ishlar soni (xodim necha mijozga xizmat ko'rsatgan)
     done_works: Optional[int] = 0
     salon_name: Optional[str] = None
+    
+    @validator('profession', 'profession_uz', 'profession_en', 'profession_ru', pre=True)
+    def parse_profession(cls, v):
+        if isinstance(v, str):
+            if not v:
+                return []
+            import json
+            try:
+                # If it looks like a JSON list
+                if v.strip().startswith('[') and v.strip().endswith(']'):
+                    return json.loads(v)
+            except:
+                pass
+            # Return as single item list
+            return [v]
+        return v
 
     class Config:
         from_attributes = True
@@ -197,7 +213,7 @@ class EmployeePostResponse(BaseModel):
     updated_at: Optional[datetime] = None
     employee_name: Optional[str] = None
     employee_surname: Optional[str] = None
-    employee_profession: Optional[str] = None
+    employee_profession: Optional[Union[str, List[str]]] = None
     salon_id: Optional[str] = None
     salon_name: Optional[str] = None
     media_files: List[str] = []
@@ -238,7 +254,7 @@ class MobileEmployeeItem(BaseModel):
     id: str
     name: str
     avatar: Optional[str] = None
-    workType: Optional[str] = None
+    workType: Optional[Union[str, List[str]]] = None
     rate: Optional[float] = 0.0
     reviewsCount: int = 0
     works: int = 0
@@ -256,7 +272,7 @@ class MobileEmployeeDetailResponse(BaseModel):
     name: str
     avatar: Optional[str] = None
     phone: Optional[str] = None
-    position: Optional[str] = None
+    position: Optional[Union[str, List[str]]] = None
     works: int = 0
     reviews_count: int = 0
     per_week: int = 0

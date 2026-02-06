@@ -979,94 +979,68 @@ async def create_appointment(
                     )
 
         # 7. Interval asosida to'qnashuvlarni tekshirish
-        # Agar duration berilgan bo'lsa, start-end oraliqni appointment va busy_slots bilan tekshiramiz
+        
+        # Determine duration if not set (default 60 mins for safety in overlap check)
+        if not selected_end_time:
+             duration_minutes = 60
+             selected_end_time = (datetime.combine(resolved_date, selected_time) + timedelta(minutes=duration_minutes)).time()
+
         from app.models.busy_slot import BusySlot
-        if selected_end_time:
-            start_dt = datetime.combine(resolved_date, selected_time)
-            end_dt = datetime.combine(resolved_date, selected_end_time)
+        
+        start_dt = datetime.combine(resolved_date, selected_time)
+        end_dt = datetime.combine(resolved_date, selected_end_time)
 
-            # Appointmentlar bilan to'qnashuv (cancelled=False va status in pending|accepted|done)
-            existing_apps = (
-                db.query(Appointment)
-                .filter(
-                    and_(
-                        Appointment.employee_id == appointment_data.employee_id,
-                        Appointment.application_date == resolved_date,
-                        Appointment.is_cancelled == False,
-                        Appointment.status.in_(["pending", "accepted", "done"]),
-                    )
+        # Appointmentlar bilan to'qnashuv (cancelled=False va status in pending|accepted|done)
+        existing_apps = (
+            db.query(Appointment)
+            .filter(
+                and_(
+                    Appointment.employee_id == appointment_data.employee_id,
+                    Appointment.application_date == resolved_date,
+                    Appointment.is_cancelled == False,
+                    Appointment.status.in_(["pending", "accepted", "done", "confirmed"]),
                 )
-                .all()
             )
+            .all()
+        )
 
-            def _appt_interval(a: Appointment):
-                s = datetime.combine(resolved_date, a.application_time)
-                e = (
-                    datetime.combine(resolved_date, a.end_time)
-                    if a.end_time
-                    else s + timedelta(minutes=a.duration_minutes or 30)
-                )
-                return s, e
-
-            for a in existing_apps:
-                s, e = _appt_interval(a)
-                if (start_dt < e) and (end_dt > s):
+        for app in existing_apps:
+            app_start = datetime.combine(resolved_date, app.application_time)
+            if app.end_time:
+                # Handle midnight crossing
+                if app.end_time < app.application_time:
+                    app_end = datetime.combine(resolved_date + timedelta(days=1), app.end_time)
+                else:
+                    app_end = datetime.combine(resolved_date, app.end_time)
+            else:
+                app_duration = app.duration_minutes or 60
+                app_end = app_start + timedelta(minutes=app_duration)
+            
+            # Overlap condition: start < other.end AND end > other.start
+            if start_dt < app_end and end_dt > app_start:
                     raise HTTPException(
                         status_code=409,
                         detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
                     )
 
-            # Busy slots bilan to'qnashuv
-            busy_rows = (
-                db.query(BusySlot)
-                .filter(and_(BusySlot.employee_id == appointment_data.employee_id, BusySlot.date == resolved_date))
-                .all()
-            )
-            for b in busy_rows:
-                bs = datetime.combine(resolved_date, b.start_time)
+        # Busy slots bilan to'qnashuv
+        busy_rows = (
+            db.query(BusySlot)
+            .filter(and_(BusySlot.employee_id == appointment_data.employee_id, BusySlot.date == resolved_date))
+            .all()
+        )
+        for b in busy_rows:
+            bs = datetime.combine(resolved_date, b.start_time)
+            # Handle midnight crossing for busy slots
+            if b.end_time < b.start_time:
+                be = datetime.combine(resolved_date + timedelta(days=1), b.end_time)
+            else:
                 be = datetime.combine(resolved_date, b.end_time)
-                if (start_dt < be) and (end_dt > bs):
-                    raise HTTPException(
-                        status_code=409,
-                        detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
-                    )
-        else:
-            # Oldingi nuqtaviy tekshiruv (servis berilmagan holat uchun)
-            existing_appointment = (
-                db.query(Appointment)
-                .filter(
-                    and_(
-                        Appointment.employee_id == appointment_data.employee_id,
-                        Appointment.application_date == resolved_date,
-                        Appointment.application_time == selected_time,
-                        Appointment.is_cancelled == False,
-                    )
-                )
-                .first()
-            )
-            if existing_appointment:
+            
+            if start_dt < be and end_dt > bs:
                 raise HTTPException(
                     status_code=409,
-                    detail=get_translation(language, "errors.409") or "Bu vaqtda allaqachon appointment mavjud",
-                )
-
-            from app.models.busy_slot import BusySlot
-            busy_hit = (
-                db.query(BusySlot)
-                .filter(
-                    and_(
-                        BusySlot.employee_id == appointment_data.employee_id,
-                        BusySlot.date == resolved_date,
-                        BusySlot.start_time <= selected_time,
-                        BusySlot.end_time > selected_time,
-                    )
-                )
-                .first()
-            )
-            if busy_hit:
-                raise HTTPException(
-                    status_code=409,
-                    detail=get_translation(language, "errors.409") or "Bu vaqt xodim band",
+                    detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
                 )
 
         # 8. Application number yaratish

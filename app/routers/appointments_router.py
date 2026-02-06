@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from typing import Optional, List, Union
-from datetime import date, time
+from datetime import date, time, datetime, timedelta
 from pydantic import BaseModel, Field
 
 # Предполагаем, что у вас есть эти импорты
@@ -139,44 +139,60 @@ async def create_appointment(
                 detail=get_translation(language, "errors.400")
             )
 
+    # Calculate duration and end time
+    duration = getattr(schedule, 'service_duration', 60) or 60
+    start_dt = datetime.combine(appointment_data.application_date, appointment_data.application_time)
+    end_dt = start_dt + timedelta(minutes=duration)
+    end_time_val = end_dt.time()
+
     # Проверка занятости: существующая запись или busy slot
     if employee_id:
-        conflict = (
-            db.query(Appointment)
-            .filter(
-                and_(
-                    Appointment.employee_id == employee_id,
-                    Appointment.application_date == appointment_data.application_date,
-                    Appointment.application_time == appointment_data.application_time,
-                    Appointment.is_cancelled == False,
-                    Appointment.status.in_(["pending", "accepted", "done"]),
-                )
-            )
-            .first()
-        )
-        if conflict:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=get_translation(language, "errors.409")
-            )
+        # Check against existing appointments
+        existing_apps = db.query(Appointment).filter(
+            Appointment.employee_id == employee_id,
+            Appointment.application_date == appointment_data.application_date,
+            Appointment.is_cancelled == False,
+            Appointment.status.in_(["pending", "accepted", "done"])
+        ).all()
 
-        busy = (
-            db.query(BusySlot)
-            .filter(
-                and_(
-                    BusySlot.employee_id == employee_id,
-                    BusySlot.date == appointment_data.application_date,
-                    BusySlot.start_time <= appointment_data.application_time,
-                    BusySlot.end_time > appointment_data.application_time,
+        for app in existing_apps:
+            app_start = datetime.combine(app.application_date, app.application_time)
+            if app.end_time:
+                # Handle midnight crossing
+                if app.end_time < app.application_time:
+                    app_end = datetime.combine(app.application_date + timedelta(days=1), app.end_time)
+                else:
+                    app_end = datetime.combine(app.application_date, app.end_time)
+            else:
+                app_duration = app.duration_minutes or 60
+                app_end = app_start + timedelta(minutes=app_duration)
+            
+            # Overlap condition: start < other.end AND end > other.start
+            if start_dt < app_end and end_dt > app_start:
+                 raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band"
                 )
-            )
-            .first()
-        )
-        if busy:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=get_translation(language, "errors.409")
-            )
+
+        # Check against BusySlots
+        busy_slots = db.query(BusySlot).filter(
+            BusySlot.employee_id == employee_id,
+            BusySlot.date == appointment_data.application_date
+        ).all()
+        
+        for slot in busy_slots:
+            slot_start = datetime.combine(slot.date, slot.start_time)
+            # Handle midnight crossing for busy slots
+            if slot.end_time < slot.start_time:
+                slot_end = datetime.combine(slot.date + timedelta(days=1), slot.end_time)
+            else:
+                slot_end = datetime.combine(slot.date, slot.end_time)
+                
+            if start_dt < slot_end and end_dt > slot_start:
+                 raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band"
+                )
     
     # Создание заявки
     # Mijoz ismini olish prioritet:
@@ -219,6 +235,8 @@ async def create_appointment(
         phone_number=appointment_data.phone_number,
         application_date=appointment_data.application_date,
         application_time=appointment_data.application_time,
+        end_time=end_time_val,
+        duration_minutes=duration,
         schedule_id=appointment_data.schedule_id,
         employee_id=employee_id,
         service_name=appointment_data.service_name,
