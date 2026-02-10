@@ -661,6 +661,9 @@ async def update_employee(
         raise
     except Exception as e:
         db.rollback()
+        import traceback
+        print(f"Error in update_employee: {type(e).__name__}: {str(e)}")
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail=get_translation(language, "errors.500")
