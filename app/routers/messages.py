@@ -314,7 +314,7 @@ async def send_message(
             Message.receiver_id == receiver_id,
             Message.is_read == False,
         ).count()
-        await manager.broadcast(room_id, {
+        notif_payload = {
             "event": "notification",
             "room_id": room_id,
             "kind": "chat_message",
@@ -325,9 +325,27 @@ async def send_message(
             "message": message_text,
             "to_user_id": receiver_id if receiver_type == "user" else None,
             "to_employee_id": receiver_id if receiver_type == "employee" else None,
+            "to_salon_id": receiver_id if receiver_type == "salon" else None,
+            "sender_id": str(current_user.id),
+            "sender_type": "user",
+            "chat_id": str(chat.id),
             "unread_count": unread_count,
             "time": _now_local_iso(),
-        })
+        }
+        await manager.broadcast(room_id, notif_payload)
+
+        # Agar user salon ga yozsa, salon-level notification room ga ham broadcast
+        if receiver_type == "salon":
+            await manager.broadcast(f"salon_{receiver_id}", notif_payload)
+
+        # Agar user employeega yozsa, employee salon room ga ham xabar
+        if receiver_type == "employee":
+            try:
+                emp = db.query(Employee).filter(Employee.id == receiver_id).first()
+                if emp and getattr(emp, "salon_id", None):
+                    await manager.broadcast(f"salon_{emp.salon_id}", notif_payload)
+            except Exception:
+                pass
     except Exception:
         pass
 

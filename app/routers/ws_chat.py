@@ -290,8 +290,8 @@ def _get_or_create_chat(db, current_id: str, current_role: str, receiver_id: str
             return chat
 
     elif current_role == "admin":
-        # Admin (salon) faqat user_salon mavjud chatiga ulanadi
         if receiver_type == "user":
+            # Admin bitta user bilan chatga ulanadi
             admin = db.query(Admin).filter(Admin.id == current_id, Admin.is_active == True).first()
             if not admin or not getattr(admin, "salon_id", None):
                 return None
@@ -305,7 +305,19 @@ def _get_or_create_chat(db, current_id: str, current_role: str, receiver_id: str
                 .first()
             )
             if not chat:
-                return None
+                # Admin side: agar user avval yozmagan bo'lsa chat yaratib beramiz
+                user_obj = db.query(User).filter(User.id == receiver_id).first()
+                if not user_obj:
+                    return None
+                chat = UserChat(
+                    user_id=receiver_id,
+                    salon_id=str(admin.salon_id),
+                    chat_type="user_salon",
+                    last_message=None,
+                    last_message_time=None,
+                )
+                db.add(chat)
+                db.flush()
             return chat
 
     # Other roles not supported in this minimal WS chat
@@ -327,7 +339,7 @@ async def websocket_chat(websocket: WebSocket):
     receiver_id = websocket.query_params.get("receiver_id")
     receiver_type = websocket.query_params.get("receiver_type")
 
-    if not token or not receiver_id or not receiver_type:
+    if not token or not receiver_type:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
@@ -343,6 +355,53 @@ async def websocket_chat(websocket: WebSocket):
     if not current_id or current_role not in {"user", "employee", "admin"}:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
+
+    # Admin+salon case da receiver_id shart emas; qolgan holatlarda talab qilinadi
+    if not receiver_id and not (current_role == "admin" and receiver_type == "salon"):
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    # ── Special case: Admin salon-level notification room ──────────────────
+    # Admin receiver_type="salon" bilan ulanganda barcha salon xabarlarini eshitadi
+    if current_role == "admin" and receiver_type == "salon":
+        db2 = SessionLocal()
+        salon_room_id = None
+        try:
+            admin_obj = db2.query(Admin).filter(Admin.id == current_id, Admin.is_active == True).first()
+            if not admin_obj or not getattr(admin_obj, "salon_id", None):
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+                return
+            salon_room_id = f"salon_{admin_obj.salon_id}"
+            await manager.connect(salon_room_id, websocket)
+            await manager.broadcast(salon_room_id, {
+                "event": "join",
+                "room_id": salon_room_id,
+                "user_id": current_id,
+                "role": "admin",
+                "time": _now_local_iso(),
+            })
+            # Admin bu modda faqat notification qabul qiladi
+            while True:
+                try:
+                    await websocket.receive_text()
+                except Exception:
+                    break
+        except WebSocketDisconnect:
+            pass
+        except Exception:
+            try:
+                await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+            except Exception:
+                pass
+        finally:
+            try:
+                if salon_room_id:
+                    manager.disconnect(salon_room_id, websocket)
+                db2.close()
+            except Exception:
+                pass
+        return
+    # ───────────────────────────────────────────────────────────────────────
 
     db = SessionLocal()
     chat = None
@@ -404,10 +463,17 @@ async def websocket_chat(websocket: WebSocket):
             event_type = parsed.get("event") or "message"
 
             if event_type == "mark_read":
-                # Mark all unread messages in this chat as read for current user
+                # Admin uchun receiver_id = salon_id (admin_id emas)
+                if current_role == "admin":
+                    admin_obj = db.query(Admin).filter(Admin.id == current_id).first()
+                    effective_receiver_id = str(admin_obj.salon_id) if admin_obj and getattr(admin_obj, "salon_id", None) else current_id
+                else:
+                    effective_receiver_id = current_id
+
+                # Mark all unread messages in this chat as read
                 db.query(Message).filter(
                     Message.user_chat_id == chat.id,
-                    Message.receiver_id == current_id,
+                    Message.receiver_id == effective_receiver_id,
                     Message.is_read == False,
                 ).update({Message.is_read: True})
 
@@ -551,8 +617,8 @@ async def websocket_chat(websocket: WebSocket):
                         db.add(notif)
                         db.commit()
 
-                # Broadcast a lightweight notification event to the room
-                await manager.broadcast(room_id, {
+                # Notification payload
+                notif_payload = {
                     "event": "notification",
                     "room_id": room_id,
                     "kind": "chat_message",
@@ -563,9 +629,32 @@ async def websocket_chat(websocket: WebSocket):
                     "message": message_text,
                     "to_user_id": receiver_id if receiver_type == "user" else None,
                     "to_employee_id": receiver_id if receiver_type == "employee" else None,
+                    "to_salon_id": receiver_id if receiver_type == "salon" else None,
+                    "sender_id": current_id,
+                    "sender_type": sender_type_eff,
+                    "chat_id": str(chat.id),
                     "unread_count": unread_count,
                     "time": _now_local_iso(),
-                })
+                }
+
+                # Broadcast a lightweight notification event to the room
+                await manager.broadcast(room_id, notif_payload)
+
+                # ── Agar user salon ga yozsa, salon-level room ga ham broadcast ──
+                if receiver_type == "salon":
+                    salon_room_id = f"salon_{receiver_id}"
+                    await manager.broadcast(salon_room_id, notif_payload)
+
+                # ── Agar user employeega yozsa, employee salon room ga ham xabar ──
+                if receiver_type == "employee":
+                    try:
+                        emp = db.query(Employee).filter(Employee.id == receiver_id).first()
+                        if emp and getattr(emp, "salon_id", None):
+                            emp_salon_room_id = f"salon_{emp.salon_id}"
+                            await manager.broadcast(emp_salon_room_id, notif_payload)
+                    except Exception:
+                        pass
+
             except Exception:
                 # Do not fail WS on notification errors
                 pass
