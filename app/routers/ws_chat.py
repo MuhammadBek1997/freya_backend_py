@@ -352,6 +352,9 @@ async def websocket_chat(websocket: WebSocket):
 
     current_id = str(payload.get("id"))
     current_role = str(payload.get("role"))
+    # salon_admin ham admin kabi ishlaydi
+    if current_role == "salon_admin":
+        current_role = "admin"
     if not current_id or current_role not in {"user", "employee", "admin"}:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
