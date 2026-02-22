@@ -158,7 +158,7 @@ def deactivate_expired_premiums(db: Session) -> int:
             affected += 1
 
             # Если у пользователя есть автопродление — подготовим платеж и попробуем провести его
-            if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay_id:
+            if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay:
                 quantity_months = int(premium.duration_months or 1)
                 amount_for_month = Settings.AMOUNT_FOR_PREMIUM  # Example amount for 1 month
 
