@@ -70,7 +70,7 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 def generate_verification_code() -> str:
     """Generate 6-digit verification code"""
     code = str(secrets.randbelow(900000) + 100000)
-    print(code)
+    # print(code)
     return code
 
 
