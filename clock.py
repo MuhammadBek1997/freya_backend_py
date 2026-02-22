@@ -37,7 +37,7 @@ async def lifespan(app: FastAPI):
 
         # Run daily at 00:00 (UTC) and also at app startup once
         _deactivate_job()
-        scheduler.add_job(_deactivate_job, CronTrigger(hour=8, minute=0))
+        scheduler.add_job(_deactivate_job, CronTrigger(hour=11, minute=35))
         scheduler.start()
         app.state.scheduler = scheduler
     except Exception as e:
