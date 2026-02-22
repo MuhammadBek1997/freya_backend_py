@@ -217,7 +217,21 @@ def deactivate_expired_premiums(db: Session) -> int:
                     # Попробуем снова при следующей проверке
                     continue
 
-                logger.info(f"Payment succeeded and recorded for user {premium.user.id}; extending premium.")
+                # Успешный платеж: отмечаем как подтвержденный и применяем бизнес-логику премиума
+                payment.status = PaymentStatus.CONFIRMED.value
+                db.commit()
+
+                try:
+                    complate_payment(payment, db)
+                except Exception as e:
+                    logger.error(
+                        f"Payment succeeded but failed to complete premium logic for user {premium.user.id}: {e}"
+                    )
+                    continue
+
+                logger.info(
+                    f"Payment succeeded and premium extended for user {premium.user.id}."
+                )
 
 
         db.commit()

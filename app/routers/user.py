@@ -736,10 +736,20 @@ async def get_user_premium_status(
     now = datetime.utcnow()
     premium = (
         db.query(UserPremium)
-        .filter(UserPremium.user_id == current_user.id, UserPremium.is_active == True)
+        .filter(
+            UserPremium.user_id == current_user.id,
+            UserPremium.is_active == True,
+        )
         .order_by(UserPremium.end_date.desc())
         .first()
     )
+
+    # Agar aktiv deb belgilangan premium allaqachon muddati o'tgan bo'lsa,
+    # xavfsizlik uchun uni shu yerning o'zida deaktivatsiya qilamiz.
+    if premium and premium.end_date <= now:
+        premium.is_active = False
+        db.commit()
+        premium = None
 
     if not premium:
         return UserPremiumStatusResponse(is_premium=False)
