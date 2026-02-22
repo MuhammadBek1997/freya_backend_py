@@ -121,7 +121,7 @@ def deactivate_expired_premiums(db: Session) -> int:
     try:
         # Сначала деактивируем все дублирующиеся активные подписки
         users_with_multiple = (
-            db.query(UserPremium)
+            db.query(UserPremium.user_id)
             .filter(UserPremium.is_active == True)
             .group_by(UserPremium.user_id)
             .having(func.count(UserPremium.id) > 1)
