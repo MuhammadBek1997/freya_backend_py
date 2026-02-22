@@ -485,7 +485,7 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
         "merchant_trans_id": data.get("merchant_trans_id"),
         "merchant_prepare_id": payment.paymet_id,
     }
-    print(response)
+    # print(response)
 
     return response
 
@@ -529,6 +529,6 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
         "merchant_prepare_id": data.get("merchant_prepare_id"),
         "merchant_confirm_id": data.get("merchant_prepare_id"),
     }
-    print(response)
+    # print(response)
 
     return response

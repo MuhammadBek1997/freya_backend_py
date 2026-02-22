@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     SUPERADMIN_IS_SUPERUSER: Optional[Union[str, int, bool, None]] = "true"
     SUPERADMIN_IS_VERIFIED: Optional[Union[str, int, bool, None]] = "true"
 
-    AMOUNT_FOR_PREMIUM: Optional[Union[str, int, bool, None]] = 19900  # so'm - obuna narxi
+    AMOUNT_FOR_PREMIUM: Optional[Union[str, int, bool, None]] = 1000  # so'm - obuna narxi
     AMOUNT_FOR_PER_POST: Optional[Union[str, int, bool, None]] = 25000  # so'm - har bir post narxi (4 ta = 100,000)
     click_provider: ClassVar[ClickPaymentProvider]  = ClickPaymentProvider(
         merchant_id="44558",
