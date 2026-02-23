@@ -166,7 +166,7 @@ def deactivate_expired_premiums(db: Session) -> int:
                     payment_for=f"premium_{premium.user.id}_{quantity_months}",
                     amount=str(amount_for_month * quantity_months),
                     status="created",
-                    payment_card_id=premium.user.card_for_auto_pay_id,
+                    payment_card_id=premium.user.card_for_auto_pay,
                 )
                 db.add(payment)
                 db.commit()
@@ -175,7 +175,7 @@ def deactivate_expired_premiums(db: Session) -> int:
                 get_card = (
                     db.query(PaymentCard)
                     .filter(
-                        PaymentCard.id == premium.user.card_for_auto_pay_id,
+                        PaymentCard.id == premium.user.card_for_auto_pay,
                         PaymentCard.user_id == premium.user.id,
                         PaymentCard.is_active == True,
                         PaymentCard.is_verified == True,
