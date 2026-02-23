@@ -147,15 +147,16 @@ def deactivate_expired_premiums(db: Session) -> int:
         # Получаем все истекшие активные премиумы
         expired_premiums = (
             db.query(UserPremium)
-            .filter(UserPremium.is_active == True, UserPremium.end_date <= now)
+            .filter(UserPremium.end_date <= now)
             .all()
         )
-
+        activated_premiums = 0
         affected = 0
         for premium in expired_premiums:
             # Деактивируем все истекшие подписки
-            premium.is_active = False
-            affected += 1
+            if premium.is_active:
+                premium.is_active = False
+                affected += 1
 
             # Если у пользователя есть автопродление — подготовим платеж и попробуем провести его
             if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay:
@@ -218,6 +219,7 @@ def deactivate_expired_premiums(db: Session) -> int:
                     continue
 
                 # Успешный платеж: отмечаем как подтвержденный и применяем бизнес-логику премиума
+                activated_premiums += 1
                 payment.status = PaymentStatus.CONFIRMED.value
                 db.commit()
 
@@ -236,7 +238,7 @@ def deactivate_expired_premiums(db: Session) -> int:
 
         db.commit()
         logger.info(f"Deactivated {affected} expired premium record(s)")
-        return affected
+        return affected, activated_premiums
     except Exception as e:
         try:
             db.rollback()

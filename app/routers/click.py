@@ -43,8 +43,8 @@ def run_premium_cron(
     Autentifikatsiyasiz chaqirilishi mumkin, shuning uchun uni faqat sizning tashqi
     servislaringiz (cron yoki worker) orqali chaqirish tavsiya etiladi.
     """
-    processed = deactivate_expired_premiums(db)
-    return {"success": True, "processed": processed}
+    processed,activated_premium = deactivate_expired_premiums(db)
+    return {"success": True, "processed": processed, "activated_premium":activated_premium}
 
 
 @router.post("/card/create")
