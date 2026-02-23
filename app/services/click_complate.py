@@ -145,11 +145,33 @@ def deactivate_expired_premiums(db: Session) -> int:
             logger.warning(f"Fixed multiple active premiums for user {user_id[0]}")
 
         # Получаем все истекшие активные премиумы
+        # expired_premiums = (
+        #     db.query(UserPremium)
+        #     .filter(UserPremium.end_date <= now)
+        #     .all()
+        # )
+        
+        subq = (
+        db.query(
+            UserPremium.user_id,
+            func.max(UserPremium.start_date).label("max_start_date")
+        )
+        .group_by(UserPremium.user_id)
+        .subquery()
+        )
+
         expired_premiums = (
             db.query(UserPremium)
+            .join(
+                subq,
+                (UserPremium.user_id == subq.c.user_id) &
+                (UserPremium.start_date == subq.c.max_start_date)
+            )
             .filter(UserPremium.end_date <= now)
             .all()
         )
+
+
         activated_premiums = 0
         affected = 0
         for premium in expired_premiums:
