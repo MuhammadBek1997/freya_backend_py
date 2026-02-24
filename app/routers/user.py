@@ -214,13 +214,13 @@ async def register_step1(
             is_verified=False,
             is_active=False,
         )
+        db.add(temp_user)
     else:
         user.password_hash = hashed_password
         user.verification_code = verification_code
         user.verification_expires_at = datetime.utcnow() + timedelta(minutes=5)
         user.is_verified = False
         user.is_active = False
-    db.add(temp_user)
     db.commit()
 
     return {
