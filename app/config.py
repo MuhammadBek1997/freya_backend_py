@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # External Services
     eskiz_email: Optional[str] = "fayzullindmr@gmail.com"
-    eskiz_password: Optional[str] = "rlPJjmkaqRvZshRoNpcIiCFtC5GiNzI7k7YNe8fs"
+    eskiz_password: Optional[str] = "ASUshzRFExyp#r9Z"
     eskiz_token: Optional[str] = ""
 
     deepl_api_key: Optional[str] = os.getenv("DEEPL_API_KEY")
