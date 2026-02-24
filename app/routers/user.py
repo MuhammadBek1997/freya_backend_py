@@ -206,18 +206,18 @@ async def register_step1(
     hashed_password = JWTUtils.hash_password(user_data.password)
     user = db.query(User).filter(User.phone == user_data.phone, User.is_verified == False).first()
     if user:
-        if user.is_verified and user.is_active:
-            raise HTTPException(
-                status_code=400,
-                detail=get_translation(language, "auth.phoneExists"),
-            )
-        else:
+        # if user.is_verified and user.is_active:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail=get_translation(language, "auth.phoneExists"),
+        #     )
+        # else:
             # qayta kod yuboramiz (update)
-            user.password_hash = hashed_password
-            user.verification_code = verification_code
-            user.verification_expires_at = datetime.utcnow() + timedelta(minutes=5)
-            user.is_verified = False
-            user.is_active = False
+        user.password_hash = hashed_password
+        user.verification_code = verification_code
+        user.verification_expires_at = datetime.utcnow() + timedelta(minutes=5)
+        user.is_verified = False
+        user.is_active = False
     else:
         temp_user = User(
             phone=user_data.phone,
