@@ -369,8 +369,8 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
     new_premium = UserPremium(
         user_id=user_id,
         start_date=now,
-        end_date=now + relativedelta(hours=months),
-        # end_date=now + relativedelta(months=months),
+        # end_date=now + relativedelta(hours=months),
+        end_date=now + relativedelta(months=months),
 
         duration_months=months,
         is_active=True,
