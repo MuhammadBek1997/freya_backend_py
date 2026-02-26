@@ -18,7 +18,7 @@ from app.schemas.Click import (
     PaymentCard as PaymentCardSchema,
 )
 from app.services.Click import PaymentStatus
-from app.services.click_complate import complate_payment
+from app.services.click_complate import complate_payment, deactivate_expired_premiums
 from app.utils.payment_validator import PaymentValidator
 
 
@@ -29,6 +29,22 @@ router = APIRouter(
 
 
 cards_temp = {}
+
+
+@router.post("/premium/run-cron")
+def run_premium_cron(
+    db: Session = Depends(get_db),
+):
+    """
+    Premiumlar uchun ochiq "cron" endpoint:
+    - muddati tugagan aktiv premiumlarni deaktivatsiya qiladi
+    - auto-pay yoqilgan foydalanuvchilar uchun Click orqali avto to'lovni urib ko'radi
+
+    Autentifikatsiyasiz chaqirilishi mumkin, shuning uchun uni faqat sizning tashqi
+    servislaringiz (cron yoki worker) orqali chaqirish tavsiya etiladi.
+    """
+    processed,activated_premium = deactivate_expired_premiums(db)
+    return {"success": True, "processed": processed, "activated_premium":activated_premium}
 
 
 @router.post("/card/create")
@@ -485,7 +501,7 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
         "merchant_trans_id": data.get("merchant_trans_id"),
         "merchant_prepare_id": payment.paymet_id,
     }
-    print(response)
+    # print(response)
 
     return response
 
@@ -529,6 +545,6 @@ async def webhook_complete(request: Request, db: Session = Depends(get_db)):
         "merchant_prepare_id": data.get("merchant_prepare_id"),
         "merchant_confirm_id": data.get("merchant_prepare_id"),
     }
-    print(response)
+    # print(response)
 
     return response

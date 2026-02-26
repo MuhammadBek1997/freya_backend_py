@@ -70,7 +70,7 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 def generate_verification_code() -> str:
     """Generate 6-digit verification code"""
     code = str(secrets.randbelow(900000) + 100000)
-    print(code)
+    # print(code)
     return code
 
 
@@ -204,15 +204,31 @@ async def register_step1(
         }
     # Create temporary user record
     hashed_password = JWTUtils.hash_password(user_data.password)
-    temp_user = User(
-        phone=user_data.phone,
-        password_hash=hashed_password,
-        verification_code=verification_code,
-        verification_expires_at=datetime.utcnow() + timedelta(minutes=5),
-        is_verified=False,
-        is_active=False,
-    )
-    db.add(temp_user)
+    user = db.query(User).filter(User.phone == user_data.phone, User.is_verified == False).first()
+    if user:
+        # if user.is_verified and user.is_active:
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail=get_translation(language, "auth.phoneExists"),
+        #     )
+        # else:
+            # qayta kod yuboramiz (update)
+        user.password_hash = hashed_password
+        user.verification_code = verification_code
+        user.verification_expires_at = datetime.utcnow() + timedelta(minutes=5)
+        user.is_verified = False
+        user.is_active = False
+    else:
+        temp_user = User(
+            phone=user_data.phone,
+            password_hash=hashed_password,
+            verification_code=verification_code,
+            verification_expires_at=datetime.utcnow() + timedelta(minutes=5),
+            is_verified=False,
+            is_active=False,
+        )
+        db.add(temp_user)
+
     db.commit()
 
     return {
@@ -736,10 +752,20 @@ async def get_user_premium_status(
     now = datetime.utcnow()
     premium = (
         db.query(UserPremium)
-        .filter(UserPremium.user_id == current_user.id, UserPremium.is_active == True)
+        .filter(
+            UserPremium.user_id == current_user.id,
+            UserPremium.is_active == True,
+        )
         .order_by(UserPremium.end_date.desc())
         .first()
     )
+
+    # Agar aktiv deb belgilangan premium allaqachon muddati o'tgan bo'lsa,
+    # xavfsizlik uchun uni shu yerning o'zida deaktivatsiya qilamiz.
+    if premium and premium.end_date <= now:
+        premium.is_active = False
+        db.commit()
+        premium = None
 
     if not premium:
         return UserPremiumStatusResponse(is_premium=False)

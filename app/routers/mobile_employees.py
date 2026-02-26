@@ -38,6 +38,14 @@ class DailyEmployeeScheduleResponse(BaseModel):
 router = APIRouter(prefix="/mobile/employees", tags=["Mobile Employees"])
 
 
+def _profession_to_str(value):
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return ", ".join(str(v) for v in value if v)
+    return str(value)
+
+
 @router.get(
     "/salon/{salon_id}",
     response_model=MobileEmployeeListResponse,
@@ -596,14 +604,16 @@ async def get_employee_schedules_by_date(
                         end_time = schedule.end_time.strftime("%H:%M") if schedule.end_time else "18:00"
                         time_range = f"{start_time}-{end_time}"
                         
-                        employee_schedules.append(EmployeeScheduleItem(
-                            employee_id=str(employee.id),
-                            employee_name=employee.name or "Unknown",
-                            service_name=schedule.name,
-                            service_type=employee.profession,
-                            is_private=salon.private_salon if salon else False,
-                            time=time_range
-                        ))
+                        employee_schedules.append(
+                            EmployeeScheduleItem(
+                                employee_id=str(employee.id),
+                                employee_name=employee.name or "Unknown",
+                                service_name=schedule.name,
+                                service_type=_profession_to_str(employee.profession),
+                                is_private=salon.private_salon if salon else False,
+                                time=time_range,
+                            )
+                        )
 
         # Pagination
         total = len(employee_schedules)
@@ -676,14 +686,18 @@ async def get_my_schedules_by_date(
                 end_time = schedule.end_time.strftime("%H:%M") if schedule.end_time else "18:00"
                 time_range = f"{start_time}-{end_time}"
 
-                employee_schedules.append(EmployeeScheduleItem(
-                    employee_id=str(current_user.id),
-                    employee_name=current_user.name or "Unknown",
-                    service_name=schedule.name,
-                    service_type=getattr(current_user, "profession", None),
-                    is_private=salon.private_salon if salon else False,
-                    time=time_range,
-                ))
+                employee_schedules.append(
+                    EmployeeScheduleItem(
+                        employee_id=str(current_user.id),
+                        employee_name=current_user.name or "Unknown",
+                        service_name=schedule.name,
+                        service_type=_profession_to_str(
+                            getattr(current_user, "profession", None)
+                        ),
+                        is_private=salon.private_salon if salon else False,
+                        time=time_range,
+                    )
+                )
 
         # Pagination
         total = len(employee_schedules)

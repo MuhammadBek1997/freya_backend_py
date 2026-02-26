@@ -145,28 +145,51 @@ def deactivate_expired_premiums(db: Session) -> int:
             logger.warning(f"Fixed multiple active premiums for user {user_id[0]}")
 
         # Получаем все истекшие активные премиумы
+        # expired_premiums = (
+        #     db.query(UserPremium)
+        #     .filter(UserPremium.end_date <= now)
+        #     .all()
+        # )
+        
+        subq = (
+        db.query(
+            UserPremium.user_id,
+            func.max(UserPremium.start_date).label("max_start_date")
+        )
+        .group_by(UserPremium.user_id)
+        .subquery()
+        )
+
         expired_premiums = (
             db.query(UserPremium)
-            .filter(UserPremium.is_active == True, UserPremium.end_date <= now)
+            .join(
+                subq,
+                (UserPremium.user_id == subq.c.user_id) &
+                (UserPremium.start_date == subq.c.max_start_date)
+            )
+            .filter(UserPremium.end_date <= now)
             .all()
         )
 
+
+        activated_premiums = 0
         affected = 0
         for premium in expired_premiums:
             # Деактивируем все истекшие подписки
-            premium.is_active = False
-            affected += 1
+            if premium.is_active:
+                premium.is_active = False
+                affected += 1
 
             # Если у пользователя есть автопродление — подготовим платеж и попробуем провести его
-            if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay_id:
+            if premium.user.auto_pay_for_premium and premium.user.card_for_auto_pay:
                 quantity_months = int(premium.duration_months or 1)
-                amount_for_month = Settings.AMOUNT_FOR_PREMIUM  # Example amount for 1 month
+                amount_for_month = settings.AMOUNT_FOR_PREMIUM  # Example amount for 1 month
 
                 payment = ClickPayment(
                     payment_for=f"premium_{premium.user.id}_{quantity_months}",
                     amount=str(amount_for_month * quantity_months),
                     status="created",
-                    payment_card_id=premium.user.card_for_auto_pay_id,
+                    payment_card_id=premium.user.card_for_auto_pay,
                 )
                 db.add(payment)
                 db.commit()
@@ -175,7 +198,7 @@ def deactivate_expired_premiums(db: Session) -> int:
                 get_card = (
                     db.query(PaymentCard)
                     .filter(
-                        PaymentCard.id == premium.user.card_for_auto_pay_id,
+                        PaymentCard.id == premium.user.card_for_auto_pay,
                         PaymentCard.user_id == premium.user.id,
                         PaymentCard.is_active == True,
                         PaymentCard.is_verified == True,
@@ -217,12 +240,27 @@ def deactivate_expired_premiums(db: Session) -> int:
                     # Попробуем снова при следующей проверке
                     continue
 
-                logger.info(f"Payment succeeded and recorded for user {premium.user.id}; extending premium.")
+                # Успешный платеж: отмечаем как подтвержденный и применяем бизнес-логику премиума
+                activated_premiums += 1
+                payment.status = PaymentStatus.CONFIRMED.value
+                db.commit()
+
+                # try:
+                #     complate_payment(payment, db)
+                # except Exception as e:
+                #     logger.error(
+                #         f"Payment succeeded but failed to complete premium logic for user {premium.user.id}: {e}"
+                #     )
+                #     continue
+
+                logger.info(
+                    f"Payment succeeded and premium extended for user {premium.user.id}."
+                )
 
 
         db.commit()
         logger.info(f"Deactivated {affected} expired premium record(s)")
-        return affected
+        return affected, activated_premiums
     except Exception as e:
         try:
             db.rollback()
@@ -331,7 +369,9 @@ def auto_extend_user_premium(user_id: str, months: int, db: Session) -> None:
     new_premium = UserPremium(
         user_id=user_id,
         start_date=now,
+        # end_date=now + relativedelta(hours=months),
         end_date=now + relativedelta(months=months),
+
         duration_months=months,
         is_active=True,
     )

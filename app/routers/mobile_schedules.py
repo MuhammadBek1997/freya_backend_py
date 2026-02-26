@@ -838,7 +838,8 @@ async def create_appointment(
         if not salon:
             raise HTTPException(
                 status_code=404,
-                detail=get_translation(language, "errors.404") or "Salon topilmadi",
+                detail=get_translation(language, "errors.salon_not_found")
+                or "Salon topilmadi",
             )
 
         # Agar token yo'q bo'lsa (guest user), user_name va phone_number majburiy
@@ -846,7 +847,8 @@ async def create_appointment(
             if not appointment_data.user_name or not appointment_data.user_name.strip():
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400") or "Token yo'q bo'lsa, mijoz ismi majburiy",
+                    detail=get_translation(language, "errors.customer_name_required")
+                    or "Mijoz ismi majburiy",
                 )
 
         # 2. Schedule mavjudligini tekshirish
@@ -865,21 +867,24 @@ async def create_appointment(
         if not schedule:
             raise HTTPException(
                 status_code=404,
-                detail=get_translation(language, "errors.404") or "Jadval topilmadi",
+                detail=get_translation(language, "errors.schedule_not_found")
+                or "Jadval topilmadi",
             )
         # resolved_date: kiritilmasa schedule.date olinadi
         resolved_date = appointment_data.application_date or schedule.date
         if resolved_date is None:
             raise HTTPException(
                 status_code=400,
-                detail=get_translation(language, "errors.400") or "Sana kiritilmagan va jadvalda sana mavjud emas",
+                detail=get_translation(language, "errors.date_not_specified")
+                or "Sana aniqlanmadi",
             )
         # Tanlangan vaqt majburiy
         selected_time = appointment_data.application_time
         if selected_time is None:
             raise HTTPException(
                 status_code=400,
-                detail=get_translation(language, "errors.400") or "Vaqt kiritilmagan va jadvalda boshlanish vaqti mavjud emas",
+                detail=get_translation(language, "errors.time_not_specified")
+                or "Vaqt kiritilmagan",
             )
 
         # 3. Employee mavjudligini va schedule'da borligini tekshirish
@@ -898,7 +903,8 @@ async def create_appointment(
         if not employee:
             raise HTTPException(
                 status_code=404,
-                detail=get_translation(language, "errors.404") or "Xodim topilmadi",
+                detail=get_translation(language, "errors.employee_not_found")
+                or "Xodim topilmadi",
             )
 
         # 4. Service mavjudligini tekshirish (agar berilgan bo'lsa). Agar berilmasa schedule ma'lumotlari ishlatiladi.
@@ -922,7 +928,8 @@ async def create_appointment(
             if not svc:
                 raise HTTPException(
                     status_code=404,
-                    detail=get_translation(language, "errors.404") or "Servis topilmadi",
+                    detail=get_translation(language, "errors.service_not_found")
+                    or "Xizmat topilmadi",
                 )
             service_name = svc.name
             service_price = float(svc.price) if getattr(svc, "price", None) is not None else service_price
@@ -930,7 +937,8 @@ async def create_appointment(
             if duration_minutes <= 0:
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400") or "Servis davomiyligi noto'g'ri",
+                    detail=get_translation(language, "errors.service_duration_invalid")
+                    or "Xizmat davomiyligi noto'g'ri",
                 )
             # End time hisoblash
             selected_end_time = (datetime.combine(resolved_date, selected_time) + timedelta(minutes=duration_minutes)).time()
@@ -940,7 +948,7 @@ async def create_appointment(
             if not appointment_data.payment_card_id:
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400")
+                    detail=get_translation(language, "errors.card_id_required")
                     or "Karta ID majburiy",
                 )
 
@@ -958,7 +966,7 @@ async def create_appointment(
             if not payment_card:
                 raise HTTPException(
                     status_code=404,
-                    detail=get_translation(language, "errors.404")
+                    detail=get_translation(language, "errors.payment_card_not_found")
                     or "To'lov kartasi topilmadi",
                 )
 
@@ -968,14 +976,16 @@ async def create_appointment(
             if not (schedule.start_time <= selected_time <= schedule.end_time):
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400") or "Vaqt jadval oralig'ida emas",
+                    detail=get_translation(language, "errors.time_out_of_schedule")
+                    or "Tanlangan vaqt jadval oralig'ida emas",
                 )
             # agar servis berilgan bo'lsa, end ham ichida bo'lsin
             if selected_end_time:
                 if not (schedule.start_time <= selected_end_time <= schedule.end_time):
                     raise HTTPException(
                         status_code=400,
-                        detail=get_translation(language, "errors.400") or "Servis tugash vaqti jadval oralig'ida emas",
+                        detail=get_translation(language, "errors.service_end_out_of_schedule")
+                        or "Xizmat tugash vaqti jadval oralig'ida emas",
                     )
 
         # 7. Interval asosida to'qnashuvlarni tekshirish
@@ -1020,7 +1030,8 @@ async def create_appointment(
             if start_dt < app_end and end_dt > app_start:
                     raise HTTPException(
                         status_code=409,
-                        detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
+                        detail=get_translation(language, "errors.master_busy")
+                        or "Bu vaqtda master band",
                     )
 
         # Busy slots bilan to'qnashuv
@@ -1040,7 +1051,8 @@ async def create_appointment(
             if start_dt < be and end_dt > bs:
                 raise HTTPException(
                     status_code=409,
-                    detail=get_translation(language, "errors.409") or "Bu vaqt allaqachon band",
+                    detail=get_translation(language, "errors.master_busy")
+                    or "Bu vaqtda master band",
                 )
 
         # 8. Application number yaratish
@@ -1064,14 +1076,16 @@ async def create_appointment(
             if not current_user:
                 raise HTTPException(
                     status_code=401,
-                    detail=get_translation(language, "errors.401") or "To'lov uchun login talab qilinadi",
+                    detail=get_translation(language, "errors.login_required_for_payment")
+                    or "To'lov uchun login talab qilinadi",
                 )
 
             # Karta majburiy va foydalanuvchiga tegishli bo'lishi kerak
             if not appointment_data.payment_card_id:
                 raise HTTPException(
                     status_code=400,
-                    detail=get_translation(language, "errors.400") or "Oldindan to'lov uchun karta ID majburiy",
+                    detail=get_translation(language, "errors.card_id_required_prepay")
+                    or "Oldindan to'lov uchun karta ID majburiy",
                 )
 
             payment_card = (
@@ -1090,7 +1104,8 @@ async def create_appointment(
             if not payment_card:
                 raise HTTPException(
                     status_code=404,
-                    detail=get_translation(language, "errors.404") or "To'lov kartasi topilmadi yoki tasdiqlanmagan",
+                    detail=get_translation(language, "errors.payment_card_not_found_or_not_verified")
+                    or "To'lov kartasi topilmadi yoki tasdiqlanmagan",
                 )
 
             # Premium foydalanuvchi uchun 10% chegirma (faqat full_pay uchun)
@@ -1147,7 +1162,7 @@ async def create_appointment(
                     status_code=402,
                     detail=(
                         result.get("error_note")
-                        or get_translation(language, "errors.402")
+                        or get_translation(language, "errors.payment_failed")
                         or "To'lov amalga oshmadi"
                     ),
                 )
