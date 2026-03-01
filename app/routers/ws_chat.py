@@ -2,7 +2,8 @@ from typing import Dict, Set, Any, Optional, List
 import json
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Depends, Query as FastQuery, HTTPException, JSONResponse
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Depends, Query as FastQuery, HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
