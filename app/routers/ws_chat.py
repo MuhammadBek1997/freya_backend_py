@@ -348,7 +348,10 @@ async def get_chat_list(
                 Message.sender_id == user_id,
                 Message.receiver_id == user_id,
                 Message.sender_id == salon_id,
-                Message.receiver_id == salon_id
+                Message.receiver_id == salon_id,
+                # Muhim: user salonga yozgan bo'lsa (receiver_id = salon_id),
+                # lekin salon hali javob bermagan bo'lsa ham ko'rinishi kerak
+                and_(Message.receiver_id == salon_id, Message.receiver_type == "salon")
             )
         else:
             role_cond = or_(
