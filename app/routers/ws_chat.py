@@ -341,41 +341,51 @@ async def get_chat_list(
     else:
         eff_role = role
 
+    chats = []
     if eff_role == "user":
         chats = db.query(UserChat).filter(UserChat.user_id == user_id, UserChat.is_active == True).all()
     elif eff_role == "employee":
         chats = db.query(UserChat).filter(UserChat.employee_id == user_id, UserChat.is_active == True).all()
     elif eff_role == "admin":
-        salon_id = str(getattr(current_user, "salon_id", ""))
-        chats = db.query(UserChat).filter(UserChat.salon_id == salon_id, UserChat.is_active == True).all()
-    else:
-        chats = []
+        salon_id = getattr(current_user, "salon_id", None)
+        if salon_id:
+            chats = db.query(UserChat).filter(UserChat.salon_id == str(salon_id), UserChat.is_active == True).all()
 
     result = []
     for chat in chats:
         # Qarshi tomon ma'lumotlarini olish
         opponent_name = "Unknown"
         opponent_id = ""
+        
         if eff_role == "user":
-            if chat.chat_type == "user_employee" and chat.employee:
-                opponent_name = f"{chat.employee.name} {chat.employee.surname or ''}".strip()
-                opponent_id = str(chat.employee_id)
-            elif chat.chat_type == "user_salon" and chat.salon:
-                opponent_name = chat.salon.name
-                opponent_id = str(chat.salon_id)
+            if chat.chat_type == "user_employee":
+                if chat.employee:
+                    opponent_name = f"{chat.employee.name} {chat.employee.surname or ''}".strip()
+                opponent_id = str(chat.employee_id or "")
+            else:
+                if chat.salon:
+                    opponent_name = chat.salon.name
+                opponent_id = str(chat.salon_id or "")
         else:
             if chat.user:
                 opponent_name = chat.user.full_name or chat.user.username or "User"
-                opponent_id = str(chat.user_id)
+            opponent_id = str(chat.user_id or "")
+
+        msg_time = None
+        if chat.last_message_time:
+            if hasattr(chat.last_message_time, 'isoformat'):
+                msg_time = chat.last_message_time.isoformat()
+            else:
+                msg_time = str(chat.last_message_time)
 
         result.append({
             "chat_id": str(chat.id),
-            "chat_type": chat.chat_type,
-            "opponent_name": opponent_name,
-            "opponent_id": opponent_id,
-            "last_message": chat.last_message,
-            "last_message_time": chat.last_message_time.isoformat() if chat.last_message_time else None,
-            "unread_count": chat.unread_count
+            "chat_type": str(chat.chat_type or ""),
+            "opponent_name": str(opponent_name),
+            "opponent_id": str(opponent_id),
+            "last_message": str(chat.last_message or ""),
+            "last_message_time": msg_time,
+            "unread_count": int(chat.unread_count or 0)
         })
 
     # Oxirgi xabar vaqti bo'yicha saralash
