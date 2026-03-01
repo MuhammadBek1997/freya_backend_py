@@ -772,36 +772,15 @@ async def create_schedule(
             service_duration=schedule_data.service_duration,
         )
 
-    # Repeat bo'lsa — bir nechta schedule yaratamiz
-    if (
-        schedule_data.repeat
-        and schedule_data.repeat_value
-        and (schedule_data.repeat_count or 0) > 0
-    ):
-        raw_days = [d.strip().lower() for d in schedule_data.repeat_value.split(',') if d.strip()]
-        target_weekdays = sorted(set(
-            WEEKDAY_MAP[d] for d in raw_days if d in WEEKDAY_MAP
-        ))
-
-        if not target_weekdays:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="repeat_value da to'g'ri kunlar topilmadi",
-            )
-
+    # Repeat bo'lsa — har 7 kunda repeat_count marta schedule yaratamiz
+    if schedule_data.repeat and (schedule_data.repeat_count or 1) > 1:
+        count = schedule_data.repeat_count or 1
         created = []
-        current_date = schedule_data.date
-        count = 0
-        max_iter = (schedule_data.repeat_count or 1) * 14 + 7  # xavfsizlik limiti
-
-        while count < (schedule_data.repeat_count or 1) and max_iter > 0:
-            max_iter -= 1
-            if current_date.weekday() in target_weekdays:
-                sched = make_schedule(current_date)
-                db.add(sched)
-                created.append(sched)
-                count += 1
-            current_date += timedelta(days=1)
+        for i in range(count):
+            target_date = schedule_data.date + timedelta(weeks=i)
+            sched = make_schedule(target_date)
+            db.add(sched)
+            created.append(sched)
 
         db.commit()
         for s in created:
