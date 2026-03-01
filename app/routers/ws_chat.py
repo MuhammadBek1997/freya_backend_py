@@ -371,7 +371,7 @@ async def get_chat_list(
             .all()
         )
         chat_ids = [str(cid[0]) for cid in chat_ids_query]
-
+        print(f"chat_ids: {chat_ids}")
         latest_msgs = []
         for cid in chat_ids:
             # Har bir chat uchun eng oxirgi xabarni olamiz
