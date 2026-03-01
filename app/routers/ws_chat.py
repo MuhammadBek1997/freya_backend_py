@@ -2,8 +2,9 @@ from typing import Dict, Set, Any, Optional, List
 import json
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Depends, Query as FastQuery, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Depends, Query as FastQuery, HTTPException, JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
 
 from app.auth.jwt_utils import JWTUtils
@@ -331,67 +332,112 @@ async def get_chat_list(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ):
-    """Foydalanuvchi uchun chatlar ro'yxatini olish."""
-    user_id = str(current_user.id)
-    role = getattr(current_user, "role", "user")
-    
-    # Rolni modelga moslash (admin turlarini umumlashtirish)
-    if role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
-        eff_role = "admin"
-    else:
-        eff_role = role
+    """
+    Foydalanuvchi uchun chatlar ro'yxatini Message modelidan olish.
+    (UserChat jadvalini ishlatmasdan)
+    """
+    try:
+        user_id = str(current_user.id)
+        role = getattr(current_user, "role", "user")
+        salon_id = str(getattr(current_user, "salon_id", ""))
 
-    chats = []
-    if eff_role == "user":
-        chats = db.query(UserChat).filter(UserChat.user_id == user_id, UserChat.is_active == True).all()
-    elif eff_role == "employee":
-        chats = db.query(UserChat).filter(UserChat.employee_id == user_id, UserChat.is_active == True).all()
-    elif eff_role == "admin":
-        salon_id = getattr(current_user, "salon_id", None)
-        if salon_id:
-            chats = db.query(UserChat).filter(UserChat.salon_id == str(salon_id), UserChat.is_active == True).all()
-
-    result = []
-    for chat in chats:
-        # Qarshi tomon ma'lumotlarini olish
-        opponent_name = "Unknown"
-        opponent_id = ""
-        
-        if eff_role == "user":
-            if chat.chat_type == "user_employee":
-                if chat.employee:
-                    opponent_name = f"{chat.employee.name} {chat.employee.surname or ''}".strip()
-                opponent_id = str(chat.employee_id or "")
-            else:
-                if chat.salon:
-                    opponent_name = chat.salon.name
-                opponent_id = str(chat.salon_id or "")
+        # Admin uchun salon_id bo'yicha ham filtrlaymiz
+        if role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
+            role_cond = or_(
+                Message.sender_id == user_id,
+                Message.receiver_id == user_id,
+                Message.sender_id == salon_id,
+                Message.receiver_id == salon_id
+            )
         else:
-            if chat.user:
-                opponent_name = chat.user.full_name or chat.user.username or "User"
-            opponent_id = str(chat.user_id or "")
+            role_cond = or_(
+                Message.sender_id == user_id,
+                Message.receiver_id == user_id
+            )
 
-        msg_time = None
-        if chat.last_message_time:
-            if hasattr(chat.last_message_time, 'isoformat'):
-                msg_time = chat.last_message_time.isoformat()
-            else:
-                msg_time = str(chat.last_message_time)
+        # Har bir chat_id uchun oxirgi xabarni topish subquery'si
+        subquery = (
+            db.query(
+                Message.user_chat_id,
+                func.max(Message.created_at).label("latest_at")
+            )
+            .filter(role_cond)
+            .group_by(Message.user_chat_id)
+            .subquery()
+        )
 
-        result.append({
-            "chat_id": str(chat.id),
-            "chat_type": str(chat.chat_type or ""),
-            "opponent_name": str(opponent_name),
-            "opponent_id": str(opponent_id),
-            "last_message": str(chat.last_message or ""),
-            "last_message_time": msg_time,
-            "unread_count": int(chat.unread_count or 0)
-        })
+        # Oxirgi xabarlarni va ularning ma'lumotlarini olish
+        latest_msgs = (
+            db.query(Message)
+            .join(subquery, and_(
+                Message.user_chat_id == subquery.c.user_chat_id,
+                Message.created_at == subquery.c.latest_at
+            ))
+            .all()
+        )
 
-    # Oxirgi xabar vaqti bo'yicha saralash
-    result.sort(key=lambda x: x["last_message_time"] or "", reverse=True)
+        result = []
+        for msg in latest_msgs:
+            try:
+                chat_id = str(msg.user_chat_id)
+                
+                # Biz (current_user) kim ekanimizni aniqlaymiz: sender yoki receiver
+                # (Admin holatida salon_id ham biz hisoblanamiz)
+                is_sender = (str(msg.sender_id) == user_id) or (salon_id and str(msg.sender_id) == salon_id)
+                
+                if is_sender:
+                    opponent_id = str(msg.receiver_id)
+                    opponent_type = str(msg.receiver_type)
+                else:
+                    opponent_id = str(msg.sender_id)
+                    opponent_type = str(msg.sender_type)
 
-    return {"success": True, "data": result}
+                # Qarshi tomon ismini olish
+                opponent_name = "Unknown"
+                if opponent_type == "user":
+                    user_obj = db.query(User).filter(User.id == opponent_id).first()
+                    if user_obj:
+                        opponent_name = user_obj.full_name or user_obj.username or "User"
+                elif opponent_type == "employee":
+                    emp_obj = db.query(Employee).filter(Employee.id == opponent_id).first()
+                    if emp_obj:
+                        opponent_name = f"{emp_obj.name} {emp_obj.surname or ''}".strip() or "Employee"
+                elif opponent_type == "salon" or opponent_type == "admin":
+                    salon_obj = db.query(Salon).filter(Salon.id == opponent_id).first()
+                    if salon_obj:
+                        opponent_name = salon_obj.name or "Salon"
+                
+                # O'qilmagan xabarlar soni
+                unread_count = db.query(Message).filter(
+                    Message.user_chat_id == chat_id,
+                    Message.receiver_id == (salon_id if (role == 'admin' and not is_sender) else user_id),
+                    Message.is_read == False
+                ).count()
+
+                result.append({
+                    "chat_id": chat_id,
+                    "opponent_name": opponent_name,
+                    "opponent_id": opponent_id,
+                    "opponent_type": opponent_type,
+                    "last_message": str(msg.message_text or ""),
+                    "last_message_time": msg.created_at.isoformat() if msg.created_at else None,
+                    "unread_count": unread_count
+                })
+            except Exception as e:
+                print(f"Error processing message in chat list: {e}")
+                continue
+
+        # Vaqt bo'yicha saralash
+        result.sort(key=lambda x: x["last_message_time"] or "", reverse=True)
+        return {"success": True, "data": result}
+
+    except Exception as e:
+        import traceback
+        print(f"CRITICAL ERROR in get_chat_list: {e}\n{traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
 
 
 @router.get("/chat/history/{chat_id}")
@@ -402,32 +448,50 @@ async def get_chat_history(
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
 ):
-    """Chat xabarlari tarixini REST API orqali olish."""
-    chat = db.query(UserChat).filter(UserChat.id == chat_id).first()
-    if not chat:
-        raise HTTPException(status_code=404, detail="Chat topilmadi")
-
-    # Xavfsizlik: user faqat o'z chatini ko'rishi kerak
+    """
+    Chat xabarlari tarixini Message modelidan olish.
+    (UserChat jadvalini ishlatmasdan)
+    """
     user_id = str(current_user.id)
     role = getattr(current_user, "role", "user")
-    
+    salon_id = str(getattr(current_user, "salon_id", ""))
+
+    # Xavfsizlik: user faqat o'zi qatnashgan chat xabarlarini ko'rishi kerak
+    # Yoki admin o'z saloniga tegishli xabarlarni ko'ra oladi
     is_allowed = False
-    if str(chat.user_id) == user_id:
+    
+    # 1. User/Employee o'zi qatnashganligini tekshiramiz
+    participant_check = db.query(Message).filter(
+        Message.user_chat_id == chat_id,
+        or_(
+            Message.sender_id == user_id,
+            Message.receiver_id == user_id
+        )
+    ).first()
+    
+    if participant_check:
         is_allowed = True
-    elif str(chat.employee_id) == user_id:
-        is_allowed = True
-    elif str(chat.salon_id) == user_id: 
-        is_allowed = True
-    # Admin tekshiruvi (role bo'yicha)
-    elif role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
-        # Admin o'z saloniga tegishli chatlarni ko'ra oladi
-        if hasattr(current_user, "salon_id") and str(chat.salon_id) == str(current_user.salon_id):
+    
+    # 2. Admin uchun salon_id bo'yicha tekshiramiz
+    if not is_allowed and role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
+        if role == "superadmin":
             is_allowed = True
-        elif role == "superadmin":
-            is_allowed = True
+        elif salon_id:
+            salon_check = db.query(Message).filter(
+                Message.user_chat_id == chat_id,
+                or_(
+                    Message.sender_id == salon_id,
+                    Message.receiver_id == salon_id
+                )
+            ).first()
+            if salon_check:
+                is_allowed = True
 
     if not is_allowed:
-        raise HTTPException(status_code=403, detail="Sizda ushbu chatni ko'rishga ruxsat yo'q")
+        # Agar hali xabar bo'lmasa, lekin chat yaratilgan bo'lsa (UserChat orqali),
+        # bu yerda muammo bo'lishi mumkin. Lekin user "UserChat ishlatma" degan.
+        # Shuning uchun faqat xabarlar bor chatlarni ko'ra oladi.
+        raise HTTPException(status_code=403, detail="Sizda ushbu chatni ko'rishga ruxsat yo'q yoki chat hali bo'sh")
 
     total = db.query(Message).filter(Message.user_chat_id == chat_id).count()
     messages = (
