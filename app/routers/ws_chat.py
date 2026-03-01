@@ -383,7 +383,7 @@ async def get_chat_list(
             )
             if msg:
                 latest_msgs.append(msg)
-
+        print(f"latest_msgs: {latest_msgs}")
         result = []
         for msg in latest_msgs:
             try:
