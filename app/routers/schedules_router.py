@@ -678,8 +678,9 @@ async def get_schedules_by_salon(
 @router.get("/")
 async def get_all_schedules(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(500, ge=1, le=1000),
     search: Optional[str] = Query(None),
+    salon_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
@@ -690,6 +691,10 @@ async def get_all_schedules(
     query = db.query(Schedule)
     count_query = db.query(func.count(Schedule.id))
 
+    if salon_id:
+        query = query.filter(Schedule.salon_id == salon_id)
+        count_query = count_query.filter(Schedule.salon_id == salon_id)
+
     if search:
         search_filter = or_(
             Schedule.name.ilike(f"%{search}%"), Schedule.title.ilike(f"%{search}%")
@@ -699,7 +704,7 @@ async def get_all_schedules(
 
     total = count_query.scalar()
     schedules = (
-        query.order_by(Schedule.created_at.desc()).offset(offset).limit(limit).all()
+        query.order_by(Schedule.date.asc()).offset(offset).limit(limit).all()
     )
 
     return {
