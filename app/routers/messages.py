@@ -138,19 +138,20 @@ async def get_conversation_messages(
             "name": getattr(salon, "salon_name", None),
         }
 
-    messages = (
-        db.query(Message)
-        .filter(Message.user_chat_id == chat.id)
-        .order_by(asc(Message.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
     total_msgs = (
         db.query(Message)
         .filter(Message.user_chat_id == chat.id)
         .count()
     )
+    messages = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .order_by(desc(Message.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    messages = list(reversed(messages))
 
     data = [
         {
@@ -518,19 +519,19 @@ async def get_employee_conversation_messages(
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
-    messages = (
-        db.query(Message)
-        .filter(Message.user_chat_id == chat.id)
-        .order_by(asc(Message.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
     total_msgs = (
         db.query(Message)
         .filter(Message.user_chat_id == chat.id)
         .count()
     )
+    messages = list(reversed(
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .order_by(desc(Message.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    ))
 
     # Participant details for employee-side conversation
     user = db.query(User).filter(User.id == user_id).first()
@@ -818,19 +819,19 @@ async def get_admin_conversation_messages(
     if not chat:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
-    messages = (
-        db.query(Message)
-        .filter(Message.user_chat_id == chat.id)
-        .order_by(asc(Message.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
     total_msgs = (
         db.query(Message)
         .filter(Message.user_chat_id == chat.id)
         .count()
     )
+    messages = list(reversed(
+        db.query(Message)
+        .filter(Message.user_chat_id == chat.id)
+        .order_by(desc(Message.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    ))
 
     user = db.query(User).filter(User.id == user_id).first()
     participant = {

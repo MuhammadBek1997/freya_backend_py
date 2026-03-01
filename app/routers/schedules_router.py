@@ -30,6 +30,7 @@ class ScheduleCreate(BaseModel):
     end_time: time
     repeat: bool = False
     repeat_value: Optional[str] = None
+    repeat_count: Optional[int] = 1
     employee_list: List[str] = []
     price: float
     full_pay: Optional[float] = None
@@ -714,6 +715,17 @@ async def get_all_schedules(
     }
 
 
+WEEKDAY_MAP = {
+    'monday': 0,
+    'tuesday': 1,
+    'wednesday': 2,
+    'thursday': 3,
+    'friday': 4,
+    'saturday': 5,
+    'sunday': 6,
+}
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_schedule(
     schedule_data: ScheduleCreate,
@@ -721,7 +733,7 @@ async def create_schedule(
     current_user: Union[Admin, User, Employee] = Depends(get_current_user),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Создать новое расписание"""
+    """Yangi schedule yaratish — repeat bo'lsa bir nechta"""
 
     salon = db.query(Salon).filter(Salon.id == schedule_data.salon_id).first()
     if not salon:
@@ -736,25 +748,69 @@ async def create_schedule(
             detail="Start time must be earlier than end time",
         )
 
-    new_schedule = Schedule(
-        salon_id=schedule_data.salon_id,
-        name=schedule_data.name,
-        title=schedule_data.title,
-        date=schedule_data.date,
-        start_time=schedule_data.start_time,
-        end_time=schedule_data.end_time,
-        repeat=schedule_data.repeat,
-        repeat_value=schedule_data.repeat_value,
-        employee_list=schedule_data.employee_list,
-        price=schedule_data.price,
-        full_pay=schedule_data.full_pay,
-        deposit=schedule_data.deposit,
-        is_active=schedule_data.is_active,
+    def make_schedule(target_date):
+        return Schedule(
+            salon_id=schedule_data.salon_id,
+            name=schedule_data.name,
+            title=schedule_data.title,
+            date=target_date,
+            start_time=schedule_data.start_time,
+            end_time=schedule_data.end_time,
+            repeat=schedule_data.repeat,
+            repeat_value=schedule_data.repeat_value,
+            employee_list=schedule_data.employee_list,
+            price=schedule_data.price,
+            full_pay=schedule_data.full_pay,
+            deposit=schedule_data.deposit,
+            is_active=schedule_data.is_active,
+            whole_day=schedule_data.whole_day,
+            service_duration=schedule_data.service_duration,
+        )
 
-        whole_day=schedule_data.whole_day,
-        service_duration=schedule_data.service_duration,
-    )
+    # Repeat bo'lsa — bir nechta schedule yaratamiz
+    if (
+        schedule_data.repeat
+        and schedule_data.repeat_value
+        and (schedule_data.repeat_count or 0) > 0
+    ):
+        raw_days = [d.strip().lower() for d in schedule_data.repeat_value.split(',') if d.strip()]
+        target_weekdays = sorted(set(
+            WEEKDAY_MAP[d] for d in raw_days if d in WEEKDAY_MAP
+        ))
 
+        if not target_weekdays:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="repeat_value da to'g'ri kunlar topilmadi",
+            )
+
+        created = []
+        current_date = schedule_data.date
+        count = 0
+        max_iter = (schedule_data.repeat_count or 1) * 14 + 7  # xavfsizlik limiti
+
+        while count < (schedule_data.repeat_count or 1) and max_iter > 0:
+            max_iter -= 1
+            if current_date.weekday() in target_weekdays:
+                sched = make_schedule(current_date)
+                db.add(sched)
+                created.append(sched)
+                count += 1
+            current_date += timedelta(days=1)
+
+        db.commit()
+        for s in created:
+            db.refresh(s)
+
+        return {
+            "success": True,
+            "message": get_translation(language, "success"),
+            "data": created,
+            "count": len(created),
+        }
+
+    # Oddiy (repeat=False) — bitta schedule
+    new_schedule = make_schedule(schedule_data.date)
     db.add(new_schedule)
     db.commit()
     db.refresh(new_schedule)
@@ -763,6 +819,7 @@ async def create_schedule(
         "success": True,
         "message": get_translation(language, "success"),
         "data": new_schedule,
+        "count": 1,
     }
 
 
