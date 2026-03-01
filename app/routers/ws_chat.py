@@ -411,9 +411,15 @@ async def get_chat_list(
                     if emp_obj:
                         opponent_name = f"{emp_obj.name} {emp_obj.surname or ''}".strip() or "Employee"
                 elif opponent_type == "salon" or opponent_type == "admin":
+                    # Avval salon nomini tekshiramiz
                     salon_obj = db.query(Salon).filter(Salon.id == opponent_id).first()
                     if salon_obj:
                         opponent_name = salon_obj.name or "Salon"
+                    else:
+                        # Agar salon topilmasa, admin (person) ma'lumotlarini qidiramiz
+                        admin_obj = db.query(Admin).filter(Admin.id == opponent_id).first()
+                        if admin_obj:
+                            opponent_name = admin_obj.full_name or admin_obj.username or "Admin"
                 
                 # O'qilmagan xabarlar soni
                 unread_count = db.query(Message).filter(
