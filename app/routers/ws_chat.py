@@ -335,7 +335,6 @@ async def get_chat_list(
 ):
     """
     Foydalanuvchi uchun chatlar ro'yxatini Message modelidan olish.
-    (UserChat jadvalini ishlatmasdan)
     """
     try:
         user_id = str(current_user.id)
@@ -371,7 +370,7 @@ async def get_chat_list(
             .all()
         )
         chat_ids = [str(cid[0]) for cid in chat_ids_query]
-        print(f"chat_ids: {chat_ids}")
+
         latest_msgs = []
         for cid in chat_ids:
             # Har bir chat uchun eng oxirgi xabarni olamiz
@@ -383,7 +382,7 @@ async def get_chat_list(
             )
             if msg:
                 latest_msgs.append(msg)
-        print(f"latest_msgs: {latest_msgs}")
+
         result = []
         for msg in latest_msgs:
             try:
@@ -464,7 +463,6 @@ async def get_chat_history(
 ):
     """
     Chat xabarlari tarixini Message modelidan olish.
-    (UserChat jadvalini ishlatmasdan)
     """
     user_id = str(current_user.id)
     role = getattr(current_user, "role", "user")
