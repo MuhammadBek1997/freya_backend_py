@@ -334,7 +334,7 @@ async def get_chat_list(
     current_user: Any = Depends(get_current_user),
 ):
     """
-    Foydalanuvchi uchun chatlar ro'yxatini Message modelidan olish.
+    Foydalanuvchi uchun chatlar ro'yxatini olish.
     """
     try:
         user_id = str(current_user.id)
@@ -462,7 +462,7 @@ async def get_chat_history(
     current_user: Any = Depends(get_current_user),
 ):
     """
-    Chat xabarlari tarixini Message modelidan olish.
+    Chat xabarlari tarixini olish.
     """
     user_id = str(current_user.id)
     role = getattr(current_user, "role", "user")
