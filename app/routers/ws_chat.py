@@ -414,7 +414,7 @@ async def get_chat_list(
                     # Avval salon nomini tekshiramiz
                     salon_obj = db.query(Salon).filter(Salon.id == opponent_id).first()
                     if salon_obj:
-                        opponent_name = salon_obj.name or "Salon"
+                        opponent_name = getattr(salon_obj, 'salon_name', None) or "Salon"
                     else:
                         # Agar salon topilmasa, admin (person) ma'lumotlarini qidiramiz
                         admin_obj = db.query(Admin).filter(Admin.id == opponent_id).first()
