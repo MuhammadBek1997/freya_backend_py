@@ -772,15 +772,31 @@ async def create_schedule(
             service_duration=schedule_data.service_duration,
         )
 
-    # Repeat bo'lsa — har 7 kunda repeat_count marta schedule yaratamiz
-    if schedule_data.repeat and (schedule_data.repeat_count or 1) > 1:
-        count = schedule_data.repeat_count or 1
+    # Repeat bo'lsa — tanlangan hafta kunlari bo'yicha repeat_count marta (haftalik) yaratamiz
+    if schedule_data.repeat and (schedule_data.repeat_count or 1) >= 1:
+        repeat_count = schedule_data.repeat_count or 1
+
+        # Hafta kunlarini aniqlash
+        if schedule_data.repeat_value:
+            raw_days = [d.strip().lower() for d in schedule_data.repeat_value.split(',') if d.strip()]
+            target_weekdays = [WEEKDAY_MAP[d] for d in raw_days if d in WEEKDAY_MAP]
+        else:
+            # repeat_value yo'q bo'lsa — tanlangan sananing o'z hafta kuni
+            target_weekdays = [schedule_data.date.weekday()]
+
+        if not target_weekdays:
+            target_weekdays = [schedule_data.date.weekday()]
+
         created = []
-        for i in range(count):
-            target_date = schedule_data.date + timedelta(weeks=i)
-            sched = make_schedule(target_date)
-            db.add(sched)
-            created.append(sched)
+        for weekday in target_weekdays:
+            # Shu hafta kunining birinchi sanasini topamiz (start date dan boshlab)
+            days_ahead = (weekday - schedule_data.date.weekday()) % 7
+            first_occ = schedule_data.date + timedelta(days=days_ahead)
+            for i in range(repeat_count):
+                target_date = first_occ + timedelta(weeks=i)
+                sched = make_schedule(target_date)
+                db.add(sched)
+                created.append(sched)
 
         db.commit()
         for s in created:
