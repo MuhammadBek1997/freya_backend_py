@@ -334,12 +334,18 @@ async def get_chat_list(
     """Foydalanuvchi uchun chatlar ro'yxatini olish."""
     user_id = str(current_user.id)
     role = getattr(current_user, "role", "user")
+    
+    # Rolni modelga moslash (admin turlarini umumlashtirish)
+    if role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
+        eff_role = "admin"
+    else:
+        eff_role = role
 
-    if role == "user":
+    if eff_role == "user":
         chats = db.query(UserChat).filter(UserChat.user_id == user_id, UserChat.is_active == True).all()
-    elif role == "employee":
+    elif eff_role == "employee":
         chats = db.query(UserChat).filter(UserChat.employee_id == user_id, UserChat.is_active == True).all()
-    elif role in ["admin", "salon_admin"]:
+    elif eff_role == "admin":
         salon_id = str(getattr(current_user, "salon_id", ""))
         chats = db.query(UserChat).filter(UserChat.salon_id == salon_id, UserChat.is_active == True).all()
     else:
@@ -350,7 +356,7 @@ async def get_chat_list(
         # Qarshi tomon ma'lumotlarini olish
         opponent_name = "Unknown"
         opponent_id = ""
-        if role == "user":
+        if eff_role == "user":
             if chat.chat_type == "user_employee" and chat.employee:
                 opponent_name = f"{chat.employee.name} {chat.employee.surname or ''}".strip()
                 opponent_id = str(chat.employee_id)
@@ -393,19 +399,21 @@ async def get_chat_history(
 
     # Xavfsizlik: user faqat o'z chatini ko'rishi kerak
     user_id = str(current_user.id)
+    role = getattr(current_user, "role", "user")
+    
     is_allowed = False
     if str(chat.user_id) == user_id:
         is_allowed = True
     elif str(chat.employee_id) == user_id:
         is_allowed = True
-    elif str(chat.salon_id) == user_id: # Admin salon_id bilan kiradi
+    elif str(chat.salon_id) == user_id: 
         is_allowed = True
     # Admin tekshiruvi (role bo'yicha)
-    elif getattr(current_user, "role", None) in ["admin", "superadmin", "salon_admin"]:
+    elif role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
         # Admin o'z saloniga tegishli chatlarni ko'ra oladi
         if hasattr(current_user, "salon_id") and str(chat.salon_id) == str(current_user.salon_id):
             is_allowed = True
-        elif getattr(current_user, "role", None) == "superadmin":
+        elif role == "superadmin":
             is_allowed = True
 
     if not is_allowed:
