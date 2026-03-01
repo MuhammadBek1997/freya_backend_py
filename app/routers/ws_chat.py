@@ -2,11 +2,13 @@ from typing import Dict, Set, Any, Optional, List
 import json
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status, Depends, Query as FastQuery, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.auth.jwt_utils import JWTUtils
-from app.database import SessionLocal
+from app.database import SessionLocal, get_db
+from app.auth.dependencies import get_current_user
 from app.models.user import User
 from app.models.employee import Employee
 from app.models.salon import Salon
@@ -322,6 +324,113 @@ def _get_or_create_chat(db, current_id: str, current_role: str, receiver_id: str
 
     # Other roles not supported in this minimal WS chat
     return None
+
+
+@router.get("/chat/list")
+async def get_chat_list(
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Foydalanuvchi uchun chatlar ro'yxatini olish."""
+    user_id = str(current_user.id)
+    role = getattr(current_user, "role", "user")
+
+    if role == "user":
+        chats = db.query(UserChat).filter(UserChat.user_id == user_id, UserChat.is_active == True).all()
+    elif role == "employee":
+        chats = db.query(UserChat).filter(UserChat.employee_id == user_id, UserChat.is_active == True).all()
+    elif role in ["admin", "salon_admin"]:
+        salon_id = str(getattr(current_user, "salon_id", ""))
+        chats = db.query(UserChat).filter(UserChat.salon_id == salon_id, UserChat.is_active == True).all()
+    else:
+        chats = []
+
+    result = []
+    for chat in chats:
+        # Qarshi tomon ma'lumotlarini olish
+        opponent_name = "Unknown"
+        opponent_id = ""
+        if role == "user":
+            if chat.chat_type == "user_employee" and chat.employee:
+                opponent_name = f"{chat.employee.name} {chat.employee.surname or ''}".strip()
+                opponent_id = str(chat.employee_id)
+            elif chat.chat_type == "user_salon" and chat.salon:
+                opponent_name = chat.salon.name
+                opponent_id = str(chat.salon_id)
+        else:
+            if chat.user:
+                opponent_name = chat.user.full_name or chat.user.username or "User"
+                opponent_id = str(chat.user_id)
+
+        result.append({
+            "chat_id": str(chat.id),
+            "chat_type": chat.chat_type,
+            "opponent_name": opponent_name,
+            "opponent_id": opponent_id,
+            "last_message": chat.last_message,
+            "last_message_time": chat.last_message_time.isoformat() if chat.last_message_time else None,
+            "unread_count": chat.unread_count
+        })
+
+    # Oxirgi xabar vaqti bo'yicha saralash
+    result.sort(key=lambda x: x["last_message_time"] or "", reverse=True)
+
+    return {"success": True, "data": result}
+
+
+@router.get("/chat/history/{chat_id}")
+async def get_chat_history(
+    chat_id: str,
+    limit: int = FastQuery(50, ge=1, le=200),
+    offset: int = FastQuery(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """Chat xabarlari tarixini REST API orqali olish."""
+    chat = db.query(UserChat).filter(UserChat.id == chat_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat topilmadi")
+
+    # Xavfsizlik: user faqat o'z chatini ko'rishi kerak
+    user_id = str(current_user.id)
+    is_allowed = False
+    if str(chat.user_id) == user_id:
+        is_allowed = True
+    elif str(chat.employee_id) == user_id:
+        is_allowed = True
+    elif str(chat.salon_id) == user_id: # Admin salon_id bilan kiradi
+        is_allowed = True
+    # Admin tekshiruvi (role bo'yicha)
+    elif getattr(current_user, "role", None) in ["admin", "superadmin", "salon_admin"]:
+        # Admin o'z saloniga tegishli chatlarni ko'ra oladi
+        if hasattr(current_user, "salon_id") and str(chat.salon_id) == str(current_user.salon_id):
+            is_allowed = True
+        elif getattr(current_user, "role", None) == "superadmin":
+            is_allowed = True
+
+    if not is_allowed:
+        raise HTTPException(status_code=403, detail="Sizda ushbu chatni ko'rishga ruxsat yo'q")
+
+    total = db.query(Message).filter(Message.user_chat_id == chat_id).count()
+    messages = (
+        db.query(Message)
+        .filter(Message.user_chat_id == chat_id)
+        .order_by(Message.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "success": True,
+        "chat_id": chat_id,
+        "items": [_serialize_message(m) for m in reversed(messages)],
+        "pagination": {
+            "limit": limit,
+            "offset": offset,
+            "total": total
+        }
+    }
 
 
 @router.websocket("/ws/chat")
