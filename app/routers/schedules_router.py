@@ -691,11 +691,6 @@ async def get_all_schedules(
     query = db.query(Schedule)
     count_query = db.query(func.count(Schedule.id))
 
-    # Faqat bugungi va kelajakdagi schedulelar
-    today = date.today()
-    query = query.filter(Schedule.date >= today)
-    count_query = count_query.filter(Schedule.date >= today)
-
     if salon_id:
         query = query.filter(Schedule.salon_id == salon_id)
         count_query = count_query.filter(Schedule.salon_id == salon_id)
