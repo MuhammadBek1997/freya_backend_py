@@ -340,45 +340,49 @@ async def get_chat_list(
     try:
         user_id = str(current_user.id)
         role = getattr(current_user, "role", "user")
-        salon_id = str(getattr(current_user, "salon_id", ""))
+        
+        # salon_id ni aniq tekshiramiz
+        raw_salon_id = getattr(current_user, "salon_id", None)
+        salon_id = str(raw_salon_id) if raw_salon_id else None
 
-        # Admin uchun salon_id bo'yicha ham filtrlaymiz
+        # Adminlar uchun filtr: o'zining IDsi yoki salonining IDsi qatnashgan xabarlar
         if role in ["admin", "superadmin", "salon_admin", "private_admin", "private_salon_admin"]:
             role_cond = or_(
                 Message.sender_id == user_id,
                 Message.receiver_id == user_id,
-                Message.sender_id == salon_id,
-                Message.receiver_id == salon_id,
-                # Muhim: user salonga yozgan bo'lsa (receiver_id = salon_id),
-                # lekin salon hali javob bermagan bo'lsa ham ko'rinishi kerak
-                and_(Message.receiver_id == salon_id, Message.receiver_type == "salon")
+                # Salonga kelgan yoki salondan ketgan xabarlar
+                and_(Message.sender_id == salon_id, Message.sender_type == "salon") if salon_id else False,
+                and_(Message.receiver_id == salon_id, Message.receiver_type == "salon") if salon_id else False
             )
         else:
+            # Foydalanuvchi yoki xodim: o'zi yuborgan yoki o'zi qabul qilgan barcha xabarlar
+            # Shuningdek, agar foydalanuvchi salonga yozgan bo'lsa, receiver_id salon_id bo'ladi, 
+            # lekin sender_id foydalanuvchining o'zi bo'ladi.
             role_cond = or_(
                 Message.sender_id == user_id,
                 Message.receiver_id == user_id
             )
 
-        # Har bir chat_id uchun oxirgi xabarni topish subquery'si
-        subquery = (
-            db.query(
-                Message.user_chat_id,
-                func.max(Message.created_at).label("latest_at")
-            )
+        # Foydalanuvchi qatnashgan barcha chatlarning IDlarini topamiz
+        chat_ids_query = (
+            db.query(Message.user_chat_id)
             .filter(role_cond)
-            .group_by(Message.user_chat_id)
-            .subquery()
-        )
-
-        # Oxirgi xabarlarni va ularning ma'lumotlarini olish
-        latest_msgs = (
-            db.query(Message)
-            .join(subquery, and_(
-                Message.user_chat_id == subquery.c.user_chat_id,
-                Message.created_at == subquery.c.latest_at
-            ))
+            .distinct()
             .all()
         )
+        chat_ids = [str(cid[0]) for cid in chat_ids_query]
+
+        latest_msgs = []
+        for cid in chat_ids:
+            # Har bir chat uchun eng oxirgi xabarni olamiz
+            msg = (
+                db.query(Message)
+                .filter(Message.user_chat_id == cid)
+                .order_by(Message.created_at.desc())
+                .first()
+            )
+            if msg:
+                latest_msgs.append(msg)
 
         result = []
         for msg in latest_msgs:
