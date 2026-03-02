@@ -20,6 +20,8 @@ from app.schemas.employee import (
 )
 from app.auth.dependencies import get_current_user, get_current_admin
 from app.auth.jwt_utils import JWTUtils
+from app.models.translation import EmployeeTranslation
+from app.services.translation_service import translation_service
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -121,30 +123,71 @@ async def update_my_work_hours(
         raise HTTPException(status_code=500, detail=str(e))
 
 def add_multilingual_fields(employee):
-    """Add multilingual fields to employee object"""
-    # For now, we'll use the same value for all languages
-    # In production, you would integrate with translation service
-    employee.name_uz = employee.name or ''
-    employee.name_en = employee.name or ''
-    employee.name_ru = employee.name or ''
-    
-    employee.surname_uz = employee.surname or ''
-    employee.surname_en = employee.surname or ''
-    employee.surname_ru = employee.surname or ''
-    
-    employee.profession_uz = employee.profession or ''
-    employee.profession_en = employee.profession or ''
-    employee.profession_ru = employee.profession or ''
-    
-    employee.bio_uz = employee.bio or ''
-    employee.bio_en = employee.bio or ''
-    employee.bio_ru = employee.bio or ''
-    
-    employee.specialization_uz = employee.specialization or ''
-    employee.specialization_en = employee.specialization or ''
-    employee.specialization_ru = employee.specialization or ''
-    
+    """Add multilingual fields from EmployeeTranslation rows if loaded, else copy original."""
+    translations_map = {}
+    try:
+        if hasattr(employee, 'translations') and employee.translations:
+            for t in employee.translations:
+                translations_map[t.language_code] = t
+    except Exception:
+        pass
+
+    for lang in ('uz', 'ru', 'en'):
+        t = translations_map.get(lang)
+        setattr(employee, f'name_{lang}', (t.name if t and t.name else None) or employee.name or '')
+        setattr(employee, f'surname_{lang}', (t.surname if t and t.surname else None) or employee.surname or '')
+        setattr(employee, f'bio_{lang}', (t.bio if t and t.bio else None) or employee.bio or '')
+        setattr(employee, f'specialization_{lang}', (t.specialization if t and t.specialization else None) or employee.specialization or '')
+        # profession is a JSON list — store same across languages for now
+        setattr(employee, f'profession_{lang}', employee.profession or [])
+
     return employee
+
+
+async def _save_employee_translations(employee_id: str, employee, db: Session):
+    """Translate employee text fields and upsert into employee_translations table."""
+    try:
+        # Delete existing translations for this employee
+        db.query(EmployeeTranslation).filter(
+            EmployeeTranslation.employee_id == employee_id
+        ).delete()
+
+        # Fields to translate (text that benefits from translation)
+        bio_text = employee.bio or ''
+        specialization_text = employee.specialization or ''
+
+        bio_translations = {'uz': bio_text, 'ru': bio_text, 'en': bio_text}
+        spec_translations = {'uz': specialization_text, 'ru': specialization_text, 'en': specialization_text}
+
+        if bio_text:
+            result = await translation_service.translate_to_all_languages(bio_text, source_language='uz')
+            if result.get('success'):
+                bio_translations = result['data']['translations']
+
+        if specialization_text:
+            result = await translation_service.translate_to_all_languages(specialization_text, source_language='uz')
+            if result.get('success'):
+                spec_translations = result['data']['translations']
+
+        for lang in ('uz', 'ru', 'en'):
+            trans = EmployeeTranslation(
+                employee_id=employee_id,
+                language_code=lang,
+                name=employee.name or '',
+                surname=employee.surname or '',
+                bio=bio_translations.get(lang, bio_text),
+                specialization=spec_translations.get(lang, specialization_text),
+                profession=str(employee.profession) if employee.profession else '',
+            )
+            db.add(trans)
+
+        db.commit()
+    except Exception as e:
+        print(f"Warning: failed to save employee translations: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 @router.get("/", response_model=EmployeeListResponse)
 @router.get("", response_model=EmployeeListResponse)
@@ -407,9 +450,10 @@ async def get_employee_by_id(
 ):
     """Get employee by ID with comments and posts"""
     try:
-        # Get employee with salon info
+        # Get employee with salon info and translations
         employee = db.query(Employee).options(
-            joinedload(Employee.salon)
+            joinedload(Employee.salon),
+            joinedload(Employee.translations),
         ).filter(
             and_(Employee.id == employee_id, Employee.deleted_at.is_(None))
         ).first()
@@ -565,7 +609,10 @@ async def create_employee(
         db.add(new_employee)
         db.commit()
         db.refresh(new_employee)
-        
+
+        # Save translations asynchronously (non-blocking on failure)
+        await _save_employee_translations(str(new_employee.id), new_employee, db)
+
         return SuccessResponse(
             success=True,
             message=get_translation(language, "auth.userCreated"),
@@ -652,6 +699,12 @@ async def update_employee(
             setattr(employee, field, value)
 
         db.commit()
+        db.refresh(employee)
+
+        # Re-save translations if translatable fields changed
+        translatable = {'name', 'surname', 'bio', 'specialization', 'profession'}
+        if translatable.intersection(update_data.keys()):
+            await _save_employee_translations(str(employee.id), employee, db)
 
         return SuccessResponse(
             success=True,
