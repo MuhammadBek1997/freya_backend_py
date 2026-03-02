@@ -745,6 +745,13 @@ async def websocket_chat(websocket: WebSocket):
                     pass
                 continue
 
+            if event_type == "ping":
+                try:
+                    await websocket.send_text(json.dumps({"event": "pong"}))
+                except Exception:
+                    pass
+                continue
+
             # Default: treat as a new chat message
             message_text = parsed.get("message_text")
             message_type = parsed.get("message_type") or "text"
