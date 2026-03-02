@@ -16,56 +16,67 @@ except ImportError:
 
 
 def _sync_translate(text: str, dest: str, src: str = "auto") -> str:
-    """Sync translation: deep_translator → direct HTTP → MyMemory → source text."""
+    """Sync translation: Lingva → deep_translator → Google HTTP → MyMemory → source."""
+    import requests as _req
+    import urllib.parse
     src_lang = src if src != "auto" else "auto"
 
-    # 1) deep_translator GoogleTranslator (most reliable)
+    # 1) Lingva.ml — uses Google's own API key, not rate-limited by caller IP
+    try:
+        q = urllib.parse.quote(text, safe="")
+        s = src if src != "auto" else "auto"
+        url = f"https://lingva.ml/api/v1/{s}/{dest}/{q}"
+        resp = _req.get(url, timeout=10)
+        t = resp.json().get("translation", "")
+        if t and t.strip() and t.strip().lower() != text.strip().lower():
+            print(f"[translate] lingva ok: {src}->{dest}")
+            return t
+    except Exception as e:
+        print(f"[translate] lingva failed: {e}")
+
+    # 2) deep_translator GoogleTranslator
     if _deep_translator_available:
         try:
             result = _DeepGT(source=src_lang, target=dest).translate(text)
             if result and result.strip() and result.strip().lower() != text.strip().lower():
+                print(f"[translate] deep_translator google ok: {src}->{dest}")
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[translate] deep_translator google failed: {e}")
 
-        # 2) deep_translator MyMemoryTranslator
+        # 3) deep_translator MyMemoryTranslator
         try:
             result = _DeepMM(source=src_lang, target=dest).translate(text)
             if result and result.strip() and result.strip().lower() != text.strip().lower():
+                print(f"[translate] deep_translator mymemory ok: {src}->{dest}")
                 return result
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[translate] deep_translator mymemory failed: {e}")
 
-    # 3) Direct HTTP to Google Translate
+    # 4) Direct HTTP to Google Translate
     try:
-        import requests as _req
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-        url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": text}
-        resp = _req.get(url, params=params, headers=headers, timeout=10)
-        data = resp.json()
-        parts = [seg[0] for seg in data[0] if seg and seg[0]]
+        resp = _req.get("https://translate.googleapis.com/translate_a/single", params=params, headers=headers, timeout=10)
+        parts = [seg[0] for seg in resp.json()[0] if seg and seg[0]]
         translated = "".join(parts)
         if translated.strip() and translated.strip().lower() != text.strip().lower():
+            print(f"[translate] google http ok: {src}->{dest}")
             return translated
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[translate] google http failed: {e}")
 
-    # 4) MyMemory direct HTTP
+    # 5) MyMemory direct HTTP
     try:
-        import requests as _req
         lang_pair = f"{src}|{dest}" if src != "auto" else f"uz|{dest}"
-        resp2 = _req.get(
-            "https://api.mymemory.translated.net/get",
-            params={"q": text, "langpair": lang_pair},
-            timeout=10,
-        )
-        t2 = resp2.json().get("responseData", {}).get("translatedText", "")
+        t2 = _req.get("https://api.mymemory.translated.net/get", params={"q": text, "langpair": lang_pair}, timeout=10).json().get("responseData", {}).get("translatedText", "")
         if t2 and t2.strip() and t2.strip().lower() != text.strip().lower():
+            print(f"[translate] mymemory http ok: {src}->{dest}")
             return t2
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[translate] mymemory http failed: {e}")
 
+    print(f"[translate] ALL FAILED {src}->{dest}, returning source")
     return text
 
 
