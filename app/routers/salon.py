@@ -1485,6 +1485,18 @@ async def update_salon(
 
                 setattr(salon, field, value)
 
+        # Translate multilingual fields if one language variant was provided
+        for field_base in ('description', 'address', 'orientation'):
+            for src_lang in ('uz', 'ru', 'en'):
+                src_field = f'{field_base}_{src_lang}'
+                if src_field in update_data and update_data[src_field]:
+                    src_text = update_data[src_field]
+                    for tgt_lang in ('uz', 'ru', 'en'):
+                        if tgt_lang != src_lang:
+                            tgt_text = await translation_service._do_translate(src_text, tgt_lang, src_lang)
+                            setattr(salon, f'{field_base}_{tgt_lang}', tgt_text)
+                    break
+
         db.commit()
         db.refresh(salon)
 
