@@ -1500,9 +1500,24 @@ async def update_salon(
         db.commit()
         db.refresh(salon)
 
+        salon_data_out = {
+            "id": salon.id,
+            "salon_name": salon.salon_name,
+            "description_uz": salon.description_uz,
+            "description_ru": salon.description_ru,
+            "description_en": salon.description_en,
+            "address_uz": salon.address_uz,
+            "address_ru": salon.address_ru,
+            "address_en": salon.address_en,
+            "orientation_uz": salon.orientation_uz,
+            "orientation_ru": salon.orientation_ru,
+            "orientation_en": salon.orientation_en,
+        }
+
         return StandardResponse(
             success=True,
             message=get_translation(language, "success"),
+            data=salon_data_out,
         )
 
     except HTTPException:
