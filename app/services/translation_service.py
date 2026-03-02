@@ -10,18 +10,36 @@ except ImportError:
 
 
 def _http_translate(text: str, dest: str, src: str = "auto") -> str:
-    """Translate via direct HTTP request to Google Translate free API."""
+    """Translate via Google Translate free API, then MyMemory fallback."""
+    import requests as _req
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+
+    # 1) Google Translate free endpoint
     try:
-        import requests as _req
         url = "https://translate.googleapis.com/translate_a/single"
         params = {"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": text}
-        resp = _req.get(url, params=params, timeout=8)
+        resp = _req.get(url, params=params, headers=headers, timeout=8)
         data = resp.json()
         parts = [seg[0] for seg in data[0] if seg and seg[0]]
         translated = "".join(parts)
-        return translated if translated.strip() else text
+        if translated.strip() and translated.strip().lower() != text.strip().lower():
+            return translated
     except Exception:
-        return text
+        pass
+
+    # 2) MyMemory free API (no key required)
+    try:
+        lang_pair = f"{src}|{dest}" if src != "auto" else f"uz|{dest}"
+        url2 = "https://api.mymemory.translated.net/get"
+        resp2 = _req.get(url2, params={"q": text, "langpair": lang_pair}, timeout=8)
+        data2 = resp2.json()
+        t2 = data2.get("responseData", {}).get("translatedText", "")
+        if t2 and t2.strip() and t2.strip().lower() != text.strip().lower():
+            return t2
+    except Exception:
+        pass
+
+    return text
 
 
 class TranslationService:
