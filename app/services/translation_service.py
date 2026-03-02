@@ -1,10 +1,27 @@
 from typing import Dict, Any, Optional
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 try:
     from googletrans import Translator as _GTrans
     _gtrans_available = True
 except ImportError:
     _gtrans_available = False
+
+
+def _http_translate(text: str, dest: str, src: str = "auto") -> str:
+    """Translate via direct HTTP request to Google Translate free API."""
+    try:
+        import requests as _req
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": text}
+        resp = _req.get(url, params=params, timeout=8)
+        data = resp.json()
+        parts = [seg[0] for seg in data[0] if seg and seg[0]]
+        translated = "".join(parts)
+        return translated if translated.strip() else text
+    except Exception:
+        return text
 
 
 class TranslationService:
@@ -16,34 +33,27 @@ class TranslationService:
         }
 
     async def _do_translate(self, text: str, dest: str, src: str = "auto") -> str:
-        """Translate text using googletrans, fall back to original on failure."""
-        if not _gtrans_available or not text or not text.strip():
+        """Translate text: direct HTTP → googletrans → original text fallback."""
+        if not text or not text.strip():
             return text
         try:
-            translator = _GTrans()
-            result = await translator.translate(text, dest=dest, src=src)
-            if result and result.text:
-                return result.text
+            loop = asyncio.get_running_loop()
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                result = await loop.run_in_executor(ex, _http_translate, text, dest, src)
+            if result and result.strip() and result != text:
+                return result
         except Exception:
             pass
-        # Synchronous fallback via thread executor
-        try:
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
-
-            def _sync_call():
-                try:
-                    t = _GTrans()
-                    r = t.translate(text, dest=dest, src=src)
-                    return r.text if r and r.text else text
-                except Exception:
-                    return text
-
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                return await loop.run_in_executor(ex, _sync_call)
-        except Exception:
-            return text
+        # googletrans fallback
+        if _gtrans_available:
+            try:
+                translator = _GTrans()
+                r = await translator.translate(text, dest=dest, src=src)
+                if r and r.text and r.text.strip():
+                    return r.text
+            except Exception:
+                pass
+        return text
 
     async def translate_text(
         self,
