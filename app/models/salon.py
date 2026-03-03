@@ -36,6 +36,9 @@ class Salon(BaseModel):
 
     # Note/Additionals (Примечание)
     note = Column(Text)
+    note_uz = Column(Text)
+    note_ru = Column(Text)
+    note_en = Column(Text)
 
     # Relationships
     employees = relationship("Employee", back_populates="salon", cascade="all, delete-orphan")

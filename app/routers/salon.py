@@ -1497,6 +1497,14 @@ async def update_salon(
                             setattr(salon, f'{field_base}_{tgt_lang}', tgt_text)
                     break
 
+        # Translate note field if provided
+        if 'note' in update_data and update_data['note']:
+            note_text = update_data['note']
+            src_lang = language if language in ('uz', 'ru', 'en') else 'uz'
+            salon.note_uz = note_text if src_lang == 'uz' else await translation_service._do_translate(note_text, 'uz', src_lang)
+            salon.note_ru = note_text if src_lang == 'ru' else await translation_service._do_translate(note_text, 'ru', src_lang)
+            salon.note_en = note_text if src_lang == 'en' else await translation_service._do_translate(note_text, 'en', src_lang)
+
         db.commit()
         db.refresh(salon)
 
@@ -1512,6 +1520,9 @@ async def update_salon(
             "orientation_uz": salon.orientation_uz,
             "orientation_ru": salon.orientation_ru,
             "orientation_en": salon.orientation_en,
+            "note_uz": salon.note_uz,
+            "note_ru": salon.note_ru,
+            "note_en": salon.note_en,
         }
 
         return StandardResponse(
