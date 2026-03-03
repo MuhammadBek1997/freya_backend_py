@@ -1504,6 +1504,12 @@ async def update_salon(
             salon.note_uz = note_text if src_lang == 'uz' else await translation_service._do_translate(note_text, 'uz', src_lang)
             salon.note_ru = note_text if src_lang == 'ru' else await translation_service._do_translate(note_text, 'ru', src_lang)
             salon.note_en = note_text if src_lang == 'en' else await translation_service._do_translate(note_text, 'en', src_lang)
+        elif salon.note_uz and (not salon.note_ru or not salon.note_en):
+            # Auto-fill missing note translations from existing note_uz
+            if not salon.note_ru:
+                salon.note_ru = await translation_service._do_translate(salon.note_uz, 'ru', 'uz')
+            if not salon.note_en:
+                salon.note_en = await translation_service._do_translate(salon.note_uz, 'en', 'uz')
 
         db.commit()
         db.refresh(salon)
