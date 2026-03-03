@@ -126,6 +126,10 @@ class SalonResponse(BaseModel):
     orientation_uz: Optional[str] = None
     orientation_ru: Optional[str] = None
     orientation_en: Optional[str] = None
+    note: Optional[str] = None
+    note_uz: Optional[str] = None
+    note_ru: Optional[str] = None
+    note_en: Optional[str] = None
 
     photos: Optional[List[str]] = None  # Rasm URL manzillari
     logo: Optional[str] = None  # Logo URL manzili
