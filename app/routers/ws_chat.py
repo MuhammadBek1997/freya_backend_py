@@ -59,7 +59,7 @@ def _now_local_iso() -> str:
         return datetime.now(tz).isoformat()
     except Exception:
         # Fallback to UTC if timezone fails
-        return datetime.utcnow().isoformat()
+        return datetime.now(timezone.utc).isoformat()
 
 
 class WSChatInfoResponse(BaseModel):
@@ -212,7 +212,7 @@ def _serialize_message(m: Message) -> Dict[str, Any]:
         "message_type": m.message_type,
         "file_url": m.file_url,
         "is_read": bool(m.is_read),
-        "created_at": m.created_at.isoformat() if getattr(m, "created_at", None) else None,
+        "created_at": m.created_at.replace(tzinfo=timezone.utc).isoformat() if getattr(m, "created_at", None) else None,
         "created_at_local": (
             m.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
             if getattr(m, "created_at", None) else _now_local_iso()
@@ -433,7 +433,7 @@ async def get_chat_list(
                     "opponent_id": opponent_id,
                     "opponent_type": opponent_type,
                     "last_message": str(msg.message_text or ""),
-                    "last_message_time": msg.created_at.isoformat() if msg.created_at else None,
+                    "last_message_time": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
                     "unread_count": unread_count
                 })
             except Exception as e:
@@ -774,7 +774,7 @@ async def websocket_chat(websocket: WebSocket):
             )
 
             chat.last_message = message_text
-            chat.last_message_time = datetime.utcnow()
+            chat.last_message_time = datetime.now(timezone.utc)
 
             db.add(new_message)
             db.commit()
@@ -794,7 +794,7 @@ async def websocket_chat(websocket: WebSocket):
                     "message_type": message_type,
                     "file_url": file_url,
                     "is_read": False,
-                    "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                    "created_at": new_message.created_at.replace(tzinfo=timezone.utc).isoformat() if new_message.created_at else None,
                     "created_at_local": (
                         new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
                         if new_message.created_at else _now_local_iso()

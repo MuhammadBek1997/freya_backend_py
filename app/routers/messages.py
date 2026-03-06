@@ -16,6 +16,15 @@ from app.models.message import Message
 from app.routers.ws_chat import manager, _now_local_iso
 
 
+def _utc_iso(dt):
+    """Naive UTC datetime ni timezone-aware qilib isoformat() qaytaradi."""
+    if dt is None:
+        return None
+    if getattr(dt, 'tzinfo', None) is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
 router = APIRouter(prefix="/messages", tags=["messages"])
 
 
@@ -72,7 +81,7 @@ async def get_conversations(
                 "chat_type": chat.chat_type,
                 "participant": participant,
                 "last_message": chat.last_message or "",
-                "last_message_time": chat.last_message_time,
+                "last_message_time": _utc_iso(chat.last_message_time),
                 "unread_count": unread_count,
                 "user_avatar_url": getattr(current_user, "avatar_url", None),
                 "employee_avatar_url": getattr(employee, "avatar_url", None) if chat.employee_id else None,
@@ -164,7 +173,7 @@ async def get_conversation_messages(
             "message_type": m.message_type,
             "file_url": m.file_url,
             "is_read": m.is_read,
-            "created_at": m.created_at,
+            "created_at": _utc_iso(m.created_at),
         }
         for m in messages
     ]
@@ -279,7 +288,7 @@ async def send_message(
 
     # Chat meta ma'lumotlarini yangilash
     chat.last_message = message_text
-    chat.last_message_time = datetime.utcnow()
+    chat.last_message_time = datetime.now(timezone.utc)
 
     db.add(new_message)
     db.commit()
@@ -304,7 +313,7 @@ async def send_message(
                 "message_type": message_type,
                 "file_url": file_url,
                 "is_read": False,
-                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at": _utc_iso(new_message.created_at),
                 "created_at_local": created_local,
             },
         }
@@ -359,7 +368,7 @@ async def send_message(
             "sender_id": new_message.sender_id,
             "receiver_id": new_message.receiver_id,
             "message_text": new_message.message_text,
-            "created_at": new_message.created_at,
+            "created_at": _utc_iso(new_message.created_at),
             "file_url": new_message.file_url,
         },
     }
@@ -477,7 +486,7 @@ async def get_employee_conversations(
                 "chat_type": chat.chat_type,
                 "participant": participant,
                 "last_message": chat.last_message,
-                "last_message_time": chat.last_message_time,
+                "last_message_time": _utc_iso(chat.last_message_time),
                 "unread_count": unread_count,
                 "user_avatar_url": getattr(user, "avatar_url", None) if chat.user_id else None,
                 "employee_avatar_url": getattr(current_user, "avatar_url", None),
@@ -553,7 +562,7 @@ async def get_employee_conversation_messages(
             "message_type": m.message_type,
             "file_url": m.file_url,
             "is_read": m.is_read,
-            "created_at": m.created_at,
+            "created_at": _utc_iso(m.created_at),
         }
         for m in messages
     ]
@@ -663,7 +672,7 @@ async def employee_send_message(
     )
 
     chat.last_message = message_text
-    chat.last_message_time = datetime.utcnow()
+    chat.last_message_time = datetime.now(timezone.utc)
 
     db.add(new_message)
     db.commit()
@@ -688,7 +697,7 @@ async def employee_send_message(
                 "message_type": message_type,
                 "file_url": file_url,
                 "is_read": False,
-                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at": _utc_iso(new_message.created_at),
                 "created_at_local": created_local,
             }
         })
@@ -723,7 +732,7 @@ async def employee_send_message(
             "sender_id": new_message.sender_id,
             "receiver_id": new_message.receiver_id,
             "message_text": new_message.message_text,
-            "created_at": new_message.created_at,
+            "created_at": _utc_iso(new_message.created_at),
         },
     }
 
@@ -777,7 +786,7 @@ async def get_admin_conversations(
                 "chat_type": chat.chat_type,
                 "participant": participant,
                 "last_message": chat.last_message,
-                "last_message_time": chat.last_message_time,
+                "last_message_time": _utc_iso(chat.last_message_time),
                 "unread_count": unread_count,
                 "user_avatar_url": getattr(user, "avatar_url", None) if chat.user_id else None,
                 "salon_id": current_admin.salon_id,
@@ -852,7 +861,7 @@ async def get_admin_conversation_messages(
             "message_type": m.message_type,
             "file_url": m.file_url,
             "is_read": m.is_read,
-            "created_at": m.created_at,
+            "created_at": _utc_iso(m.created_at),
         }
         for m in messages
     ]
@@ -975,7 +984,7 @@ async def admin_send_message(
     )
 
     chat.last_message = message_text
-    chat.last_message_time = datetime.utcnow()
+    chat.last_message_time = datetime.now(timezone.utc)
 
     db.add(new_message)
     db.commit()
@@ -1000,7 +1009,7 @@ async def admin_send_message(
                 "message_type": message_type,
                 "file_url": file_url,
                 "is_read": False,
-                "created_at": new_message.created_at.isoformat() if new_message.created_at else None,
+                "created_at": _utc_iso(new_message.created_at),
                 "created_at_local": created_local,
             }
         })
@@ -1035,6 +1044,6 @@ async def admin_send_message(
             "sender_id": new_message.sender_id,
             "receiver_id": new_message.receiver_id,
             "message_text": new_message.message_text,
-            "created_at": new_message.created_at,
+            "created_at": _utc_iso(new_message.created_at),
         },
     }
