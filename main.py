@@ -102,8 +102,8 @@ app = FastAPI(
         "url": "https://opensource.org/licenses/MIT",
     },
     servers=[
+        {"url": "https://freyapp.up.railway.app", "description": "Production server (Railway)"},
         {"url": "http://localhost:8000", "description": "Development server"},
-        {"url": "https://freya-2aff07996d13.herokuapp.com", "description": "Production server"},
     ],
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
     debug=True
@@ -122,7 +122,7 @@ origins = [
     "https://www.freyapp.uz",
     "https://freyapp.uz",
     "https://api.freyapp.uz",
-    "https://freya-2aff07996d13.herokuapp.com",
+    "https://freyapp.up.railway.app",
     "https://freya-admin-frontend.vercel.app",
     "https://freya-admin-frontend-git-main-muhammadbekdev.vercel.app",
     "https://freya-admin-frontend-muhammadbekdev.vercel.app",
@@ -152,8 +152,7 @@ if os.getenv("NODE_ENV") == "production":
             "api.freyapp.uz",
             "freyapp.uz",
             "www.freyapp.uz",
-            "freya-2aff07996d13.herokuapp.com",
-            "*.herokuapp.com",
+            "freyapp.up.railway.app",
             "localhost",
             "127.0.0.1",
         ],
