@@ -46,6 +46,15 @@ async def add_salon_comment(
     db.commit()
     db.refresh(comment)
 
+    rows: List[SalonComment] = (
+        db.query(SalonComment).filter(SalonComment.salon_id == salon_id).order_by(SalonComment.created_at.desc()).offset(offset).limit(limit).all()
+    )
+    salonrating = [int(row.rating) for row in rows]
+    salonaveragerating = sum(salonrating)/len(salonrating) if salonrating else 0
+    salon.ratings = salonaveragerating
+    db.add(salon)
+    db.commit()
+
     return {
         "success": True,
         "data": CommentItem(
