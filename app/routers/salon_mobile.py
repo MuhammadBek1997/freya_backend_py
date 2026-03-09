@@ -398,7 +398,9 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
     except Exception:
         pass
     is_fav = is_favourite_salon(db, str(salon.id), user_id)
-    
+    rows: List[SalonComment] = (
+        db.query(SalonComment).filter(SalonComment.salon_id == salon.id).all()
+    )
     return MobileSalonItem(
         id=str(salon.id),
         name=salon.salon_name,
@@ -407,7 +409,7 @@ def build_mobile_item(salon: Salon, language: Optional[str], db: Session, user_i
         salonImage=salon_image,
         city=city,
         rate=rate,
-        reviews=0,
+        reviews=len(rows),
         news=news,
         isFavorite=is_fav,
         isPrivate=bool(getattr(salon, "private_salon", False)),

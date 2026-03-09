@@ -43,11 +43,11 @@ async def add_salon_comment(
 
     comment = SalonComment(salon_id=salon_id, user_id=current_user_id, text=request.text, rating=request.rating)
     rows: List[SalonComment] = (
-        db.query(SalonComment).filter(SalonComment.salon_id == salon_id).order_by(SalonComment.created_at.desc()).offset(offset).limit(limit).all()
+        db.query(SalonComment).filter(SalonComment.salon_id == salon_id).order_by(SalonComment.created_at.desc()).all()
     )
     salonrating = [int(row.rating) for row in rows]
     salonaveragerating = sum(salonrating)/len(salonrating) if salonrating else 0
-    salon.rating = salonaveragerating
+    salon.salon_rating = round(salonaveragerating, 2)
     db.add(salon)
     db.add(comment)
     db.commit()
