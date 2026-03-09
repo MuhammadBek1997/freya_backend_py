@@ -42,18 +42,16 @@ async def add_salon_comment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=get_translation(language, "errors.404"))
 
     comment = SalonComment(salon_id=salon_id, user_id=current_user_id, text=request.text, rating=request.rating)
-    db.add(comment)
-    db.commit()
-    db.refresh(comment)
-
     rows: List[SalonComment] = (
         db.query(SalonComment).filter(SalonComment.salon_id == salon_id).order_by(SalonComment.created_at.desc()).offset(offset).limit(limit).all()
     )
     salonrating = [int(row.rating) for row in rows]
     salonaveragerating = sum(salonrating)/len(salonrating) if salonrating else 0
-    salon.ratings = salonaveragerating
+    salon.rating = salonaveragerating
     db.add(salon)
+    db.add(comment)
     db.commit()
+    db.refresh(comment)
 
     return {
         "success": True,
