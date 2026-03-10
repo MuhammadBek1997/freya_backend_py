@@ -53,13 +53,12 @@ class ConnectionManager:
 
 
 def _now_local_iso() -> str:
-    """Return current time ISO string with +05:00 offset (Asia/Tashkent)."""
+    """Return current UTC+5 time as naive string (no timezone suffix)."""
     try:
         tz = timezone(timedelta(hours=5))
-        return datetime.now(tz).isoformat()
+        return datetime.now(tz).strftime('%Y-%m-%dT%H:%M:%S')
     except Exception:
-        # Fallback to UTC if timezone fails
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S')
 
 
 class WSChatInfoResponse(BaseModel):
@@ -201,11 +200,12 @@ manager = ConnectionManager()
 
 
 def _to_local_iso(dt) -> str:
-    """Convert UTC datetime to UTC+5 ISO string."""
+    """Convert UTC datetime to naive UTC+5 string (no timezone suffix)."""
     if dt is None:
         return _now_local_iso()
     tz5 = timezone(timedelta(hours=5))
-    return dt.replace(tzinfo=timezone.utc).astimezone(tz5).isoformat()
+    local_dt = dt.replace(tzinfo=timezone.utc).astimezone(tz5)
+    return local_dt.strftime('%Y-%m-%dT%H:%M:%S')
 
 
 def _serialize_message(m: Message) -> Dict[str, Any]:
