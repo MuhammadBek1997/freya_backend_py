@@ -200,8 +200,17 @@ async def ws_chat_info():
 manager = ConnectionManager()
 
 
+def _to_local_iso(dt) -> str:
+    """Convert UTC datetime to UTC+5 ISO string."""
+    if dt is None:
+        return _now_local_iso()
+    tz5 = timezone(timedelta(hours=5))
+    return dt.replace(tzinfo=timezone.utc).astimezone(tz5).isoformat()
+
+
 def _serialize_message(m: Message) -> Dict[str, Any]:
     """Convert Message ORM to JSON-friendly dict."""
+    local_ts = _to_local_iso(getattr(m, "created_at", None))
     return {
         "id": str(m.id),
         "sender_id": str(m.sender_id),
@@ -212,11 +221,8 @@ def _serialize_message(m: Message) -> Dict[str, Any]:
         "message_type": m.message_type,
         "file_url": m.file_url,
         "is_read": bool(m.is_read),
-        "created_at": m.created_at.replace(tzinfo=timezone.utc).isoformat() if getattr(m, "created_at", None) else None,
-        "created_at_local": (
-            m.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
-            if getattr(m, "created_at", None) else _now_local_iso()
-        ),
+        "created_at": local_ts,
+        "created_at_local": local_ts,
     }
 
 
@@ -433,7 +439,7 @@ async def get_chat_list(
                     "opponent_id": opponent_id,
                     "opponent_type": opponent_type,
                     "last_message": str(msg.message_text or ""),
-                    "last_message_time": msg.created_at.replace(tzinfo=timezone.utc).isoformat() if msg.created_at else None,
+                    "last_message_time": _to_local_iso(msg.created_at) if msg.created_at else None,
                     "unread_count": unread_count
                 })
             except Exception as e:
@@ -794,11 +800,8 @@ async def websocket_chat(websocket: WebSocket):
                     "message_type": message_type,
                     "file_url": file_url,
                     "is_read": False,
-                    "created_at": new_message.created_at.replace(tzinfo=timezone.utc).isoformat() if new_message.created_at else None,
-                    "created_at_local": (
-                        new_message.created_at.replace(tzinfo=timezone.utc).astimezone(timezone(timedelta(hours=5))).isoformat()
-                        if new_message.created_at else _now_local_iso()
-                    ),
+                    "created_at": _to_local_iso(new_message.created_at),
+                    "created_at_local": _to_local_iso(new_message.created_at),
                 }
             })
 

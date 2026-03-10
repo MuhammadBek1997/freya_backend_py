@@ -13,16 +13,12 @@ from app.models.employee import Employee
 from app.models.salon import Salon
 from app.models.user_chat import UserChat
 from app.models.message import Message
-from app.routers.ws_chat import manager, _now_local_iso
+from app.routers.ws_chat import manager, _now_local_iso, _to_local_iso
 
 
 def _utc_iso(dt):
-    """Naive UTC datetime ni timezone-aware qilib isoformat() qaytaradi."""
-    if dt is None:
-        return None
-    if getattr(dt, 'tzinfo', None) is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.isoformat()
+    """UTC datetime ni UTC+5 (Asia/Tashkent) ga o'tkazib isoformat() qaytaradi."""
+    return _to_local_iso(dt)
 
 
 router = APIRouter(prefix="/messages", tags=["messages"])
