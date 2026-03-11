@@ -104,6 +104,7 @@ app = FastAPI(
     servers=[
         {"url": "https://freyapp.up.railway.app", "description": "Production server (Railway)"},
         {"url": "http://localhost:8000", "description": "Development server"},
+        {"url": "https://freya-2aff07996d13.herokuapp.com", "description": "Production server (Heroku)"}
     ],
     swagger_ui_parameters={"syntaxHighlight.theme": "obsidian"},
     debug=True
