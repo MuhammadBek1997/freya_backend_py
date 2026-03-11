@@ -322,7 +322,7 @@ def pay_for_premium(
         result = settings.click_provider.payment_with_token(
             card_token=get_card.card_token,
             amount=payment.amount,
-            merchant_trans_id=payment.id,
+            merchant_trans_id=str(payment.paymet_id),
         )
         print(f'error {result.get("error_code")}')
         if result.get("error_code"):
@@ -342,7 +342,7 @@ def pay_for_premium(
         invoice = settings.click_provider.create_invoice(
             amount=payment.amount,
             phone_number=current_user.phone,
-            merchant_trans_id=payment.id,
+            merchant_trans_id=str(payment.paymet_id),
         )
 
         if invoice.get("error_code"):
@@ -400,7 +400,7 @@ def pay_for_post(
         invoice = settings.click_provider.create_invoice(
             amount=payment.amount,
             phone_number=employe.phone,
-            merchant_trans_id=payment.id,
+            merchant_trans_id=str(payment.paymet_id),
         )
         if invoice.get("error_code"):
             payment.status = PaymentStatus.ERROR.value
@@ -425,8 +425,8 @@ def pay_for_post(
 
         return {
             "success": True,
-            "payment_id": payment.id,
-            "redirect_url": f"https://my.click.uz/services/pay?service_id={settings.click_provider.merchant_service_id}&merchant_id={settings.click_provider.merchant_id}&amount={payment.amount}&transaction_param={payment.id}&return_url={return_url}&card_type={card_type}",
+            "payment_id": payment.paymet_id,
+            "redirect_url": f"https://my.click.uz/services/pay?service_id={settings.click_provider.merchant_service_id}&merchant_id={settings.click_provider.merchant_id}&amount={payment.amount}&transaction_param={payment.paymet_id}&return_url={return_url}&card_type={card_type}",
         }
 
 
@@ -478,7 +478,7 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
     # Получить payment из БД
     payment = (
         db.query(ClickPayment)
-        .filter(ClickPayment.id == data["merchant_trans_id"])
+        .filter(ClickPayment.paymet_id == data["merchant_trans_id"])
         .first()
     )
     if not payment:
