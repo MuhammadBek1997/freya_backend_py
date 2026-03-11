@@ -338,7 +338,7 @@ class ClickPaymentProvider:
             'amount': float(amount),
             'transaction_parameter': merchant_trans_id
         }
-        
+        print(f"data {data}")
         result = self._make_request("POST", "/card_token/payment", data)
         
         if result.get('error_code') == 0:
