@@ -196,7 +196,7 @@ class ClickPaymentProvider:
         logger.info(f"💳 Creating invoice | amount={amount} | phone={phone_number} | trans_id={merchant_trans_id}")
         
         data = {
-            'service_id': int(self.merchant_service_id),
+            'service_id': self.merchant_service_id,
             'amount': float(amount),
             'phone_number': phone_number,
             'merchant_trans_id': merchant_trans_id
@@ -264,7 +264,7 @@ class ClickPaymentProvider:
         logger.info(f"💳 Creating card token | card={masked_card} | expire={expire_date} | temporary={temporary}")
         
         data = {
-            'service_id': int(self.merchant_service_id),
+            'service_id': self.merchant_service_id,
             'card_number': card_number,
             'expire_date': expire_date,
             'temporary': temporary
@@ -301,7 +301,7 @@ class ClickPaymentProvider:
         logger.info(f"🔐 Verifying card token | token={card_token} | sms=***")
         
         data = {
-            'service_id': int(self.merchant_service_id),
+            'service_id': self.merchant_service_id,
             'card_token': card_token,
             'sms_code': sms_code
         }
@@ -334,10 +334,10 @@ class ClickPaymentProvider:
         logger.info(f"💰 Payment with token | token={card_token} | amount={amount} | trans_id={merchant_trans_id}")
         
         data = {
-            'service_id': int(self.merchant_service_id),
+            'service_id': self.merchant_service_id,
             'card_token': card_token,
             'amount': float(amount),
-            'merchant_trans_id': merchant_trans_id
+            'transaction_parameter': merchant_trans_id
         }
         print(f"data {data}")
         result = self._make_request("POST", "/card_token/payment", data)

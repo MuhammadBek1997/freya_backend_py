@@ -1150,7 +1150,7 @@ async def create_appointment(
             result = settings.click_provider.payment_with_token(
                 card_token=payment_card.card_token,
                 amount=prepay_amount,
-                merchant_trans_id=str(click_payment.paymet_id),
+                merchant_trans_id=click_payment.id,
             )
 
             # Xatolik bo'lsa to'lovni bekor qilamiz

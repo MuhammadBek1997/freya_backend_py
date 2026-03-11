@@ -222,7 +222,7 @@ def deactivate_expired_premiums(db: Session) -> int:
                     result = settings.click_provider.payment_with_token(
                         card_token=get_card.card_token,
                         amount=payment.amount,
-                        merchant_trans_id=str(payment.paymet_id),
+                        merchant_trans_id=payment.id,
                     )
                 except Exception as e:
                     payment.status = PaymentStatus.ERROR.value
