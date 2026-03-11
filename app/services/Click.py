@@ -113,6 +113,7 @@ class ClickPaymentProvider:
             logger.info(f"✅ Request completed in {elapsed_time:.2f}s | Status: {response.status_code}")
             
             if response.status_code == 200:
+                print(f"ok 200")
                 try:
                     result = response.json()
                     logger.info(f"📥 Response: {json.dumps(result, ensure_ascii=False, indent=2)}")
