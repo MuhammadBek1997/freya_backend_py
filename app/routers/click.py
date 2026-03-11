@@ -324,6 +324,7 @@ def pay_for_premium(
             amount=payment.amount,
             merchant_trans_id=payment.id,
         )
+        print(result.get("error_code"))
         if result.get("error_code"):
             payment.status = PaymentStatus.ERROR.value
             db.commit()
