@@ -471,6 +471,7 @@ def parse_webhook_body(body: bytes) -> Dict[str, str]:
 
 @router.post("/webhook/prepare")
 async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
+    print(f"prepare")
     body = await request.body()
     data = parse_webhook_body(body)
 
@@ -509,6 +510,7 @@ async def webhook_prepare(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/webhook/complete")
 async def webhook_complete(request: Request, db: Session = Depends(get_db)):
+    print(f"complete")
     body = await request.body()
     data = parse_webhook_body(body)
 
