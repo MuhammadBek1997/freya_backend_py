@@ -340,7 +340,7 @@ class ClickPaymentProvider:
         }
         print(f"data {data}")
         result = self._make_request("POST", "/card_token/payment", data)
-        
+        print(f"result {result}")
         if result.get('error_code') == 0:
             payment_id = result.get('payment_id')
             logger.info(f"✅ Payment successful | payment_id={payment_id}")
