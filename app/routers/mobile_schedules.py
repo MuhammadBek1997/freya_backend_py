@@ -1070,7 +1070,6 @@ async def create_appointment(
                 prepay_amount = float(schedule.deposit)
         except Exception:
             prepay_amount = 0.0
-        print(prepay_amount)
         if prepay_amount > 0:
             # Foydalanuvchi autentifikatsiya qilingan bo'lishi shart
             if not current_user:
