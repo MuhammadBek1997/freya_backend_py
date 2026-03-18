@@ -555,27 +555,41 @@ async def delete_booking(
 
 @router.get("/grouped/by-date")
 async def get_schedules_grouped_by_date(
+    employee_id: Optional[str] = Query(None),
+    salon_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
-    """Получить расписания, сгруппированные по дням недели"""
+    """Расписания, сгруппированные по реальной дате (не по дню недели)"""
 
-    schedules = db.query(Schedule).order_by(Schedule.date, Schedule.created_at).all()
+    q = db.query(Schedule).filter(Schedule.is_active == True)
+    if salon_id:
+        q = q.filter(Schedule.salon_id == salon_id)
+    all_schedules = q.order_by(Schedule.date, Schedule.created_at).all()
+
+    # Filter by employee_id if provided
+    if employee_id:
+        filtered = []
+        for s in all_schedules:
+            emp_list = s.employee_list or []
+            if str(employee_id) in [str(x) for x in emp_list]:
+                filtered.append(s)
+        all_schedules = filtered
 
     weekdays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"]
-    grouped_by_date: Dict[str, List[Dict[str, Any]]] = {}
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
 
-    for schedule in schedules:
+    for schedule in all_schedules:
+        date_key = str(schedule.date)
         day_of_week = weekdays[
             schedule.date.weekday() + 1 if schedule.date.weekday() < 6 else 0
         ]
-
         schedule_item = {
             "id": schedule.id,
             "salon_id": schedule.salon_id,
             "name": schedule.name,
             "title": schedule.title,
-            "date": str(schedule.date),
+            "date": date_key,
             "repeat": schedule.repeat,
             "repeat_value": schedule.repeat_value,
             "employee_list": schedule.employee_list,
@@ -583,6 +597,7 @@ async def get_schedules_grouped_by_date(
             "full_pay": schedule.full_pay,
             "deposit": schedule.deposit,
             "is_active": schedule.is_active,
+            "whole_day": getattr(schedule, "whole_day", False),
             "dayOfWeek": day_of_week,
             "start_time": (
                 schedule.start_time.strftime("%H:%M")
@@ -597,17 +612,12 @@ async def get_schedules_grouped_by_date(
             "created_at": str(schedule.created_at) if schedule.created_at else None,
             "updated_at": str(schedule.updated_at) if schedule.updated_at else None,
         }
+        if date_key not in grouped:
+            grouped[date_key] = []
+        grouped[date_key].append(schedule_item)
 
-        if day_of_week not in grouped_by_date:
-            grouped_by_date[day_of_week] = []
-        grouped_by_date[day_of_week].append(schedule_item)
-
-    ordered_weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-    day_list_items = [
-        grouped_by_date[day]
-        for day in ordered_weekdays
-        if day in grouped_by_date and len(grouped_by_date[day]) > 0
-    ]
+    # Return as flat list of arrays sorted by date
+    day_list_items = [grouped[d] for d in sorted(grouped.keys())]
 
     return {
         "success": True,
