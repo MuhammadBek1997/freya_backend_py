@@ -846,6 +846,8 @@ class MyScheduleCreate(BaseModel):
     price: float
     repeat: Optional[bool] = False
     repeat_value: Optional[str] = None
+    repeat_count: Optional[int] = 1
+    whole_day: Optional[bool] = False
     is_active: Optional[bool] = True
 
 
@@ -913,20 +915,47 @@ async def create_my_schedule(
         if st_t and en_t and not (st_t < en_t):
             raise HTTPException(status_code=400, detail=get_translation(language, "errors.400") or "Start end'dan kichik bo'lishi kerak")
 
-        # Jadval yaratish: faqat xodimning salonida va employee_list faqat o'zi
-        new_schedule = Schedule(
-            salon_id=str(current_user.salon_id),
-            name=payload.name,
-            title=payload.title,
-            date=d,
-            start_time=st_t,
-            end_time=en_t,
-            repeat=bool(payload.repeat or False),
-            repeat_value=payload.repeat_value,
-            employee_list=[str(current_user.id)],
-            price=payload.price,
-            is_active=bool(payload.is_active if payload.is_active is not None else True),
-        )
+        _WEEKDAY_MAP = {'monday':0,'tuesday':1,'wednesday':2,'thursday':3,'friday':4,'saturday':5,'sunday':6}
+
+        def _make(target_date):
+            return Schedule(
+                salon_id=str(current_user.salon_id),
+                name=payload.name,
+                title=payload.title,
+                date=target_date,
+                start_time=st_t,
+                end_time=en_t,
+                repeat=bool(payload.repeat or False),
+                repeat_value=payload.repeat_value,
+                whole_day=bool(payload.whole_day or False),
+                employee_list=[str(current_user.id)],
+                price=payload.price,
+                is_active=bool(payload.is_active if payload.is_active is not None else True),
+            )
+
+        # Repeat bo'lsa — haftalik takrorlash
+        if payload.repeat and payload.repeat_value:
+            repeat_count = min(payload.repeat_count or 1, 52)
+            raw_days = [x.strip().lower() for x in payload.repeat_value.split(',') if x.strip()]
+            target_weekdays = [_WEEKDAY_MAP[x] for x in raw_days if x in _WEEKDAY_MAP]
+            if not target_weekdays:
+                target_weekdays = [d.weekday()]
+            created = []
+            for weekday in target_weekdays:
+                days_ahead = (weekday - d.weekday()) % 7
+                first_occ = d + timedelta(days=days_ahead)
+                for i in range(repeat_count):
+                    created.append(_make(first_occ + timedelta(weeks=i)))
+            for s in created:
+                db.add(s)
+            db.commit()
+            for s in created:
+                db.refresh(s)
+            first_item = _to_my_item(created[0]) if created else None
+            return MyScheduleResponse(success=True, data=first_item)
+
+        # Oddiy — bitta schedule
+        new_schedule = _make(d)
         db.add(new_schedule)
         db.commit()
         db.refresh(new_schedule)
