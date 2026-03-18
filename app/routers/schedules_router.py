@@ -561,8 +561,10 @@ async def get_schedules_grouped_by_date(
     language: Union[str, None] = Header(None, alias="X-User-language"),
 ):
     """Расписания, сгруппированные по реальной дате (не по дню недели)"""
+    from datetime import date as _date
+    today = _date.today()
 
-    q = db.query(Schedule).filter(Schedule.is_active == True)
+    q = db.query(Schedule).filter(Schedule.is_active == True, Schedule.date >= today)
     if salon_id:
         q = q.filter(Schedule.salon_id == salon_id)
     all_schedules = q.order_by(Schedule.date, Schedule.created_at).all()
@@ -784,7 +786,7 @@ async def create_schedule(
 
     # Repeat bo'lsa — tanlangan hafta kunlari bo'yicha repeat_count marta (haftalik) yaratamiz
     if schedule_data.repeat and (schedule_data.repeat_count or 1) >= 1:
-        repeat_count = schedule_data.repeat_count or 1
+        repeat_count = min(schedule_data.repeat_count or 1, 52)  # max 52 hafta (1 yil)
 
         # Hafta kunlarini aniqlash
         if schedule_data.repeat_value:
