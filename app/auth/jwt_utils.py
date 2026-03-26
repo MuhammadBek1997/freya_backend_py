@@ -22,7 +22,7 @@ class JWTUtils:
         if expires_delta:
             expire = datetime.utcnow() + expires_delta
         else:
-            expire = datetime.utcnow() + timedelta(days=7)  # Default 7 days
+            expire = datetime.utcnow() + timedelta(days=30)  # Default 7 days
         
         # Add timestamp and unique identifiers
         timestamp = int(datetime.utcnow().timestamp() * 1000)
